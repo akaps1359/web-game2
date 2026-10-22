@@ -475,6 +475,11 @@ export const STATES = [
   ['nukus', '호라즘', 'SOV', 59.60, 42.46, { x: [[60.36, 41.38]], vp: 0, ind: 0.1, t: 'desert' }],
 ];
 
+// 지도 밖 가상 주(도형 없음). 미국 본토는 북대서양 해역으로만 유럽과 연결된다.
+export const VIRTUAL_STATES = [
+  ['usa', '미국 본토', 'USA', -31.5, 45.5, { vp: 60, port: 10, virtual: 1, sea: 'natl', cat: 'mega', t: 'plains' }],
+];
+
 // 해역 (보로노이 시드). [key, 이름, 경도, 위도]
 export const SEAS = [
   ['natl', '북대서양', -27, 53],
