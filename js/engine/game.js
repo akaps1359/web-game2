@@ -3,7 +3,7 @@ import { COUNTRIES, COLONY_POP, FACTIONS0, WARS0, FACTION_DEFS } from '../data/c
 import { DEFAULT_TEMPLATES, SHIP_KEYS } from '../data/units.js';
 import { TECH_SETS, TECH } from '../data/techs.js';
 import { FOCUS_TREES } from '../data/focus.js';
-import { EVENTS } from '../data/events.js';
+import { EVENTS, CAPITULATIONS } from '../data/events.js';
 import { makeRng } from './rng.js';
 import { refreshMods } from './mods.js';
 import { rebuildWarCache, news, atWar, allied, fmtDate } from './world.js';
@@ -42,7 +42,7 @@ export function makeCountry(G, tag, def) {
     mp: { total: 0, inDivs: 0, training: 0, dead: 0 },
     templates: [], training: [],
     faction: null, master: null, guarantees: [], naps: {}, access: [], justify: [], wargoals: [],
-    surrender: 0, offmap: def.offmap ? { ...def.offmap } : null,
+    surrender: 0, offmap: def.offmap ? { ...def.offmap } : null, offmapVP: def.offmapVP || 0,
     generals: (def.generals || []).map(([name, skill, type]) => ({ id: G.nextId++, name, skill, type: type || 'gen' })),
     eco: { civ: 0, mil: 0, dock: 0, res: {}, need: {}, offer: {} }, stats: {}, flags: {}, decCd: {}, extraMods: {},
     aiState: {}, autoTrade: true, navalBase: -1, tensionCaused: 0,
@@ -243,7 +243,16 @@ export function attachRuntime(G, map, rngState) {
   G.focusTree = (C) => FOCUS_TREES[C.focus.tree] || FOCUS_TREES.generic;
   G.queueEvent = (id, tag, days = 0) => { G.events.scheduled.push({ id, tag, at: G.hour + Math.round(days * 24) }); };
   G.makeCountry = (tag, def) => makeCountry(G, tag, def);
-  for (const k of ['focusNode', 'focusTree', 'queueEvent', 'makeCountry']) Object.defineProperty(G, k, { enumerable: false, value: G[k], writable: true });
+  // 항복 특수 처리(비시 프랑스, 내전 종결, 분할 등): 데이터의 이벤트가 처리
+  G.onCapitulate = (tag, victor, enemies) => {
+    const H = CAPITULATIONS.find((h) => h.tag === tag && (!h.by || h.by.includes(victor) || (h.anyEnemy && enemies.some((e) => h.by.includes(e)))) && (!h.trig || checkTrigger(G, G.countries[tag], h.trig)));
+    if (!H || !EVENT_INDEX[H.event]) return null;
+    G.capVictor = victor;
+    fireEvent(G, H.event, H.who === 'victor' ? victor : tag);
+    G.capVictor = null;
+    return 'handled';
+  };
+  for (const k of ['focusNode', 'focusTree', 'queueEvent', 'makeCountry', 'onCapitulate']) Object.defineProperty(G, k, { enumerable: false, value: G[k], writable: true });
   for (const k of ['warRel', 'supplyOf', 'supRatio', 'seaReach', 'airSup', 'airPen', 'casPower', 'navSup', 'raid', 'divsAt', 'ownCtrl', 'ctrlBy', 'battles', 'onNews', 'onCapture', 'onWar', 'onDivDestroyed'])
     if (!(k in G)) Object.defineProperty(G, k, { enumerable: false, writable: true, value: undefined });
   G.battles = G.battles || {};
@@ -265,6 +274,7 @@ export function tick(G) {
 
 export function daily(G) {
   if (G.indexDirty || !G.ownCtrl) rebuildIndexes(G);
+  { const m = new Date(Date.UTC(1936, 0, 1) + G.hour * 3600e3).getUTCMonth(); G.winter = m === 11 || m === 0 || m === 1; }
   rebuildWarCache(G);
   const alive = Object.values(G.countries).filter((C) => C.alive);
   for (const C of alive) if (C.modsDirty || G.hour % (24 * 7) === 0) refreshMods(C);

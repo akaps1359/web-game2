@@ -50,10 +50,11 @@ export function declareWar(G, a, b, opts = {}) {
   if (B.master) joinDef.add(B.master);
   for (const t in G.countries) { const X = G.countries[t]; if (X.alive && X.master === b) joinDef.add(t); }
   if (B.faction) for (const t of G.factions[B.faction]?.members || []) joinDef.add(t);
-  for (const t in G.countries) { const X = G.countries[t]; if (X.alive && X.guarantees?.includes(b)) joinDef.add(t); }
+  if (!opts.noGuarantees) for (const t in G.countries) { const X = G.countries[t]; if (X.alive && X.guarantees?.includes(b)) joinDef.add(t); }
   for (const t of joinDef) if (t !== b && t !== a && G.countries[t]?.alive && !atWar(G, t, a) && !allied(G, t, a)) joinWar(G, war, t, 'def');
   // 공격측: 진영 지도자가 선전포고한 경우 진영 전체, 괴뢰국
-  if (A.faction && G.factions[A.faction]?.leader === a) for (const t of G.factions[A.faction].members) if (t !== a && !atWar(G, t, b) && !allied(G, t, b)) joinWar(G, war, t, 'att');
+  // 공격측: 진영 지도자가 선전포고하면 소국 동맹은 따라오지만, 강대국은 스스로 참전을 결정한다(이벤트·중점)
+  if (A.faction && G.factions[A.faction]?.leader === a) for (const t of G.factions[A.faction].members) if (t !== a && !G.countries[t].major && !atWar(G, t, b) && !allied(G, t, b)) joinWar(G, war, t, 'att');
   for (const t in G.countries) { const X = G.countries[t]; if (X.alive && X.master === a && !atWar(G, t, b)) joinWar(G, war, t, 'att'); }
   rebuildWarCache(G);
   news(G, `${A.name}이(가) ${B.name}에 선전포고했습니다!`, { kind: 'war', tags: [a, b], big: 1 });
@@ -314,6 +315,7 @@ export function surrenderProgress(G, tag) {
     if (S.ctrl !== tag && atWar(G, tag, S.ctrl)) lost += v;
   }
   const C = G.countries[tag];
+  total += C.offmapVP || 0; // 지도 밖 후방(시베리아 등)은 잃지 않는다
   if (C.capital >= 0 && G.st[C.capital].ctrl !== tag && atWar(G, tag, G.st[C.capital].ctrl)) lost += total * 0.05;
   return total > 0 ? Math.min(1, lost / total) : 1;
 }
@@ -369,7 +371,8 @@ export function settleCapitulation(G, tag, victor, enemies, opts = {}) {
   // 사단 해산
   for (const D of divsOf(G, tag)) destroyDivision(G, D, 'capitulate');
   for (const id in G.wings) if (G.wings[id].tag === tag) delete G.wings[id];
-  for (const id in G.fleets) if (G.fleets[id].tag === tag) { G.fleets[id].tag = victor; G.fleets[id].mission = 'idle'; }
+  const fleetTo = opts.fleetTo && G.countries[opts.fleetTo]?.alive ? opts.fleetTo : victor;
+  for (const id in G.fleets) if (G.fleets[id].tag === tag) { G.fleets[id].tag = fleetTo; G.fleets[id].mission = 'idle'; G.fleets[id].reserve = false; }
   // 장비 절반 이전
   for (const e in C.stock) { V.stock[e] = (V.stock[e] || 0) + C.stock[e] * 0.5; C.stock[e] *= 0.1; }
   if (puppet && remainVP > 0) {
@@ -385,7 +388,7 @@ export function settleCapitulation(G, tag, victor, enemies, opts = {}) {
   } else {
     // 남은 영토는 승자에게
     for (let i = 0; i < G.st.length; i++) { const S = G.st[i]; if (S.owner === tag) { S.owner = victor; S.ctrl = victor; S.ctrlSince = G.hour; } }
-    if (alliesFighting && C.faction) {
+    if ((alliesFighting && C.faction) || opts.exile) {
       C.capitulated = true; C.exiled = true; C.capital = -1;
       for (const w of G.wars) { /* 망명정부는 전쟁에 남되 항복 상태 */ }
       news(G, `${C.name} 정부가 망명했습니다.`, { kind: 'diplo', tags: [tag] });

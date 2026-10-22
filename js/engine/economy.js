@@ -59,8 +59,9 @@ export function canBuild(G, C, type, st) {
 // 상태별 공장 반영률
 function facShare(S, tag) {
   if (S.ctrl !== tag) return 0;
-  if (S.owner === tag) return (S.cores.includes(tag) ? 1 : 0.6) * (1 - (S.dmg || 0));
-  return 0.25 * (1 - (S.dmg || 0));
+  // 핵심 영토 100%, 병합한 비핵심 영토 35%, 점령지 15% (저항과 낮은 순응도)
+  if (S.owner === tag) return (S.cores.includes(tag) ? 1 : 0.35) * (1 - (S.dmg || 0));
+  return 0.15 * (1 - (S.dmg || 0));
 }
 function resShare(S, tag) {
   if (S.ctrl !== tag) return 0;

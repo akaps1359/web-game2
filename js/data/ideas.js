@@ -92,6 +92,7 @@ export const SPIRITS = {
   // 기타
   pol_cav: { name: '기병의 전통', mods: { 'cav.atk': 0.1 } },
   spr_unrest: { name: '정치적 혼란', mods: { stability: -0.2, ppFactor: -0.2 } },
+  nsp_army: { name: '아프리카군', mods: { 'land.atk': 0.1, 'land.org': 0.1 }, desc: '모로코 전쟁으로 단련된 외인부대와 모로코 정규군.' },
   fin_sisu: { name: '시수', mods: { 'land.def': 0.1, winter: 0.5 }, desc: '핀란드인의 불굴의 정신.' },
   swi_neutral: { name: '무장 중립', mods: { 'land.def': 0.15, 'land.entrench': 0.3 } },
   tur_kemal: { name: '케말주의', mods: { stability: 0.05 } },

@@ -1,0 +1,51 @@
+// 1942~1945 이벤트: 이탈리아 휴전과 사회 공화국, 루마니아·불가리아·핀란드의 이탈, 독일 항복, 지도자 교체
+const ITALY_SOUTH = ['palermo', 'catania', 'sardegna', 'calabria', 'bari', 'napoli'];
+const RSI_STATES = ['milano', 'torino', 'genova', 'venezia', 'trieste', 'trento', 'bologna'];
+
+export const E1942 = [
+  { id: 'ita_armistice', who: 'ITA', trig: [['faction', 'ITA', 'axis'], ['atWar', 'ITA', 'ENG'], ['or', [['surrender', 'ITA', 0.3], ['and', [['after', '1943-07-20'], ['enemyControls', 'ITA', ITALY_SOUTH]]]]]], pic: 'crowd',
+    news: true, newsText: '무솔리니가 실각했습니다. 이탈리아가 연합국과 휴전합니다!',
+    immediate: [['leaveFaction'], ['leaveWar'], ['gov', { leader: '피에트로 바돌리오', title: '총리', ideology: 'neu', gov: '왕국 정부', party: '바돌리오 내각' }], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]], ['event', 'ger_achse', 'GER', 0]],
+    title: '무솔리니 실각', desc: '7월 24일 밤 파시즘 대평의회가 무솔리니를 불신임했고, 이튿날 국왕은 그를 체포했다. 바돌리오 정부는 9월 8일 연합국과의 휴전을 발표했다. 국왕과 정부는 로마를 떠나 남쪽으로 피했다.',
+    opts: [{ t: '휴전', fx: [['stab', -0.1]] }] },
+  { id: 'ger_achse', who: 'GER', manual: true, pic: 'troops',
+    immediate: [['warOn', 'THIS', 'ITA', '이탈리아 전역'], ['spawnCtrl', 'RSI', RSI_STATES, 'GER'], ['for', 'RSI', [['units', [['inf9', 4, 'milano'], ['inf9', 2, 'bologna']]], ['equip', 'inf_eq', 3000]]]],
+    title: '아흐제 작전', desc: '독일군이 이탈리아군을 무장 해제하고 북부와 중부를 장악했다. 9월 12일 그란사소 산장에서 구출된 무솔리니가 북부에 "이탈리아 사회 공화국"을 세웠다.',
+    opts: [{ t: '배신자를 응징하라', fx: [] }] },
+  { id: 'rom_coup', who: 'ROM', trig: [['faction', 'ROM', 'axis'], ['after', '1944-03-01'], ['or', [['enemyControls', 'ROM', ['iasi', 'chisinau', 'galati', 'cernauti', 'budjak']], ['surrender', 'ROM', 0.2]]]], pic: 'crowd',
+    news: true, newsText: '루마니아가 추축국에서 이탈해 연합국 편으로 돌아섰습니다!',
+    immediate: [['leaveFaction'], ['leaveWar'], ['gov', { leader: '미하이 1세', title: '국왕', ideology: 'neu', gov: '입헌 군주제', party: '국민민주블록' }], ['cede', ['chisinau', 'budjak', 'cernauti'], 'SOV', 1], ['if', [['alive', 'SOV'], ['faction', 'SOV']], [['joinFaction', 'SOV']]]],
+    title: '미하이 1세의 쿠데타', desc: '8월 23일 국왕 미하이 1세가 궁정에서 안토네스쿠를 체포했다. 루마니아는 추축국에서 빠져나와 독일에 선전포고했다.',
+    opts: [{ t: '연합국 편으로!', fx: [['if', [['alive', 'GER'], ['notAtWar', 'THIS', 'GER']], [['war', 'GER', '루마니아의 전향', { noGuarantees: true }]]]] }] },
+  { id: 'bul_switch', who: 'BUL', trig: [['faction', 'BUL', 'axis'], ['after', '1944-08-01'], ['or', [['enemyControls', 'BUL', ['varna', 'burgas', 'plovdiv', 'pleven']], ['surrender', 'BUL', 0.15], ['controls', 'SOV', ['bucuresti']]]]], pic: 'crowd',
+    immediate: [['leaveFaction'], ['leaveWar'], ['gov', { leader: '키몬 게오르기에프', title: '총리', ideology: 'com', gov: '조국전선 정부', party: '조국전선' }], ['if', [['alive', 'SOV'], ['faction', 'SOV']], [['joinFaction', 'SOV']]]],
+    title: '조국전선 정부', desc: '붉은 군대가 국경에 이르자 9월 9일 조국전선이 정권을 잡았다. 불가리아는 독일에 선전포고했다.',
+    opts: [{ t: '조국전선 만세', fx: [['if', [['alive', 'GER'], ['notAtWar', 'THIS', 'GER']], [['war', 'GER', '불가리아의 전향', { noGuarantees: true }]]]] }] },
+  { id: 'fin_armistice', who: 'FIN', trig: [['fired', 'fin_continuation'], ['atWar', 'SOV', 'FIN'], ['after', '1944-06-01'], ['or', [['controls', 'SOV', ['viipuri']], ['surrender', 'FIN', 0.2], ['after', '1944-09-15']]]], pic: 'diplomacy',
+    title: '모스크바 휴전 협정', desc: '여름 공세로 카렐리야 지협이 다시 뚫렸다. 대통령이 된 만네르헤임 원수는 소련과 휴전하고 핀란드에 있는 독일군을 몰아내기로 했다.',
+    opts: [
+      { t: '휴전한다', ai: 9, fx: [['cede', ['viipuri', 'sortavala', 'petsamo'], 'SOV', 1], ['leaveFaction'], ['peace', 'SOV'], ['gov', { leader: '칼 구스타브 에밀 만네르헤임', title: '대통령' }], ['news', '핀란드가 소련과 휴전했습니다.', 1]] },
+      { t: '끝까지 싸운다', ai: 0, fx: [['ws', 0.1]] },
+    ] },
+  { id: 'ger_unconditional', who: 'GER', manual: true, pic: 'ruins', news: true, newsText: '독일이 무조건 항복했습니다! 유럽의 전쟁이 끝났습니다.',
+    immediate: [['flag', 've_day'], ['settleCap', null, { puppet: false }]],
+    title: '무조건 항복', desc: '베를린이 함락되었다. 5월 7일 랭스, 8일 베를린 카를스호르스트에서 독일군은 무조건 항복 문서에 서명했다. 유럽에서 전쟁이 끝났다.',
+    opts: [{ t: '전쟁이 끝났다', fx: [] }] },
+  { id: 've_day', who: ['ENG', 'FRA', 'SOV', 'USA', 'POL'], trig: [['flag', 've_day']], pic: 'victory', paper: '승전 특보',
+    title: '유럽 전승 기념일', desc: '런던의 트래펄가 광장, 파리의 샹젤리제, 모스크바의 붉은 광장에 사람들이 쏟아져 나왔다. 6년에 걸친 유럽의 전쟁이 끝났다. 이제 남은 것은 폐허 위에 새 질서를 세우는 일이다.',
+    opts: [{ t: '승리!', fx: [['stab', 0.15], ['ws', -0.2]] }] },
+
+  // ── 지도자 교체 ──
+  { id: 'usa_election1940', who: 'USA', trig: [['after', '1940-11-05']], pic: 'crowd',
+    title: '루스벨트 3선', desc: '루스벨트가 미국 역사상 처음으로 3선에 성공했다. 그는 "여러분의 아들들을 외국의 전쟁에 보내지 않겠다"고 약속했다.',
+    opts: [{ t: '네 번째 임기를 향해', fx: [['stab', 0.03], ['pp', 30]] }] },
+  { id: 'usa_truman', who: 'USA', trig: [['after', '1945-04-12'], ['leader', '프랭클린 D. 루스벨트']], pic: 'city',
+    title: '루스벨트 서거', desc: '4월 12일 웜스프링스에서 루스벨트 대통령이 뇌출혈로 숨졌다. 부통령 해리 S. 트루먼이 대통령직을 이어받는다.',
+    opts: [{ t: '트루먼 대통령', fx: [['gov', { leader: '해리 S. 트루먼', title: '대통령' }], ['stab', -0.02]] }] },
+  { id: 'eng_attlee', who: 'ENG', trig: [['after', '1945-07-26'], ['flag', 've_day']], pic: 'crowd',
+    title: '노동당 압승', desc: '전쟁을 승리로 이끈 처칠의 보수당이 총선에서 졌다. 국민은 복지 국가를 약속한 클레멘트 애틀리의 노동당을 택했다.',
+    opts: [{ t: '애틀리 내각', fx: [['gov', { leader: '클레멘트 애틀리', title: '총리', party: '노동당' }], ['stab', 0.05]] }] },
+  { id: 'gre_metaxas_death', who: 'GRE', trig: [['after', '1941-01-29'], ['leader', '이오아니스 메탁사스']], pic: 'city',
+    title: '메탁사스 사망', desc: '이탈리아군을 알바니아로 밀어낸 승리의 한가운데서 메탁사스 총리가 숨을 거두었다.',
+    opts: [{ t: '코리지스 내각', fx: [['gov', { leader: '알렉산드로스 코리지스', title: '총리' }], ['stab', -0.03]] }] },
+];

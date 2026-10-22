@@ -80,6 +80,16 @@ export function tplStats(C, tpl) {
 }
 
 export function getTpl(C, id) { return C.templates.find((t) => t.id === id); }
+
+// 장비 충족률: 장비 가치(IC)로 가중한 평균. 일부 장비(예: 공병의 지원 장비)가 없어도 나머지로 채운다
+export function eqFillRatio(C, need, scale = 1) {
+  let tot = 0, got = 0;
+  for (const e in need) { const n = need[e] * scale; if (n <= 0) continue; const w = n * eqCost(C, e); tot += w; got += w * Math.min(1, Math.max(0, C.stock[e] || 0) / n); }
+  return tot > 0 ? got / tot : 1;
+}
+function consumeEq(C, need, scale) {
+  for (const e in need) { const n = need[e] * scale; if (n > 0) C.stock[e] = Math.max(0, (C.stock[e] || 0) - n); }
+}
 export function divStats(G, D) { const C = G.countries[D.tag]; return tplStats(C, getTpl(C, D.tpl)); }
 
 // 사단 아이콘 종류
@@ -293,13 +303,19 @@ export function hourlyDivisions(G) {
       const maxPlan = 0.3 + M(C, 'land.planning');
       D.plan = Math.min(maxPlan, D.plan + 0.3 / (10 * 24));
     }
+    // 러시아의 겨울: 12~2월 동부(북위 48° 이상, 동경 22° 이상)에서 혹한 대비가 없는 부대는 소모
+    if (G.winter && map.lat[D.loc] >= 48 && map.lon[D.loc] >= 22) { const res = Math.min(1, M(C, 'winter') * 2); if (res < 1) D.str = Math.max(0.05, D.str - 0.00008 * (1 - res)); }
     // 보급 부족 소모 (보급 15% 미만에서 하루 최대 약 0.5%)
     if (D.sup < 0.15) D.str = Math.max(0.05, D.str - 0.00025 * (1 - D.sup / 0.15));
+    // 완전히 포위되어 굶주린 사단은 항복
+    if (D.sup < 0.05 && D.str <= 0.06 && G.battles[D.loc] == null && enemyAround(G, D)) { news(G, `${D.name}(${C.name})이(가) ${map.name[D.loc]}에서 고립된 끝에 항복했습니다.`, { tags: [D.tag], kind: 'mil', st: D.loc }); destroyDivision(G, D, 'starved'); continue; }
     // 사막·산악 등 지형 소모
     const attr = TERRAIN[map.terrain[D.loc]]?.attr || 0;
     if (attr && D.sup < 0.4) D.str = Math.max(0.05, D.str - 0.00006 * attr);
   }
 }
+
+function enemyAround(G, D) { return G.map.nb[D.loc].some((v) => atWar(G, D.tag, G.st[v].ctrl)); }
 
 function moveIndex(G, D, from) {
   const a = G.divsAt[from]; if (a) { const i = a.indexOf(D.id); if (i >= 0) a.splice(i, 1); }
@@ -322,13 +338,12 @@ export function dailyMilitary(G, C) {
     if (D.str >= 0.999 || D.retreat || D.sup < 0.08) continue;
     const st = divStats(G, D);
     const frac = Math.min(rate * Math.min(1, D.sup + 0.2) * (1 + (st.mods.reinforce || 0)), 1 - D.str);
-    let ratio = 1;
+    let ratio = eqFillRatio(C, st.eq, frac);
     const avail = manpowerAvailable(C);
     if (st.mp * frac > avail) ratio = Math.min(ratio, avail / (st.mp * frac));
-    for (const e in st.eq) { const need = st.eq[e] * frac; if (need > 0) ratio = Math.min(ratio, (C.stock[e] || 0) / need); }
     if (ratio <= 0.001) continue;
     ratio = Math.min(1, ratio);
-    for (const e in st.eq) C.stock[e] = Math.max(0, (C.stock[e] || 0) - st.eq[e] * frac * ratio);
+    consumeEq(C, st.eq, frac * ratio);
     C.mp.inDivs += st.mp * frac * ratio;
     D.str = Math.min(1, D.str + frac * ratio);
   }
@@ -345,13 +360,12 @@ export function dailyMilitary(G, C) {
     }
     T.prog += speed;
     if (T.prog >= st.train) {
-      // 장비 확인: 최소 40%
-      let ratio = 1;
-      for (const e in st.eq) ratio = Math.min(ratio, (C.stock[e] || 0) / st.eq[e]);
+      // 장비 확인: 최소 40%(가치 가중)
+      let ratio = eqFillRatio(C, st.eq);
       if (ratio < (T.minEq ?? 0.4) && !T.force) { T.wait = true; continue; }
       T.wait = false;
-      ratio = Math.min(1, ratio);
-      for (const e in st.eq) C.stock[e] = Math.max(0, (C.stock[e] || 0) - st.eq[e] * ratio);
+      ratio = Math.max(0.05, Math.min(1, ratio));
+      consumeEq(C, st.eq, ratio);
       let loc = T.loc;
       if (loc == null || G.st[loc].ctrl !== tag) loc = C.capital >= 0 && G.st[C.capital].ctrl === tag ? C.capital : firstControlled(G, tag);
       if (loc < 0) continue;

@@ -1,7 +1,8 @@
 // 효과·조건 해석기 (국가 중점·이벤트·결정 데이터에서 사용)
 // 효과: [연산, ...인수] 배열의 목록. 조건도 같은 형식(모두 참이어야 함)
 import { atWar, atWarAny, allied, news, hourOfDate, yearFrac } from './world.js';
-import { addTension, declareWar, transferStates, annexCountry, setPuppet, createFaction, joinFaction, leaveFaction, signNap, grantAccess, civilWar, spawnCountry, relocateCapital, joinWar, warBetween } from './diplomacy.js';
+import { addTension, declareWar, transferStates, annexCountry, setPuppet, createFaction, joinFaction, leaveFaction, signNap, grantAccess, civilWar, spawnCountry, relocateCapital, joinWar, warBetween, settleCapitulation, cleanupWars, capitulate } from './diplomacy.js';
+import { rebuildWarCache } from './world.js';
 import { addSpirit, removeSpirit, enactLaw } from './politics.js';
 import { grantTech } from './research.js';
 import { createDivision, getTpl } from './military.js';
@@ -36,7 +37,9 @@ export function applyEffects(G, C, fx, ctx = {}) {
 function T(G, t, C) { return t === 'THIS' || t == null ? C : G.countries[t]; }
 
 function applyOne(G, C, e, ctx) {
-  const [op, a, b, c] = e;
+  const op = e[0];
+  const th = (x) => (x === 'THIS' ? C.tag : x);
+  const a = th(e[1]), b = th(e[2]), c = th(e[3]);
   switch (op) {
     case 'pp': C.pp += a; break;
     case 'stab': C.baseStab += a; break;
@@ -58,8 +61,8 @@ function applyOne(G, C, e, ctx) {
     case 'transfer': { const to = b === 'THIS' || b == null ? C.tag : b; transferStates(G, [].concat(a), to, { core: !!c }); break; }
     case 'puppet': { const X = G.countries[a]; if (X?.alive) setPuppet(G, C.tag, a); break; }
     case 'unpuppet': { const X = G.countries[a]; if (X) X.master = null; break; }
-    case 'war': { const t = a; if (G.countries[t]?.alive && !atWar(G, C.tag, t) && !allied(G, C.tag, t)) declareWar(G, C.tag, t, { forced: true, name: b }); break; }
-    case 'warOn': { const att = a, def = b; if (G.countries[att]?.alive && G.countries[def]?.alive && !atWar(G, att, def)) declareWar(G, att, def, { forced: true, name: c }); break; }
+    case 'war': { const t = a; if (G.countries[t]?.alive && !atWar(G, C.tag, t) && !allied(G, C.tag, t)) { if (C.naps) delete C.naps[t]; declareWar(G, C.tag, t, { forced: true, name: b, ...(c || {}) }); } break; }
+    case 'warOn': { const att = a, def = b; if (G.countries[att]?.alive && G.countries[def]?.alive && !atWar(G, att, def)) { if (G.countries[att].naps) delete G.countries[att].naps[def]; declareWar(G, att, def, { forced: true, name: c, ...(e[4] || {}) }); } break; }
     case 'joinWarOf': { // [joinWarOf, ally, enemy]
       const w = warBetween(G, a, b); if (w) joinWar(G, w, C.tag, w.att.includes(a) ? 'att' : 'def'); break;
     }
@@ -75,19 +78,20 @@ function applyOne(G, C, e, ctx) {
     case 'gov': Object.assign(C, a); C.modsDirty = true; break; // {ideology, leader, title, gov, party}
     case 'flag': G.flags[a] = b ?? G.hour; break;
     case 'cflag': (C.flags ||= {})[a] = b ?? G.hour; break;
-    case 'equip': C.stock[a] = (C.stock[a] || 0) + b; break;
+    case 'equip': C.stock[a] = Math.max(0, (C.stock[a] || 0) + b); break;
     case 'manpower': C.mp.total += a; C.mp.bonus = (C.mp.bonus || 0) + a; break;
     case 'fuel': C.fuel = (C.fuel || 0) + a; break;
     case 'law': enactLaw(G, C, a, b, true); break;
     case 'unlock': C.unlock[a] = 1; C.techVer++; break;
     case 'demil': { const i = idxOf(G, a); if (i != null) G.st[i].demil = b ?? 0; break; }
     case 'demilAll': for (const S of G.st) if (S.owner === C.tag) S.demil = 0; break;
-    case 'news': news(G, a, { kind: 'event', tags: [C.tag], big: b ? 1 : 0 }); break;
+    case 'news': news(G, a.replace(/\{country\}/g, C.name).replace(/\{leader\}/g, C.leader), { kind: 'event', tags: [C.tag], big: b ? 1 : 0 }); break;
     case 'event': G.queueEvent(a, b || C.tag, c || 0); break;
     case 'units': {
       for (const [tplKey, n, loc] of a) {
         let tpl = C.templates.find((t) => t.key === tplKey) || C.templates[0];
-        const li = loc ? idxOf(G, loc) : C.capital;
+        let li = loc ? idxOf(G, loc) : C.capital;
+        if (li == null || li < 0 || G.st[li].ctrl !== C.tag) li = C.capital >= 0 && G.st[C.capital].ctrl === C.tag ? C.capital : G.st.findIndex((S) => S.ctrl === C.tag && S.owner === C.tag);
         if (li == null || li < 0) continue;
         for (let k = 0; k < n; k++) { const D = createDivision(G, C.tag, tpl.id, li, { xp: 0.2 }); (G.divsAt[li] ||= []).push(D.id); }
       }
@@ -104,8 +108,86 @@ function applyOne(G, C, e, ctx) {
     case 'if': if (checkTrigger(G, C, a)) applyEffects(G, C, b, ctx); else if (c) applyEffects(G, C, c, ctx); break;
     case 'for': { const X = G.countries[a]; if (X?.alive || b?.[0]?.[0] === 'spawn') applyEffects(G, X || C, b, ctx); break; }
     case 'random': { const r = G.rng(); if (r < a) applyEffects(G, C, b, ctx); else if (c) applyEffects(G, C, c, ctx); break; }
+    // 새 국가를 세우고 괴뢰국으로 둔다: [spawnPuppet, 태그, [주], 종주국(생략 시 THIS)]
+    case 'spawnPuppet': { const N = spawnCountry(G, a, [].concat(b).filter((k) => idxOf(G, k) != null)); const m = c || C.tag; if (G.countries[m]?.alive && m !== a) setPuppet(G, m, a); N.isAI = G.player !== a; break; }
+    // 두 나라 사이의 전쟁만 끝낸다(다른 참전국은 계속): [peace, 상대]
+    case 'peace': { endWarPair(G, C.tag, a); break; }
+    // 이 나라가 모든 전쟁에서 빠진다
+    case 'leaveWar': { for (const w of G.wars) { w.att = w.att.filter((t) => t !== C.tag); w.def = w.def.filter((t) => t !== C.tag); } returnOccupied(G, C.tag); rebuildWarCache(G); cleanupWars(G); G.mapDirty = true; break; }
+    // 영토 할양(소유국과 무관): [cede, [주], 받는 나라]
+    case 'cede': { const to = b || C.tag; if (!G.countries[to]?.alive) break; transferStates(G, [].concat(a).filter((k) => idxOf(G, k) != null), to, { core: !!c }); break; }
+    // 플레이어가 이 나라라면 다른 나라로 갈아탄다
+    case 'playAs': if (G.player === C.tag && G.countries[a]?.alive) { for (const t in G.countries) G.countries[t].isAI = t !== a; G.player = a; G.onPlayerChange?.(a); } break;
+    // 항복 처리: [settleCap, 승전국, 옵션]
+    case 'settleCap': {
+      const enemies = Object.keys(G.warRel[C.tag] || {});
+      const v = a && G.countries[a]?.alive ? a : G.capVictor && G.countries[G.capVictor]?.alive ? G.capVictor : enemies[0];
+      if (v) settleCapitulation(G, C.tag, v, enemies, b || {});
+      break;
+    }
+    // AI가 지정일 이후에 쓰는 전쟁 목표
+    // AI가 지정일 이후 실행할 전쟁 목표: [wargoalAt, 대상, '1939-09-01' | {at, name, force}]
+    case 'wargoalAt': {
+      if (!G.countries[a]?.alive) break;
+      const o = typeof b === 'object' && b ? b : { at: b };
+      C.wargoals = C.wargoals.filter((w) => w.target !== a);
+      C.wargoals.push({ target: a, type: 'conquer', forced: true, after: hourOf(o.at), force: o.force !== false, name: o.name });
+      break;
+    }
+    case 'guarantee': if (G.countries[a]?.alive) { (C.guarantees ||= []); if (!C.guarantees.includes(a)) C.guarantees.push(a); } break;
+    case 'fleetsTo': { for (const id in G.fleets) { const F = G.fleets[id]; if (F.tag === C.tag) { F.tag = a; F.mission = 'idle'; F.reserve = false; } } break; }
+    case 'stockTo': { const X = G.countries[a]; if (X) for (const k in C.stock) { const amt = C.stock[k] * (b ?? 0.5); X.stock[k] = (X.stock[k] || 0) + amt; C.stock[k] -= amt; } break; }
+    // 현재 이 나라가 통제 중인 주만 골라 새 나라로: [spawnCtrl, 태그, [주], 종주국?]
+    case 'spawnCtrl': {
+      const keys = [].concat(b).filter((k) => { const i = idxOf(G, k); return i != null && G.st[i].owner === C.tag && G.st[i].ctrl === C.tag; });
+      if (!keys.length) break;
+      const N = spawnCountry(G, a, keys); if (c && G.countries[c]?.alive) setPuppet(G, c, a); N.isAI = G.player !== a; break;
+    }
+    case 'breakNap': { const X = G.countries[a]; if (C.naps) delete C.naps[a]; if (X?.naps) delete X.naps[C.tag]; break; }
+    case 'offmapAdd': { C.offmap ||= { civ: 0, mil: 0, dock: 0, res: {} }; C.offmap[a] = (C.offmap[a] || 0) + b; break; }
+    // 국경 주 중 이웃 수가 많은 n개에 요새 +lv: [fortBorder, n, lv, 상대국?]
+    case 'fortBorder': {
+      const map = G.map; const rows = [];
+      for (let i = 0; i < map.nGeo; i++) { const S = G.st[i]; if (S.owner !== C.tag || S.ctrl !== C.tag) continue; const k = map.nb[i].filter((v) => G.st[v].owner !== C.tag && (!c || G.st[v].owner === c)).length; if (k) rows.push([i, k + (S.vp || 0) * 0.1]); }
+      rows.sort((x, y) => y[1] - x[1]);
+      for (const [i] of rows.slice(0, a)) G.st[i].fort = Math.min(10, (G.st[i].fort || 0) + (b || 1));
+      break;
+    }
+    // 강제 항복(정부 붕괴 등)
+    case 'capitulate': if (G.warRel[C.tag] && Object.keys(G.warRel[C.tag]).length) capitulate(G, C.tag); break;
+    // AI 공세 보류: [aiHold, [태그], '1940-05-10']
+    case 'aiHold': { C.aiState ||= {}; C.aiState.hold ||= {}; for (const t of [].concat(a)) C.aiState.hold[t] = hourOf(b); break; }
+    case 'removeWargoal': C.wargoals = C.wargoals.filter((w) => w.target !== a); C.justify = C.justify.filter((j) => j.target !== a); break;
+    case 'ownCores': { // 자국이 통제 중인 이 나라 핵심 주를 소유
+      for (const S of G.st) if (S.cores.includes(a) && S.ctrl === C.tag && S.owner !== C.tag) S.owner = C.tag; G.mapDirty = true; G.indexDirty = true; break;
+    }
     default: console.warn('unknown effect', op);
   }
+}
+
+const hourOf = (d) => { if (!d) return 0; const [y, m, dd] = d.split('-').map(Number); return hourOfDate(y, m, dd); };
+
+// 두 나라 사이 전쟁 종료: 둘만 남은 전쟁이면 전쟁 자체를 끝내고, 아니면 한쪽을 빼낸다
+function endWarPair(G, a, b) {
+  const w = warBetween(G, a, b); if (!w) return;
+  const sideA = w.att.includes(a) ? 'att' : 'def';
+  const mine = w[sideA], theirs = w[sideA === 'att' ? 'def' : 'att'];
+  if (mine.length <= 1 || theirs.length <= 1) {
+    const leaving = mine.length <= 1 ? a : b;
+    w.att = w.att.filter((t) => t !== leaving); w.def = w.def.filter((t) => t !== leaving);
+  } else { w.att = w.att.filter((t) => t !== a); w.def = w.def.filter((t) => t !== a); }
+  rebuildWarCache(G);
+  returnOccupied(G, a); returnOccupied(G, b);
+  cleanupWars(G);
+  G.mapDirty = true;
+}
+// 더 이상 전쟁 중이 아닌 점령지는 원래 소유국에게
+function returnOccupied(G, tag) {
+  for (const S of G.st) {
+    if (S.ctrl === S.owner) continue;
+    if ((S.owner === tag || S.ctrl === tag) && !atWar(G, S.ctrl, S.owner) && G.countries[S.owner]?.alive) { S.ctrl = S.owner; S.ctrlSince = G.hour; }
+  }
+  G.indexDirty = true;
 }
 
 export function checkTrigger(G, C, trig) {
@@ -114,7 +196,9 @@ export function checkTrigger(G, C, trig) {
   return true;
 }
 function checkOne(G, C, t) {
-  const [op, a, b, c] = t;
+  const op = t[0];
+  const th = (x) => (x === 'THIS' ? C.tag : x);
+  const a = th(t[1]), b = th(t[2]), c = t[3];
   const idx = (k) => idxOf(G, k);
   switch (op) {
     case 'after': { const [y, m, d] = a.split('-').map(Number); return G.hour >= hourOfDate(y, m, d); }
@@ -151,6 +235,20 @@ function checkOne(G, C, t) {
     case 'and': return a.every((x) => checkOne(G, C, x));
     case 'allied': return allied(G, a, b);
     case 'hasWargoal': return C.wargoals.some((w) => w.target === a);
+    case 'fired': return !!G.events.fired[a + ':' + (b || C.tag)];
+    case 'notFired': return !G.events.fired[a + ':' + (b || C.tag)];
+    case 'master': return G.countries[a === 'THIS' ? C.tag : a]?.master === b;
+    case 'notPuppet': return !G.countries[a === 'THIS' ? C.tag : a]?.master;
+    case 'controlsCount': { // [controlsCount, 나라, [주], 최소 개수]
+      const X = a === 'THIS' ? C.tag : a; let n = 0; for (const k of [].concat(b)) if (G.st[idx(k)]?.ctrl === X) n++; return n >= c;
+    }
+    case 'enemyControls': { // [enemyControls, 나라, [주]] — 그 나라의 적이 하나라도 통제
+      const X = a === 'THIS' ? C.tag : a; return [].concat(b).some((k) => { const S = G.st[idx(k)]; return S && S.ctrl !== X && atWar(G, X, S.ctrl); });
+    }
+    case 'player': return G.player === (a === 'THIS' ? C.tag : a);
+    case 'spirit': return C.spirits.some((x) => x.id === a);
+    case 'leader': return G.countries[b || C.tag]?.leader === a;
+    case 'major': return !!G.countries[a]?.major;
     case 'numDivsRatio': { // [numDivsRatio, other, ratio] 자국 사단 수 / 상대 사단 수 ≥ ratio
       let mine = 0, theirs = 0; for (const id in G.divs) { const D = G.divs[id]; if (D.tag === C.tag) mine++; else if (D.tag === a) theirs++; } return mine >= theirs * b;
     }

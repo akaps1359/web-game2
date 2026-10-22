@@ -54,7 +54,7 @@ export function dailyAir(G) {
     if (!cov.length) continue;
     W.cov = cov.length;
     const planes = W.n * fuelOk;
-    C.fuel = Math.max(0, C.fuel - planes * 4 * (W.mission === 'none' ? 0 : 1));
+    C.fuel = Math.max(0, C.fuel - planes * 1.5 * (W.mission === 'none' ? 0 : 1));
     const aAtk = (st.atk || 0) * (1 + M(C, 'air.atk')) * (1 + (st.agi || 0) / 200) * (1 + M(C, 'air.agi'));
     active.push({ W, C, st, cov, planes, aAtk });
     if (W.mission === 'sup' || W.type === 'fighter') { const arr = ensure(fighter, W.tag); for (const s of cov) arr[s] += planes * aAtk / cov.length * 6; }
