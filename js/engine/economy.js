@@ -283,7 +283,8 @@ export function runEconomy(G, C) {
     total += S.pop * 1000 * pct * mpMod * (S.cores.includes(tag) ? 1 : 0.15);
   }
   if (C.offmap) total += (C.offmap.pop || 0) * 1e6 * (C.offmap.mpFactor || 0) * pct * mpMod;
-  C.mp.total = Math.max(0, total - C.mp.dead);
+  // 이벤트·중점·결정으로 얻은 인력(bonus)은 매일 다시 계산해도 남는다
+  C.mp.total = Math.max(0, total + (C.mp.bonus || 0) - C.mp.dead);
 }
 
 function lawTradeOutput(C) {

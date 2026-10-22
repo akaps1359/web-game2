@@ -574,7 +574,16 @@ function armyAI(G, C, A) {
 function alliedFrontStates(G, C) {
   const tag = C.tag, map = G.map, out = [];
   if (!C.faction) return out;
-  const land = (NAVAL_POWERS[tag] || 0) >= 0.9 || C.capital < 0 ? null : friendlyDistances(G, tag, C.capital);
+  // 육로 연결: 본토 + 각본으로 보낸 원정 거점(아프리카 군단의 트리폴리 등)
+  let land = null;
+  if ((NAVAL_POWERS[tag] || 0) < 0.9 && C.capital >= 0) {
+    land = friendlyDistances(G, tag, C.capital);
+    for (const a of C.aiState?.anchors || []) {
+      if (!friendlyCtrl(G, tag, a)) continue;
+      const d = friendlyDistances(G, tag, a);
+      for (let i = 0; i < map.n; i++) if (d[i] < land[i]) land[i] = d[i];
+    }
+  }
   for (let s = 0; s < map.nGeo; s++) {
     const c = G.st[s].ctrl;
     if (c === tag || G.countries[c]?.faction !== C.faction) continue;
@@ -670,9 +679,9 @@ export function runFront(G, C, divs, opts) {
   }
   if (G.dbg) G.dbg('front', tag, { fronts: fronts.map((f) => `${map.key[f]}:${count.get(f) || 0}/${desired.get(f)}${allyFront.has(f) ? '*' : ''}`).join(' '), free: free.map((D) => map.key[D.loc] + (D.path.length ? '>' + map.key[D.path[D.path.length - 1]] : '')).join(','), lacking: lacking.map((f) => map.key[f]).join(',') });
   // 바다 건너 전선(본토와 육로 단절, 동맹국 전선 포함): 해상 수송
-  if (opts.whole && free.length > 2 && lacking.length) overseasReinforce(G, C, lacking, free, threat, desired, count);
+  if (opts.whole && free.length > 2 && lacking.length) overseasReinforce(G, C, lacking, free, threat, desired, count, allyFront);
   // 본토 전선에 병력이 모자라면 전선 없는 해외 영토의 사단을 불러들인다(아프리카군 공수 등)
-  if (opts.whole && lacking.length && free.length) repatriate(G, C, free, lacking);
+  if (opts.whole && lacking.length && free.length) repatriate(G, C, free, lacking, fronts);
   // 공세 (동맹국 전선 포함)
   // 공세에 동시에 투입할 수 있는 사단 수(나머지는 전선 방어)
   if (opts.aggr > 0) offensive(G, C, fronts, usable, enemyPow, { ...opts, spear: spear?.sp, room: Math.floor(divs.length * (0.3 + opts.aggr * 0.4)) - (divs.length - usable.length) });
@@ -680,10 +689,12 @@ export function runFront(G, C, divs, opts) {
   const occ = new Map();
   for (const D of usable) { const t2 = D.path.length ? D.path[D.path.length - 1] : D.loc; occ.set(t2, (occ.get(t2) || 0) + 1); }
   const tops = fronts.slice().sort((a, b) => threat.get(b) - threat.get(a));
+  const onFront = new Set(fronts);
   for (const D of free) {
     if (D.path.length || D.att >= 0 || D.sea) continue;
-    // 남는 사단: 절반 확률로 수용 여력이 있는 위협 큰 전선으로(이동 중인 사단은 건드리지 않는다)
-    if (opts.whole && G.rng() < 0.5) {
+    // 후방의 남는 사단: 절반 확률로 수용 여력이 있는 위협 큰 전선으로(이동 중인 사단은 건드리지 않는다).
+    // 이미 전선에 있는 예비대는 그 자리를 지킨다 — 전선 사이를 오가기만 하면 아무 데서도 싸우지 못한다
+    if (opts.whole && !onFront.has(D.loc) && G.rng() < 0.5) {
       const f = tops.find((x) => x !== D.loc && (occ.get(x) || 0) < capDivs(x));
       if (f != null && orderMove(G, D, f, 'friendly')) { occ.set(f, (occ.get(f) || 0) + 1); occ.set(D.loc, (occ.get(D.loc) || 1) - 1); continue; }
     }
@@ -871,7 +882,7 @@ function offensive(G, C, fronts, usable, enemyPow, opts) {
   }
 }
 
-function overseasReinforce(G, C, fronts, free, threat, desired, count) {
+function overseasReinforce(G, C, fronts, free, threat, desired, count, allyFront) {
   const tag = C.tag;
   if (C.capital < 0) return;
   const connected = friendlyDistances(G, tag, C.capital);
@@ -890,7 +901,13 @@ function overseasReinforce(G, C, fronts, free, threat, desired, count) {
     let port = -1, pd = Infinity;
     for (let i = 0; i < G.map.n; i++) if (isFinite(local[i]) && friendlyCtrl(G, tag, i) && G.st[i].port > 0 && local[i] < pd) { pd = local[i]; port = i; }
     if (port < 0) continue;
-    const need = (desired.get(f) || 0) - (count.get(f) || 0) - sailing.filter((to) => isFinite(local[to])).length;
+    let need = (desired.get(f) || 0) - (count.get(f) || 0) - sailing.filter((to) => isFinite(local[to])).length;
+    // 해양 강국이 아니면 바다 건너 동맹국 전선에는 소규모 원정군(5개 사단)만
+    if (allyFront?.has(f) && (NAVAL_POWERS[tag] || 0) < 0.9) {
+      let there = sailing.filter((to) => isFinite(local[to])).length;
+      for (const id in G.divs) { const D = G.divs[id]; if (D.tag === tag && !D.sea && isFinite(local[D.loc])) there++; }
+      need = Math.min(need, 5 - there);
+    }
     if (need <= 0) continue;
     let sent = 0;
     for (const D of free) {
@@ -911,12 +928,12 @@ function overseasReinforce(G, C, fronts, free, threat, desired, count) {
     break;
   }
 }
-function repatriate(G, C, free, lacking) {
+function repatriate(G, C, free, lacking, fronts) {
   const tag = C.tag, map = G.map;
   if (C.capital < 0) return;
   const home = friendlyDistances(G, tag, C.capital);
   if (!lacking.some((f) => isFinite(home[f]))) return;
-  const myFronts = frontStates(G, tag);
+  const myFronts = fronts; // 동맹국 전선(원정지)도 포함
   // 아군 영토로 이어진 지역별: 그 지역에 전선이 있으면 그대로 두고, 지역마다 1개 사단은 남긴다
   const region = new Map(); // 주 → { local, hot, kept }
   let sent = 0;

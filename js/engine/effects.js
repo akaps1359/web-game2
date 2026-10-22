@@ -5,8 +5,9 @@ import { addTension, declareWar, transferStates, annexCountry, setPuppet, create
 import { rebuildWarCache } from './world.js';
 import { addSpirit, removeSpirit, enactLaw } from './politics.js';
 import { grantTech } from './research.js';
-import { createDivision, getTpl } from './military.js';
+import { createDivision, getTpl, divStats } from './military.js';
 import { stateSlots, stateUsedSlots } from './economy.js';
+import { LAW_GROUPS } from '../data/ideas.js';
 
 const idxOf = (G, k) => (typeof k === 'number' ? k : G.map.idx[k]);
 
@@ -81,7 +82,11 @@ function applyOne(G, C, e, ctx) {
     case 'equip': C.stock[a] = Math.max(0, (C.stock[a] || 0) + b); break;
     case 'manpower': C.mp.total += a; C.mp.bonus = (C.mp.bonus || 0) + a; break;
     case 'fuel': C.fuel = (C.fuel || 0) + a; break;
-    case 'law': enactLaw(G, C, a, b, true); break;
+    case 'law': { // 징병·경제 법은 효과로 내려가지 않는다(늦게 끝난 중점이 이미 올린 법을 되돌리지 않도록)
+      const ord = a !== 'trade' && LAW_GROUPS[a]?.order;
+      if (ord && ord.indexOf(b) < ord.indexOf(C.laws[a])) break;
+      enactLaw(G, C, a, b, true); break;
+    }
     case 'unlock': C.unlock[a] = 1; C.techVer++; break;
     case 'demil': { const i = idxOf(G, a); if (i != null) G.st[i].demil = b ?? 0; break; }
     case 'demilAll': for (const S of G.st) if (S.owner === C.tag) S.demil = 0; break;
@@ -101,6 +106,15 @@ function applyOne(G, C, e, ctx) {
     case 'spawn': spawnCountry(G, a, b, c || {}); break;
     case 'capital': { const i = idxOf(G, a); if (i != null && G.st[i].owner === C.tag) C.capital = i; break; }
     case 'relocateCapital': relocateCapital(G, C); break;
+    case 'shock': { // 기습: [조직력 배율, 전력 배율, 항공기 배율] — 준비되지 않은 군대
+      for (const id in G.divs) {
+        const D = G.divs[id]; if (D.tag !== C.tag) continue;
+        D.org *= a;
+        if (b != null && b < 1) { const lost = D.str * (1 - b); D.str -= lost; C.mp.dead += divStats(G, D).mp * lost; }
+      }
+      if (c != null) for (const id in G.wings) { const W = G.wings[id]; if (W.tag === C.tag) W.n = Math.floor(W.n * c); }
+      break;
+    }
     case 'xp': break;
     case 'opinion': break;
     case 'popAdd': C.pop[a] = (C.pop[a] || 0) + b; break;
@@ -163,6 +177,17 @@ function applyOne(G, C, e, ctx) {
         const i = idxOf(G, key); if (i == null) continue;
         for (let n = 0; n < a[key] && pool.length; n++) { const D = pool.shift(); D.path = []; D.prog = 0; D.sea = { kind: 'invade', to: i, eta: G.hour + 12 + (k++ % 6) * 2, from: D.loc }; }
       }
+      break;
+    }
+    // 원정 파견: [deploy, 사단 수, 주, 'mob'] — 전선에 있지 않은 사단을 바다 건너 동맹국 항구로 보낸다(아프리카 군단 등)
+    case 'deploy': {
+      const to = idxOf(G, b); if (to == null) break;
+      const pool = [];
+      for (const id in G.divs) { const D = G.divs[id]; if (D.tag === C.tag && !D.sea && D.att < 0 && !D.retreat && !G.map.nb[D.loc].some((v) => atWar(G, C.tag, G.st[v].ctrl))) pool.push(D); }
+      const mob = (D) => { const st = G.countries[D.tag].templates.find((t) => t.id === D.tpl); return st && (st.bats.lt || st.bats.mt || st.bats.ht || st.bats.mot) ? 1 : 0; };
+      pool.sort((x, y) => (c === 'mob' ? mob(y) - mob(x) : 0) || y.str - x.str);
+      for (const D of pool.slice(0, a)) { D.path = []; D.prog = 0; D.sea = { kind: 'move', to, eta: G.hour + 72, from: D.loc }; }
+      C.aiState ||= {}; C.aiState.anchors = [...new Set([...(C.aiState.anchors || []), to])];
       break;
     }
     // 망명 정부가 영토를 되찾아 복귀: [returnGov, 수도]

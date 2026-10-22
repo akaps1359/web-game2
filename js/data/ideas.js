@@ -128,7 +128,7 @@ export const DECISIONS = [
   { id: 'armsdrive', name: '군수 증산 운동', cost: 75, days: 150, spirit: 'arms_drive', desc: '150일간 군수 공장 산출 +10%, 안정도 -5%', cd: 200, req: { tension: 0.2 } },
   { id: 'industrial', name: '공업화 운동', cost: 75, days: 150, spirit: 'industrial_drive', desc: '150일간 건설 속도 +15%', cd: 200 },
   { id: 'science', name: '과학 진흥 정책', cost: 60, days: 150, spirit: 'research_push', desc: '150일간 연구 속도 +10%', cd: 200 },
-  { id: 'mobilize', name: '총동원령', cost: 100, days: 180, spirit: 'mobilization', desc: '180일간 징병 가능 인구 +20%', cd: 365, req: { war: 1 } },
+  { id: 'mobilize', name: '총동원령', cost: 100, days: 0, desc: '예비역을 소집해 징병 가능 인구를 영구히 10% 늘린다', cd: 365, req: { war: 1 }, fx: { mpFrac: 0.1 } },
   { id: 'warbonds', name: '전시 국채 발행', cost: 25, days: 0, desc: '전쟁 지지도 +5%, 안정도 -3%', cd: 120, req: { war: 1 }, fx: { warSupport: 0.05, stability: -0.03 } },
   { id: 'fuelrationing', name: '연료 배급제', cost: 50, days: 0, desc: '연료 +25,000, 안정도 -5%', cd: 180, fx: { fuel: 25000, stability: -0.05 } },
 ];

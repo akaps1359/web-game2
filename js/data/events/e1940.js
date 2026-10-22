@@ -12,6 +12,9 @@ export const E1940 = [
       { t: '동시 상륙을 감행한다', ai: 9, fx: [['amphib', { oslo: 3, kristiansand: 1, bergen: 2, trondheim: 2, narvik: 1 }]] },
       { t: '상륙은 위험하다', ai: 0, fx: [] },
     ] },
+  { id: 'ger_dak', who: 'GER', trig: [['atWar', 'GER', 'ENG'], ['after', '1941-02-06'], ['faction', 'ITA', 'axis'], ['atWar', 'ITA', 'ENG'], ['controls', 'ITA', 'tripoli']], pic: 'tanks',
+    title: '아프리카 군단', desc: '이탈리아군이 영국군의 콤퍼스 작전에 무너져 키레나이카를 잃었다. 무솔리니의 요청에 히틀러는 에르빈 롬멜 중장과 기갑 부대를 리비아로 보냈다. 2월 12일 롬멜이 트리폴리에 내렸다.',
+    opts: [{ t: '롬멜을 보낸다', ai: 9, fx: [['deploy', 3, 'tripoli', 'mob']] }, { t: '이탈리아의 일이다', ai: 0, fx: [] }] },
   { id: 'den_occupation', who: 'DEN', trig: [['atWar', 'GER', 'THIS'], ['notPuppet', 'THIS']], pic: 'troops', style: 'telegram',
     title: '베저위붕 작전', desc: '4월 9일 새벽 독일군이 국경을 넘고 코펜하겐 항구에 상륙했다. 독일 대사는 "보호"를 받아들이라는 각서를 내밀었다. 몇 시간 만에 국왕 크리스티안 10세와 스타우닝 정부는 저항을 멈추기로 했다.',
     opts: [
@@ -107,6 +110,8 @@ export const E1940 = [
     opts: [{ t: '동부 전선으로', ai: 9, fx: [['joinWarOf', 'GER', 'SOV']] }, { t: '참전을 미룬다', ai: 0, fx: [] }] },
 
   { id: 'sov_barbarossa', who: 'SOV', trig: [['atWar', 'GER', 'SOV'], ['before', '1942-01-01']], pic: 'tanks', style: 'telegram',
+    // 기습: 흩어져 있던 국경 부대는 조직력을 잃고, 비행장의 항공기 상당수가 첫날 파괴되었다
+    immediate: [['shock', 0.35, 0.85, 0.7]],
     title: '6월 22일', desc: '새벽 3시 15분, 3천 km에 이르는 국경 전체에서 포격이 시작되었다. 독일군 300만 명이 국경을 넘었고, 비행장에 늘어서 있던 소련 항공기 1,200대가 첫날 파괴되었다. 몰로토프가 라디오에서 말했다. "우리의 대의는 정당하다."',
     // (AI) 1941년 겨울 반격 전까지는 방어, 추축 소국 본토로의 진격은 역사적 시기(1944년)까지 미룬다
     opts: [{ t: '반격하라! (명령 제3호)', ai: 1, fx: [['spirit', 'sov_surprise', 120]] }, { t: '종심으로 물러나며 시간을 번다', ai: 9, fx: [['spirit', 'sov_surprise', 120], ['aiHold', ['GER', 'ITA'], '1941-10-15'],

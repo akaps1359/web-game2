@@ -5,6 +5,7 @@ import { atWar, ymd, news } from './world.js';
 import { divStats, retreatDivision, getTpl } from './military.js';
 
 export const COMBAT_K = 0.75; // 피해 배율 (HOI4 1시간 판정 기준 ≒ 1)
+export const CAS_PERM = 0.55; // 사상자 가운데 영구 손실 비율 (2차 대전 독일군: 전사·실종 약 530만, 부상 약 600만)
 
 const xpF = (xp) => 0.85 + 0.35 * xp;
 const strF = (str) => Math.max(0.1, Math.ceil(str * 10) / 10);
@@ -172,22 +173,24 @@ function resolve(G, t, Gp, prev) {
   }
 
   // 피해 적용
-  const apply = (u) => {
+  const apply = (u, atk) => {
     if (!u.orgDmg && !u.hpDmg) return;
     const D = u.D;
     D.org = Math.max(0, D.org - u.orgDmg);
     const dStr = Math.min(D.str - 0.01, u.hpDmg / Math.max(1, u.st.hp));
     if (dStr > 0) {
       D.str -= dStr;
-      const cas = u.st.mp * dStr * (1 + (u.st.mods.casualty || 0));
+      // 잃은 병력 가운데 전사·실종·중상만 영구 손실이다. 나머지 부상병은 회복해 인력 풀로 돌아온다
+      const cas = u.st.mp * dStr * CAS_PERM * (1 + (u.st.mods.casualty || 0));
       u.C.mp.dead += cas; u.C.mp.inDivs -= u.st.mp * dStr;
       u.C.stats.casualties = (u.C.stats.casualties || 0) + cas;
+      if (G.dbg) G.dbg('cas', u.D.tag, { cas, atk, t, eq: dStr });
     }
     D.xp = Math.min(1, D.xp + 0.0006);
     D.plan = Math.max(0, D.plan - 0.01);
   };
-  for (const u of A.front) apply(u);
-  for (const u of Dd.front) apply(u);
+  for (const u of A.front) apply(u, 1);
+  for (const u of Dd.front) apply(u, 0);
 
   // 조직력 소진 처리
   const defIds = [], atkIds = [];

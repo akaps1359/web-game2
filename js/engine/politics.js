@@ -160,6 +160,7 @@ export function takeDecision(G, C, id) {
     if (D.fx.warSupport) C.baseWs += D.fx.warSupport;
     if (D.fx.stability) C.baseStab += D.fx.stability;
     if (D.fx.fuel) C.fuel = Math.min(C.fuelCap || 1e9, C.fuel + D.fx.fuel);
+    if (D.fx.mpFrac) { const add = Math.round(Math.max(0, C.mp.total + C.mp.dead - (C.mp.bonus || 0)) * D.fx.mpFrac); C.mp.total += add; C.mp.bonus = (C.mp.bonus || 0) + add; }
   }
   return true;
 }

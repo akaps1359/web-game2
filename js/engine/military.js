@@ -279,7 +279,7 @@ export function hourlyDivisions(G) {
       const spd = divSpeed(G, D, st) * (D.won ? 1.5 : 1);
       D.prog += spd;
       D.ent = 0;
-      if (st.fuel > 0 && C.fuel > 0) C.fuel -= st.fuel * D.str * 0.5;
+      if (st.fuel > 0 && C.fuel > 0) C.fuel -= st.fuel * D.str * 0.2;
       if (D.prog >= L) {
         // 도착 직전 적이 들어왔으면 공격으로 전환
         if (hostile && enemyDivsIn(G, D.tag, next).length && !D.retreat) { D.att = next; D.prog = 0; continue; }

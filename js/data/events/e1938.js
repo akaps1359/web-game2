@@ -18,7 +18,7 @@ export const E1938 = [
     title: '뮌헨 회담', desc: '독일이 주데텐란트 할양을 요구하며 전쟁도 불사하겠다고 위협한다. 체임벌린 총리는 세 번째로 히틀러를 만나러 뮌헨으로 날아간다. 프랑스의 달라디에, 이탈리아의 무솔리니도 참석한다. 정작 체코슬로바키아는 회담에 초대받지 못했다.',
     opts: [
       { t: '"우리 시대의 평화" — 할양을 승인한다', ai: 9, aiIf: [['spirit', 'eng_appease']], fx: [['flag', 'munich'], ['stab', 0.05], ['for', 'FRA', [['stab', -0.03]]], ['event', 'cze_munich', 'CZE', 1]] },
-      { t: '체코슬로바키아를 지킨다', ai: 0.05, fx: [['guarantee', 'CZE'], ['for', 'FRA', [['guarantee', 'CZE']]], ['ws', 0.1], ['event', 'cze_munich_alone', 'CZE', 1]] },
+      { t: '체코슬로바키아를 지킨다', ai: 0, fx: [['guarantee', 'CZE'], ['for', 'FRA', [['guarantee', 'CZE']]], ['ws', 0.1], ['event', 'cze_munich_alone', 'CZE', 1]] },
     ] },
   { id: 'cze_munich', who: 'CZE', manual: true, pic: 'map',
     title: '뮌헨 협정', desc: '영국·프랑스·이탈리아·독일 정상이 주데텐란트를 독일에 넘기기로 합의했다. 동맹국마저 등을 돌렸다. 요새선과 공업 지대를 잃으면 나라를 지킬 수 없다는 것을 베네시 대통령도 안다.',
