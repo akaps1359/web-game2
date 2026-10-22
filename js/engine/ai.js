@@ -196,6 +196,8 @@ function aiConstruction(G, C) {
   const civShare = war ? 0.1 : y < 1938 ? 0.7 : y < 1939.5 ? 0.35 : 0.15;
   const owned = [];
   for (const i of G.ownCtrl?.[tag] || []) { const S = G.st[i]; if (S.owner === tag && S.ctrl === tag && S.cores.includes(tag) && !G.map.virtual[i]) owned.push(i); }
+  // 지도 밖 본토만 있는 나라(미국)는 그곳에 짓는다
+  if (!owned.length) for (const i of G.ownCtrl?.[tag] || []) if (G.map.virtual[i] && G.st[i].owner === tag && G.st[i].ctrl === tag) owned.push(i);
   if (!owned.length) return;
   let guard = 0;
   while (C.cons.length < want && guard++ < 10) {
@@ -246,7 +248,8 @@ export function desiredMix(G, C) {
   if (inf) add(tplStats(C, inf), Math.max(3, divs.length * 0.15), 0);
   const arm = C.templates.find((t) => t.key === 'arm');
   if (arm && C.major && tplAvailable(C, arm)) {
-    const want = Math.round(divs.length * (y > 1939 ? 0.12 : 0.08));
+    // 기갑 사단은 전체의 8% 안팎, 많아도 30개(1941년 독일 기갑 사단 21개, 1944년 약 40개)
+    const want = Math.min(30, Math.round(divs.length * (y > 1939 ? 0.09 : 0.06)));
     const have = divs.filter((D) => divStats(G, D).armored).length;
     add(tplStats(C, arm), Math.max(1, want - have + 1), 0);
   }
@@ -264,6 +267,10 @@ export function desiredMix(G, C) {
     if (have > ref) w *= Math.max(0.05, ref / have);
     if (w > 0) land[e] = w;
   }
+  // 전차는 비싸서 수요만 따르면 공장 절반을 삼킨다: 지상 장비의 30%까지만
+  const TANKS = ['ltank', 'mtank', 'htank'];
+  const tsum = TANKS.reduce((s, e) => s + (land[e] || 0), 0), all = Object.values(land).reduce((a, b) => a + b, 0);
+  if (tsum > 0 && tsum > all * 0.3) { const k = (0.3 * (all - tsum)) / (0.7 * tsum); for (const e of TANKS) if (land[e]) land[e] *= k; }
   const mix = {};
   const lsum = Object.values(land).reduce((a, b) => a + b, 0) || 1;
   for (const e in land) mix[e] = (land[e] / lsum) * (1 - airShare) * 100;
@@ -347,13 +354,13 @@ function aiRecruit(G, C) {
   for (const D of divs) { if (D.str >= 0.98) continue; const st = divStats(G, D); for (const e in st.eq) avail[e] = (avail[e] || 0) - st.eq[e] * (1 - D.str); }
   for (const T of C.training) { const tp = C.templates.find((t) => t.id === T.tpl); if (!tp) continue; const s2 = tplStats(C, tp); for (const e in s2.eq) avail[e] = (avail[e] || 0) - s2.eq[e]; }
   const y = yearFrac(G.hour);
-  const armorShare = C.major ? (y > 1939 ? 0.22 : 0.12) : 0.05;
+  const armorShare = C.major ? (y > 1939 ? 0.09 : 0.06) : 0.03; // desiredMix의 기갑 목표와 같게
   const arm = tpls.find((t) => t.key === 'arm' || (t.bats.lt || t.bats.mt));
   const mot = tpls.find((t) => t.key === 'mot');
   const nArm = divs.filter((D) => divStats(G, D).armored).length;
   // 선호 순서: 기갑(비율 미달 시) → 차량화(가끔) → 포병 보강 보병 → 보병 → 기타
   const order = [];
-  if (arm && nArm < nDiv * armorShare) order.push(arm);
+  if (arm && nArm < Math.min(30, nDiv * armorShare)) order.push(arm);
   if (mot && C.major && G.rng() < 0.15) order.push(mot);
   // 기병은 기병 전통이 있는 나라만, 전체의 20%까지
   const cavOk = CAV_NATIONS.has(C.tag) && divs.filter((D) => divStats(G, D).cls.cav).length < nDiv * 0.2;
@@ -634,9 +641,12 @@ export function runFront(G, C, divs, opts) {
   }
   const totalThreat = [...threat.values()].reduce((a, b) => a + b, 0);
   const totalFrontage = [...frontage.values()].reduce((a, b) => a + b, 0) || 1;
+  // 해안 수비대: 강한 해군국과 싸우는 동안 항구·주요 해안 주에 일부를 남긴다(대서양 방벽)
+  const guard = opts.whole ? coastGuard(G, C, usable, fronts) : null;
+  const avail = guard?.size ? usable.filter((D) => !guard.has(D.id)) : usable;
   // 기갑 집중: 기동 사단은 전선 배치에서 빼서 돌파 지점에 모은다
-  const spear = opts.whole ? spearhead(G, C, fronts, usable, enemyPow, opts) : null;
-  const line = spear ? usable.filter((D) => !spear.ids.has(D.id)) : usable;
+  const spear = opts.whole ? spearhead(G, C, fronts, avail, enemyPow, opts) : null;
+  const line = spear ? avail.filter((D) => !spear.ids.has(D.id)) : avail;
   // 공세 예비대 비율
   const reserveFrac = opts.aggr >= 0.6 ? 0.3 : opts.aggr >= 0.3 ? 0.15 : 0.05;
   const forFront = Math.max(Math.min(line.length, fronts.length), Math.round(line.length * (1 - reserveFrac)));
@@ -684,7 +694,7 @@ export function runFront(G, C, divs, opts) {
   if (opts.whole && lacking.length && free.length) repatriate(G, C, free, lacking, fronts);
   // 공세 (동맹국 전선 포함)
   // 공세에 동시에 투입할 수 있는 사단 수(나머지는 전선 방어)
-  if (opts.aggr > 0) offensive(G, C, fronts, usable, enemyPow, { ...opts, spear: spear?.sp, room: Math.floor(divs.length * (0.3 + opts.aggr * 0.4)) - (divs.length - usable.length) });
+  if (opts.aggr > 0) offensive(G, C, fronts, avail, enemyPow, { ...opts, spear: spear?.sp, room: Math.floor(divs.length * (0.3 + opts.aggr * 0.4)) - (divs.length - usable.length) });
   // 남은 자유 사단: 수용 여력이 있는 위협 큰 전선으로, 과밀한 주에 있으면 보급이 나은 후방으로
   const occ = new Map();
   for (const D of usable) { const t2 = D.path.length ? D.path[D.path.length - 1] : D.loc; occ.set(t2, (occ.get(t2) || 0) + 1); }
@@ -692,10 +702,11 @@ export function runFront(G, C, divs, opts) {
   const onFront = new Set(fronts);
   for (const D of free) {
     if (D.path.length || D.att >= 0 || D.sea) continue;
-    // 후방의 남는 사단: 절반 확률로 수용 여력이 있는 위협 큰 전선으로(이동 중인 사단은 건드리지 않는다).
-    // 이미 전선에 있는 예비대는 그 자리를 지킨다 — 전선 사이를 오가기만 하면 아무 데서도 싸우지 못한다
-    if (opts.whole && !onFront.has(D.loc) && G.rng() < 0.5) {
-      const f = tops.find((x) => x !== D.loc && (occ.get(x) || 0) < capDivs(x));
+    // 남는 사단: 절반 확률로 수용 여력이 있는 위협 큰 전선으로(이동 중인 사단은 건드리지 않는다).
+    // 이미 전선에 있는 예비대는 위협이 1.5배 넘게 큰 곳으로만 옮긴다 — 비슷한 전선 사이를 오가기만 하면 아무 데서도 싸우지 못한다
+    if (opts.whole && G.rng() < 0.5) {
+      const here = onFront.has(D.loc) ? threat.get(D.loc) * 1.5 : 0;
+      const f = tops.find((x) => x !== D.loc && (occ.get(x) || 0) < capDivs(x) && threat.get(x) > here);
       if (f != null && orderMove(G, D, f, 'friendly')) { occ.set(f, (occ.get(f) || 0) + 1); occ.set(D.loc, (occ.get(D.loc) || 1) - 1); continue; }
     }
     if ((occ.get(D.loc) || 0) > capDivs(D.loc)) {
@@ -743,6 +754,59 @@ function spearhead(G, C, fronts, usable, enemyPow, opts) {
     orderMove(G, D, sp.from, 'friendly');
   }
   return { ids, sp };
+}
+
+// 해안 수비(대서양 방벽): 영·미와 싸우는 동안 그 항구에서 1,200km 안의 항구·주요 해안 주에 보병 수비대를 둔다.
+// 배치는 C.aiState.guard(사단 → 주)에 남겨 매번 바꾸지 않는다
+function coastGuard(G, C, usable, fronts) {
+  const tag = C.tag, map = G.map;
+  const AS = (C.aiState ||= {});
+  // 대규모 상륙을 할 수 있는 해군국(영국·미국)만 위협으로 본다
+  const foes = Object.keys(G.warRel[tag] || {}).filter((e) => (NAVAL_POWERS[e] || 0) >= 0.9 && G.countries[e]?.alive && !G.countries[e].capitulated);
+  const bases = [];
+  for (const e of foes) for (const i of G.ctrlBy?.[e] || []) if (i < map.nGeo && G.st[i].port > 0) bases.push(i);
+  if (!bases.length) { AS.guard = null; return null; }
+  const frontSet = new Set(fronts);
+  const want = new Map(), prio = new Map();
+  for (const i of G.ctrlBy?.[tag] || []) {
+    const S = G.st[i];
+    if (i >= map.nGeo || !map.coastal[i] || frontSet.has(i) || (!(S.port > 0) && (S.vp || 0) < 5)) continue;
+    let d = Infinity; for (const b of bases) d = Math.min(d, map.dist(i, b));
+    if (d > 1200) continue;
+    want.set(i, (S.vp || 0) >= 10 ? 2 : 1);
+    prio.set(i, (S.vp || 0) + (S.port > 0 ? 3 : 0) + (C.capital === i ? 10 : 0) + (1200 - d) / 200);
+  }
+  const y = yearFrac(G.hour);
+  let foeDivs = 0; for (const e of foes) foeDivs += divsOf(G, e).length;
+  const budget = Math.min(Math.round(usable.length * (y < 1941.5 ? 0.06 : y < 1943 ? 0.1 : 0.15)), Math.round(foeDivs * 0.6));
+  const target = new Map(); let total = 0;
+  for (const s of [...want.keys()].sort((a, b) => prio.get(b) - prio.get(a))) { if (total >= budget) break; const n = Math.min(want.get(s), budget - total); target.set(s, n); total += n; }
+  const byId = new Map(usable.map((D) => [D.id, D]));
+  const keep = {}, cnt = new Map();
+  for (const id in AS.guard || {}) {
+    const D = byId.get(+id), s = AS.guard[id];
+    if (!D || !target.has(s) || (cnt.get(s) || 0) >= target.get(s)) continue;
+    keep[id] = s; cnt.set(s, (cnt.get(s) || 0) + 1);
+  }
+  const comp = landComponents(map);
+  let pool = null;
+  for (const [s, n] of target) {
+    let need = n - (cnt.get(s) || 0);
+    if (need <= 0) continue;
+    pool ||= usable.filter((D) => !(D.id in keep) && !divStats(G, D).motorized && !divStats(G, D).armored);
+    // 전선 밖에 있는 가까운 보병부터
+    const cands = pool.filter((D) => !(D.id in keep) && comp[D.loc] === comp[s]).sort((a, b) => (frontSet.has(a.loc) - frontSet.has(b.loc)) || map.dist(a.loc, s) - map.dist(b.loc, s));
+    for (const D of cands) { if (need <= 0) break; keep[D.id] = s; need--; }
+  }
+  const ids = new Set();
+  for (const id in keep) {
+    const D = byId.get(+id), s = keep[id];
+    const dest = D.path.length ? D.path[D.path.length - 1] : D.loc;
+    if (dest !== s && !orderMove(G, D, s, 'friendly')) { delete keep[id]; continue; }
+    ids.add(D.id);
+  }
+  AS.guard = keep;
+  return ids;
 }
 
 // 과밀한 주 근처에서 보급 여유가 있는 아군 주 (최대 4칸)
@@ -988,7 +1052,8 @@ function aiInvasion(G, C) {
   }
   // 놀고 있는 사단: 적과 맞닿지 않은 곳에서 대기 중. 지상 전선이 바쁘면 상륙은 미룬다
   const all = divsOf(G, tag);
-  const idle = all.filter((D) => !D.sea && !D.path.length && D.att < 0 && !D.retreat && D.str > 0.7 && !map.nb[D.loc].some((v) => atWar(G, tag, G.st[v].ctrl)));
+  const guard = st.guard || {};
+  const idle = all.filter((D) => !(D.id in guard) && !D.sea && !D.path.length && D.att < 0 && !D.retreat && D.str > 0.7 && !map.nb[D.loc].some((v) => atWar(G, tag, G.st[v].ctrl)));
   const fronts = frontStates(G, tag);
   if (idle.length < 6 || idle.length < all.length * 0.3 || (fronts.length && idle.length < fronts.length * 3)) { if (st.inv && !st.inv.sent) st.inv = null; return; }
   if (!st.inv) {

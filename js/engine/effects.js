@@ -5,7 +5,7 @@ import { addTension, declareWar, transferStates, annexCountry, setPuppet, create
 import { rebuildWarCache } from './world.js';
 import { addSpirit, removeSpirit, enactLaw } from './politics.js';
 import { grantTech } from './research.js';
-import { createDivision, getTpl, divStats } from './military.js';
+import { createDivision, getTpl, divStats, divsOf, destroyDivision } from './military.js';
 import { stateSlots, stateUsedSlots } from './economy.js';
 import { LAW_GROUPS } from '../data/ideas.js';
 
@@ -113,6 +113,17 @@ function applyOne(G, C, e, ctx) {
         if (b != null && b < 1) { const lost = D.str * (1 - b); D.str -= lost; C.mp.dead += divStats(G, D).mp * lost; }
       }
       if (c != null) for (const id in G.wings) { const W = G.wings[id]; if (W.tag === C.tag) W.n = Math.floor(W.n * c); }
+      break;
+    }
+    case 'evacuate': C.evac = { until: G.hour + a * 24, frac: b ?? 0.5 }; break; // [일수, 비율] 공장 소개령
+    case 'disband': { // [남길 주 목록, 최대 사단 수] — 그 밖의 사단은 무장 해제된다(이탈리아 휴전 등)
+      const keepSet = new Set((a || []).map((k) => idxOf(G, k)));
+      let kept = 0;
+      for (const D of divsOf(G, C.tag)) {
+        if (keepSet.has(D.loc) && kept < (b ?? Infinity)) { kept++; continue; }
+        destroyDivision(G, D, 'disband');
+      }
+      G.indexDirty = true;
       break;
     }
     case 'xp': break;

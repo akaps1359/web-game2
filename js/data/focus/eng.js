@@ -63,8 +63,9 @@ export const ENG = [
     fx: [['event', 'usa_lend_request', 'USA', 1]], desc: '미국에 무기와 물자를 빌려 달라고 요청한다.' },
   { id: 'eng_atlantic', name: '대서양 헌장', icon: 'globe', x: 15, y: 4, req: ['eng_lendlease'], aiIf: [['after', '1941-08-01']],
     fx: [['ws', 0.05], ['for', 'USA', [['ws', 0.1]]]], desc: '1941년 8월 처칠과 루스벨트가 전후 세계 질서의 원칙을 선언했다.' },
-  { id: 'eng_overlord', name: '오버로드 작전', icon: 'invade', x: 15, y: 5, req: ['eng_atlantic'], ai: 10, aiIf: [['after', '1943-10-01']],
+  { id: 'eng_overlord', name: '오버로드 작전', icon: 'invade', x: 15, y: 5, req: ['eng_atlantic'], days: 70, ai: 10, aiIf: [['after', '1944-03-25']],
     avail: [['atWar', 'ENG', 'GER']], availText: '독일과 전쟁 중',
-    fx: [['units', [['inf72', 6, 'kent'], ['arm', 2, 'kent']]], ['mods', { 'land.atk': 0.05 }], ['flag', 'overlord']],
+    fx: [['units', [['inf72', 6, 'kent'], ['arm', 2, 'kent']]], ['mods', { 'land.atk': 0.05 }], ['flag', 'overlord'],
+      ['if', [['isAI', 'ENG'], ['atWar', 'ENG', 'GER'], ['enemyControls', 'ENG', ['caen']]], [['amphib', { caen: 8 }], ['if', [['alive', 'USA'], ['atWar', 'USA', 'GER']], [['for', 'USA', [['amphib', { caen: 8 }]]]]]]]],
     desc: '노르망디 상륙 작전(1944년 6월 6일)을 준비한다. 미국·캐나다·자유 프랑스군과 함께 유럽 대륙에 돌아간다.' },
 ];

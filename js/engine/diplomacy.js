@@ -366,6 +366,20 @@ export function settleCapitulation(G, tag, victor, enemies, opts = {}) {
     if (S.ctrl !== tag && enemies.includes(S.ctrl)) { S.owner = S.ctrl; S.ctrlSince = G.hour; }
     else remainVP += Math.max(1, S.vp);
   }
+  // 점령 중이던 남의 땅은 소유국(항복했거나 없으면 승자)에게 돌아가고, 그곳에 있던 적군은 가장 가까운 자국 영토로 철수한다
+  // (1940년 네덜란드에 남은 연합군 교두보가 2년 뒤 상륙 거점이 되는 일을 막는다)
+  for (let i = 0; i < G.st.length; i++) {
+    const S = G.st[i];
+    if (S.ctrl !== tag || S.owner === tag) continue;
+    const O = G.countries[S.owner];
+    S.ctrl = O?.alive && !O.capitulated ? S.owner : victor; S.ctrlSince = G.hour;
+    for (const id of [...(G.divsAt[i] || [])]) {
+      const D = G.divs[id];
+      if (!D || D.tag === tag || D.tag === S.ctrl || !atWar(G, D.tag, S.ctrl)) continue;
+      const dest = nearestOwned(G, D.tag, i);
+      if (dest >= 0) { D.loc = dest; D.path = []; D.att = -1; D.prog = 0; } else destroyDivision(G, D, 'transfer');
+    }
+  }
   // 동맹이 계속 싸우면 망명 정부
   const alliesFighting = G.wars.some((w) => (w.att.includes(tag) && w.att.length > 1) || (w.def.includes(tag) && w.def.length > 1));
   const puppet = opts.puppet ?? (remainVP >= totalVP * 0.25 && V.isAI !== false);

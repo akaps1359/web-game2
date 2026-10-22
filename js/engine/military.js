@@ -220,6 +220,13 @@ export function captureState(G, st, byTag) {
     for (const c of S.cores) { if (c !== byTag && allied(G, byTag, c) && G.countries[c]?.alive && !G.countries[c].capitulated) { newCtrl = c; break; } }
   }
   if (prevCtrl === newCtrl) return;
+  // 공장 소개(疏開): 소개령이 내려진 동안 빼앗기는 자국 주의 공장 일부를 지도 밖 후방으로 옮긴다(1941년 소련)
+  const O = G.countries[S.owner];
+  if (O?.evac && G.hour < O.evac.until && prevCtrl === S.owner && !S.evacuated && atWar(G, newCtrl, S.owner)) {
+    const mv = Math.floor((S.mil || 0) * O.evac.frac), cv = Math.floor((S.civ || 0) * O.evac.frac);
+    if (mv || cv) { S.mil -= mv; S.civ -= cv; O.offmap ||= { name: '후방', civ: 0, mil: 0, dock: 0, pop: 0, res: {} }; O.offmap.mil = (O.offmap.mil || 0) + mv; O.offmap.civ = (O.offmap.civ || 0) + cv; }
+    S.evacuated = 1;
+  }
   S.ctrl = newCtrl;
   S.ctrlSince = G.hour;
   // 남아 있던 적 사단 유린(퇴각 중이거나 조직력 0)

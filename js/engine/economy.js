@@ -30,6 +30,7 @@ export function buildCost(G, C, type, st) {
 
 export function stateSlots(G, C, st) {
   const S = G.st[st];
+  if (G.map.virtual[st]) return 400; // 지도 밖 본토(미국): 대륙 하나 크기
   return Math.floor((CAT_SLOTS[S.cat] ?? 2) * (1 + (C ? M(C, 'slots') : 0)));
 }
 export function stateUsedSlots(S) { return (S.civ || 0) + (S.mil || 0) + (S.dock || 0) + (S.ref || 0); }

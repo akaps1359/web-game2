@@ -56,6 +56,12 @@ export function describeEffects(G, C, fx, depth = 0) {
       case 'units': lines.push(`사단 ${a.reduce((s, x) => s + x[1], 0)}개 편성`); break;
       case 'civilWar': lines.push(`<b class="bad">내전 발발: ${nm(a)}</b>`); break;
       case 'spawn': lines.push(`${nm(a)} 수립`); break;
+      case 'amphib': lines.push(`상륙 작전: ${Object.entries(a).map(([k, n]) => `${st(k)} ${n}개 사단`).join(', ')}`); break;
+      case 'deploy': lines.push(`${st(b)}에 사단 ${a}개 파견`); break;
+      case 'returnGov': lines.push(`정부 귀환: ${st(a)}`); break;
+      case 'shock': lines.push(`<b class="bad">기습 피해</b>: 사단 조직력 ${p(a - 1)}${b != null && b < 1 ? `, 전력 ${p(b - 1)}` : ''}${c != null ? `, 항공기 ${p(c - 1)}` : ''}`); break;
+      case 'evacuate': lines.push(`공장 소개령 ${a}일: 빼앗기는 주의 공장 ${Math.round((b ?? 0.5) * 100)}%를 후방으로 옮김`); break;
+      case 'disband': lines.push(`<b class="bad">군대 무장 해제</b> (${[].concat(a).length ? `${[].concat(a).map(st).join('·')}의 ` : ''}최대 ${b}개 사단만 남음)`); break;
       case 'if': { const inner = describeEffects(G, C, b, depth + 1); if (inner) lines.push(`(조건부) ${inner}`); break; }
       case 'for': { const inner = describeEffects(G, G.countries[a] || C, b, depth + 1); if (inner) lines.push(`${nm(a)}: ${inner}`); break; }
       case 'random': lines.push(`${Math.round(a * 100)}% 확률: ${describeEffects(G, C, b, depth + 1)}`); break;

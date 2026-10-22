@@ -17,7 +17,8 @@ export const E1942 = [
 
   { id: 'ita_armistice', who: 'ITA', trig: [['faction', 'ITA', 'axis'], ['atWar', 'ITA', 'ENG'], ['or', [['surrender', 'ITA', 0.3], ['and', [['after', '1943-07-20'], ['enemyControls', 'ITA', ITALY_SOUTH]]]]]], pic: 'crowd',
     news: true, newsText: '무솔리니가 실각했습니다. 이탈리아가 연합국과 휴전합니다!',
-    immediate: [['leaveFaction'], ['leaveWar'], ['gov', { leader: '피에트로 바돌리오', title: '총리', ideology: 'neu', gov: '왕국 정부', party: '바돌리오 내각' }], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]], ['if', [['alive', 'GER']], [['event', 'ger_achse', 'GER', 0]]]],
+    // 독일군이 북부·중부와 해외 점령지의 이탈리아군을 무장 해제했다. 남부의 소수 부대만 공동 교전군으로 남는다
+    immediate: [['disband', ITALY_SOUTH, 8], ['leaveFaction'], ['leaveWar'], ['gov', { leader: '피에트로 바돌리오', title: '총리', ideology: 'neu', gov: '왕국 정부', party: '바돌리오 내각' }], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]], ['if', [['alive', 'GER']], [['event', 'ger_achse', 'GER', 0]]]],
     title: '무솔리니 실각', desc: '7월 24일 밤 파시즘 대평의회가 무솔리니를 불신임했고, 이튿날 국왕은 그를 체포했다. 바돌리오 정부는 9월 8일 연합국과의 휴전을 발표했다. 국왕과 정부는 로마를 떠나 남쪽으로 피했다.',
     opts: [{ t: '휴전', fx: [['stab', -0.1]] }] },
   { id: 'ger_achse', who: 'GER', manual: true, pic: 'troops',
