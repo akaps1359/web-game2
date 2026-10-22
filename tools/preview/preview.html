@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#222}canvas{display:block}</style></head><body><canvas id="c"></canvas>
+<script type="module">
+import { STATES } from '../../js/data/states.js';
+const P = new URLSearchParams(location.search);
+const W = +P.get('w')||2000, H = +P.get('h')||2000;
+const view = (P.get('view')||'').split(',').map(Number); // x0,y0,x1,y1 in km
+const m = await (await fetch('../../data/map.json')).json();
+const arcs = m.arcs.map(a=>{const p=new Float64Array(a.length);let x=0,y=0;for(let i=0;i<a.length;i+=2){x+=a[i];y+=a[i+1];p[i]=x/10;p[i+1]=y/10;}return p;});
+const c = document.getElementById('c'); c.width=W; c.height=H; const g=c.getContext('2d');
+let [x0,y0,x1,y1] = view.length===4?view:m.bounds;
+const ll=(P.get('ll')||'').split(',').map(Number);
+if(ll.length===4){const pr=(lon,lat)=>[(lon-20)*Math.PI/180*6371,-6371*Math.log(Math.tan(Math.PI/4+lat*Math.PI/360))];const a=pr(ll[0],ll[3]),b=pr(ll[2],ll[1]);[x0,y0,x1,y1]=[a[0],a[1],b[0],b[1]];}
+const s = Math.min(W/(x1-x0), H/(y1-y0));
+g.setTransform(s,0,0,s,-x0*s,-y0*s);
+const ringPath=(path,ring)=>{let first=true;for(const a of ring){const pts=arcs[a<0?~a:a];const n=pts.length/2;if(a>=0){for(let i=0;i<n;i++){const x=pts[2*i],y=pts[2*i+1];if(first){path.moveTo(x,y);first=false;}else if(i>0)path.lineTo(x,y);}}else{for(let i=n-1;i>=0;i--){const x=pts[2*i],y=pts[2*i+1];if(first){path.moveTo(x,y);first=false;}else if(i<n-1)path.lineTo(x,y);}}}path.closePath();};
+const polyPath=(polys)=>{const p=new Path2D();for(const poly of polys)for(const ring of poly)ringPath(p,ring);return p;};
+g.fillStyle='#1d3346';g.fillRect(x0,y0,x1-x0,y1-y0);
+// sea cells
+g.strokeStyle='rgba(255,255,255,0.12)';g.lineWidth=1.2/s;
+for(const z of m.seas){g.beginPath();z.cell.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.closePath();g.stroke();}
+g.fillStyle='#4a4a40';g.fill(polyPath(m.off),'evenodd');
+const colors={};const pal=['#7a8fa6','#a65b5b','#5b7fa6','#6f9c55','#9c3b3b','#c9b04a','#8a6aa6','#c47e3c','#4f9c8f','#b06f8f','#8c8c5a','#5a8c6c','#a68a5b','#6b6bb0','#b05a7a','#5ab0a6','#9a7b4f','#4f6f9a','#c08080','#80a0c0'];
+const fixed={GER:'#5f6466',ENG:'#b8484a',FRA:'#3d5fae',ITA:'#4f8a3c',SOV:'#8e1f1f',POL:'#c86d82',SPR:'#c9a83a',USA:'#2f5aa0',TUR:'#8e9b6f',ROM:'#c8b43c',HUN:'#c98a4a',YUG:'#3f8c8c',CZE:'#58a2b5',SWE:'#3c71b8',FIN:'#e8e8f0',NOR:'#a8505a',GRE:'#7ab0d8',BUL:'#3f6f3f',AUS:'#d8a0a0',ETH:'#5a8a3a',PER:'#6c9a4c',IRQ:'#a0a070',SAU:'#7a9a5a'};
+let k=0;for(const s of STATES){if(!colors[s[2]])colors[s[2]]=fixed[s[2]]||pal[(k++)%pal.length];}
+m.states.forEach((st,i)=>{const p=polyPath(st.a);g.fillStyle=colors[STATES[i][2]];g.fill(p,'evenodd');st._p=p;});
+// lakes
+const decPoly=(enc)=>{const p=new Path2D();for(const r of enc){let x=0,y=0;for(let i=0;i<r.length;i+=2){x+=r[i];y+=r[i+1];i?p.lineTo(x/10,y/10):p.moveTo(x/10,y/10);}p.closePath();}return p;};
+g.fillStyle='#1d3346';for(const l of m.lakes)g.fill(decPoly(l.p),'evenodd');
+// rivers
+g.strokeStyle='#3a6a8a';for(const r of m.rivers){g.lineWidth=(r.r<=3?2:1.2)/s;g.beginPath();for(let i=0;i<r.p.length;i+=2)i?g.lineTo(r.p[i],r.p[i+1]):g.moveTo(r.p[i],r.p[i+1]);g.stroke();}
+// arcs
+const owner=i=>STATES[i][2];
+const users=new Map();m.states.forEach((st,i)=>{for(const p of st.a)for(const r of p)for(const a of r){const kk=a<0?~a:a;if(!users.has(kk))users.set(kk,[]);users.get(kk).push(i);}});
+for(const [a,u] of users){const pts=arcs[a];const t=m.arcTypes[a];g.beginPath();for(let i=0;i<pts.length;i+=2)i?g.lineTo(pts[i],pts[i+1]):g.moveTo(pts[i],pts[i+1]);
+ if(t==='b'){g.strokeStyle='#111';g.lineWidth=2.2/s;} else if(t==='i'){g.strokeStyle='rgba(0,0,0,0.35)';g.lineWidth=0.8/s;} else if(t==='c'){g.strokeStyle='rgba(0,0,0,0.5)';g.lineWidth=1/s;} else {g.strokeStyle='#e33';g.lineWidth=1.5/s;}
+ g.stroke();}
+// labels
+g.textAlign='center';g.textBaseline='middle';
+const fs=Math.max(7,11/s* (P.get('fs')?+P.get('fs'):1));
+m.states.forEach((st,i)=>{g.font=`${(st.area>60000?1.4:1)*fs}px sans-serif`;g.fillStyle='#000';g.fillText(STATES[i][1],st.lx,st.ly);g.fillStyle='#fff';g.beginPath();g.arc(st.cx,st.cy,2/s,0,7);g.fill();});
+g.fillStyle='rgba(180,220,255,0.8)';g.font=`italic ${fs*1.2}px serif`;for(const z of m.seas)g.fillText(z.name,z.x,z.y);
+document.title='done';
+</script></body></html>
