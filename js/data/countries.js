@@ -272,7 +272,7 @@ export const COUNTRIES = {
   ICE: { name: '아이슬란드', full: '아이슬란드 왕국', color: '#d8b84a', ideology: 'dem', gov: '덴마크와 동군연합', leader: '헤르만 요나손', title: '총리', party: '진보당', capital: 'reykjavik', pp: 10, stability: 0.8, warSupport: 0.05, pop: 0.116, fac: [0, 0, 0], rslots: 1, laws: {}, techs: ['base'], spirits: [], pop0: { dem: 0.95, neu: 0.05, fas: 0, com: 0 }, flag: { t: 'nordic', bg: '#02529c', fg: '#f4f2ec', inner: '#dc1e35' }, div: [], ai: { aggr: 0 } },
   ETH: {
     name: '에티오피아', full: '에티오피아 제국', color: '#5a8a3a', ideology: 'neu', gov: '제국', leader: '하일레 셀라시에', title: '황제', party: '황실', capital: 'addis',
-    pp: 10, stability: 0.4, warSupport: 0.8, pop: 10, fac: [1, 1, 0], rslots: 1, laws: { conscription: 'extensive' }, techs: ['base'], spirits: ['minor_army', 'eth_war'], pop0: { neu: 0.9, dem: 0.05, fas: 0, com: 0.05 },
+    pp: 10, stability: 0.4, warSupport: 0.8, pop: 10, fac: [1, 1, 0], rslots: 1, laws: { conscription: 'extensive' }, techs: ['sup_eq', 'engineers'], spirits: ['minor_army', 'eth_war'], pop0: { neu: 0.9, dem: 0.05, fas: 0, com: 0.05 },
     flag: { t: 'h', c: ['#078930', '#fcdd09', '#da121a'], emblem: 'star' }, div: [['gar', 8], ['inf9', 4, 'harar']], ai: { aggr: 0 },
   },
   IRQ: { name: '이라크', full: '이라크 왕국', color: '#a0a070', ideology: 'neu', gov: '입헌 군주제', leader: '가지 1세', title: '국왕', party: '국민형제당', capital: 'baghdad', pp: 15, stability: 0.5, warSupport: 0.3, pop: 3.5, fac: [2, 1, 0], rslots: 1, laws: {}, techs: ['base'], spirits: ['minor_army'], pop0: { neu: 0.8, dem: 0.1, fas: 0.05, com: 0.05 }, flag: { t: 'iq' }, div: [['inf9', 3]], ai: { aggr: 0 } },

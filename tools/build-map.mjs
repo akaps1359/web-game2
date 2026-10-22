@@ -501,6 +501,45 @@ for (const [a, users] of arcUse) {
     arcType.set(a, s1 === s2 ? 'i' : ST[s1].owner === ST[s2].owner ? 'i' : 'b');
   }
 }
+// 좌표가 정확히 일치하지 않아 공유 arc로 잡히지 않은 국경(예: 서로 다른 나라의 행정구역 경계)을
+// 근접 탐색으로 보완: 해안이 아닌 외곽 arc의 표본점이 다른 주의 외곽 arc와 3km 이내면 인접으로 본다.
+{
+  const PG = 12; const pkey = (x, y) => `${Math.floor(x / PG)},${Math.floor(y / PG)}`;
+  const grid = new Map(); const samples = [];
+  for (const [a, users] of arcUse) {
+    if (users.length !== 1 || arcType.get(a) !== 'e') continue;
+    const st = users[0]; const pts = ARCS[a];
+    const kk = kAt(pts[0][1]); const step = 4 * kk;
+    let acc = 0;
+    for (let k = 1; k < pts.length; k++) {
+      const [x0, y0] = pts[k - 1], [x1, y1] = pts[k]; const segL = Math.hypot(x1 - x0, y1 - y0); if (!segL) continue;
+      let t = acc > 0 ? step - acc : 0;
+      while (t <= segL) { const x = x0 + ((x1 - x0) * t) / segL, y = y0 + ((y1 - y0) * t) / segL; const smp = [x, y, st, kk]; samples.push(smp); const g = pkey(x, y); if (!grid.has(g)) grid.set(g, []); grid.get(g).push(smp); t += step; }
+      acc = (acc + segL) % step;
+    }
+  }
+  let added = 0;
+  for (const [x, y, st, kk] of samples) {
+    const r = 3 * kk; let best = -1, bd = r;
+    const cx = Math.floor(x / PG), cy = Math.floor(y / PG), span = Math.ceil(r / PG);
+    for (let gx = cx - span; gx <= cx + span; gx++) for (let gy = cy - span; gy <= cy + span; gy++) {
+      for (const q of grid.get(`${gx},${gy}`) || []) { if (q[2] === st) continue; const d = Math.hypot(q[0] - x, q[1] - y); if (d < bd) { bd = d; best = q[2]; } }
+    }
+    if (best >= 0) { const k = st < best ? `${st}|${best}` : `${best}|${st}`; if (!adj.has(k)) added++; adj.set(k, (adj.get(k) || 0) + 2); }
+  }
+  log('proximity borders added', added);
+}
+if (process.env.DEBUG_ST) {
+  for (const key of process.env.DEBUG_ST.split(',')) {
+    const si = keyIdx[key];
+    console.log('DEBUG', key, 'seed proj', ST[si].x?.toFixed?.(0), ST[si].y?.toFixed?.(0));
+    for (const [a, users] of arcUse) {
+      if (!users.includes(si)) continue;
+      const pts = ARCS[a]; const m = pts[Math.floor(pts.length / 2)];
+      console.log('  arc', a, 'users', users.map((u) => ST[u].key).join('/'), 'type', arcType.get(a), 'len', arcLen(pts).toFixed(0), 'mid', m[0].toFixed(0), m[1].toFixed(0), 'n', pts.length);
+    }
+  }
+}
 
 // 하천
 log('rivers …');

@@ -4,7 +4,7 @@ import { M } from './mods.js';
 import { atWar, ymd, news } from './world.js';
 import { divStats, retreatDivision, getTpl } from './military.js';
 
-export const COMBAT_K = 1.25; // 주 단위 전투 가속 계수
+export const COMBAT_K = 1.8; // 주 단위 전투 가속 계수 (주 하나가 HOI4의 여러 지방에 해당)
 
 const xpF = (xp) => 0.85 + 0.35 * xp;
 const strF = (str) => Math.max(0.1, Math.ceil(str * 10) / 10);

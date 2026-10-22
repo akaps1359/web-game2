@@ -4,6 +4,8 @@ import { M } from './mods.js';
 import { atWar, allied, news } from './world.js';
 import { blocked } from './supply.js';
 
+const SHIP_FUEL = { dd: 4, cl: 7, ca: 11, bb: 24, cv: 18, ss: 2 };
+
 export function fleetPower(G, F) {
   const C = G.countries[F.tag];
   let atk = 0, hp = 0;
@@ -55,7 +57,12 @@ export function dailyNaval(G) {
     } else if (F.mission === 'idle' || F.mission === 'repair') {
       F.dmg = Math.max(0, F.dmg * 0.9 - 10);
     }
-    if (F.mission !== 'idle' && C.fuel > 0) C.fuel = Math.max(0, C.fuel - fleetSize(F) * 25);
+    if (F.mission !== 'idle' && C.fuel > 0) {
+      // 함종별 하루 연료 소모, 평시 훈련 항해는 15%
+      let use = 0; for (const k of SHIP_KEYS) use += (F.ships[k] || 0) * SHIP_FUEL[k];
+      if (!G.warRel[F.tag] || !Object.keys(G.warRel[F.tag]).length) use *= 0.15;
+      C.fuel = Math.max(0, C.fuel - use);
+    }
   }
   // 제해권
   G.navSup = {};

@@ -31,7 +31,7 @@ const summary = (tags) => {
 const t1 = Date.now();
 import { declareWar } from '../js/engine/diplomacy.js';
 for (let d = 0; d < days; d++) {
-  if (d === 2 && process.env.WAR) for (const pair of process.env.WAR.split(',')) { const [a, b] = pair.split(':'); declareWar(G, a, b, { forced: true }); }
+  if (d === +(process.env.WARDAY || 2) && process.env.WAR) for (const pair of process.env.WAR.split(',')) { const [a, b] = pair.split(':'); declareWar(G, a, b, { forced: true }); }
   for (let h = 0; h < 24; h++) tick(G);
   if ((d + 1) % (+process.env.EVERY || 30) === 0) {
     console.log(`== ${fmtDate(G.hour)} tension ${(G.tension * 100).toFixed(0)}% wars ${G.wars.map((w) => w.name).join(' | ')} battles ${Object.keys(G.battles).length}`);

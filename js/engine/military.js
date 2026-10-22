@@ -16,7 +16,7 @@ export function eqCost(C, eq) {
 
 // 편제가 현재 기술로 편성 가능한가
 export function tplAvailable(C, tpl) {
-  for (const b in tpl.bats) { const B = BATTALIONS[b]; if (!B) return false; if (B.need && !C.unlock[B.need]) return false; for (const e in B.eq) if (eqLevel(C, e) < 1) return false; }
+  for (const b in tpl.bats) { const B = BATTALIONS[b]; if (!B) return false; if (B.need && !C.unlock[B.need]) return false; for (const e in B.eq) if (eqLevel(C, e) < 1 && e !== 'inf_eq') return false; }
   for (const s of tpl.sup || []) { const S = SUPPORT[s]; if (!S) return false; if (S.need && !C.unlock[S.need]) return false; }
   return true;
 }
@@ -252,7 +252,7 @@ export function hourlyDivisions(G) {
     const C = G.countries[D.tag];
     const st = divStats(G, D);
     const inBattle = D.att >= 0 || (G.battles[D.loc] && G.battles[D.loc].defIds?.includes(D.id));
-    const maxOrg = st.org * (1 + M(C, 'land.org')) * (D.sup < 0.25 ? 0.35 + D.sup : 1);
+    const maxOrg = st.org * (1 + M(C, 'land.org')) * (D.sup < 0.25 ? 0.5 + 2 * D.sup : 1);
     // 이동
     if (D.path.length && D.att < 0) {
       const next = D.path[0];
@@ -293,11 +293,11 @@ export function hourlyDivisions(G) {
       const maxPlan = 0.3 + M(C, 'land.planning');
       D.plan = Math.min(maxPlan, D.plan + 0.3 / (10 * 24));
     }
-    // 보급 부족 소모
-    if (D.sup < 0.2) D.str = Math.max(0.05, D.str - 0.0004 * (1 - D.sup));
+    // 보급 부족 소모 (보급 15% 미만에서 하루 최대 약 0.5%)
+    if (D.sup < 0.15) D.str = Math.max(0.05, D.str - 0.00025 * (1 - D.sup / 0.15));
     // 사막·산악 등 지형 소모
     const attr = TERRAIN[map.terrain[D.loc]]?.attr || 0;
-    if (attr && D.sup < 0.6) D.str = Math.max(0.05, D.str - 0.0001 * attr);
+    if (attr && D.sup < 0.4) D.str = Math.max(0.05, D.str - 0.00006 * attr);
   }
 }
 
@@ -319,7 +319,7 @@ export function dailyMilitary(G, C) {
   divs.sort((a, b) => a.str - b.str);
   const rate = 0.05 * (1 + M(C, 'land.reinforce'));
   for (const D of divs) {
-    if (D.str >= 0.999 || D.retreat || D.sup < 0.15) continue;
+    if (D.str >= 0.999 || D.retreat || D.sup < 0.08) continue;
     const st = divStats(G, D);
     const frac = Math.min(rate * Math.min(1, D.sup + 0.2) * (1 + (st.mods.reinforce || 0)), 1 - D.str);
     let ratio = 1;
@@ -348,7 +348,8 @@ export function dailyMilitary(G, C) {
       // 장비 확인: 최소 40%
       let ratio = 1;
       for (const e in st.eq) ratio = Math.min(ratio, (C.stock[e] || 0) / st.eq[e]);
-      if (ratio < 0.4 && !T.force) { T.wait = true; continue; }
+      if (ratio < (T.minEq ?? 0.4) && !T.force) { T.wait = true; continue; }
+      T.wait = false;
       ratio = Math.min(1, ratio);
       for (const e in st.eq) C.stock[e] = Math.max(0, (C.stock[e] || 0) - st.eq[e] * ratio);
       let loc = T.loc;

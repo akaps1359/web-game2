@@ -31,7 +31,7 @@ export function computeSupply(G) {
     if (reach) {
       for (let i = 0; i < n; i++) {
         if (!friendly[i] || !(G.st[i].port > 0)) continue;
-        if (map.coast[i].some((z) => reach.has(z))) src.push([i, Math.min(0.85, 0.35 + 0.06 * G.st[i].port)]);
+        if (map.coast[i].some((z) => reach.has(z))) src.push([i, Math.min(0.85, 0.45 + 0.07 * G.st[i].port)]);
       }
     }
     // 다익스트라: 거리 감쇠

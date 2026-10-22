@@ -236,7 +236,7 @@ export function runEconomy(G, C) {
   eco.milOut = 0;
   for (const L of C.lines) {
     const E = EQUIPMENT[L.eq];
-    if (!E || eqLevel(C, L.eq) < 1) continue;
+    if (!E || (eqLevel(C, L.eq) < 1 && L.eq !== 'inf_eq')) continue;
     const fac = L.fac * eco.milScale;
     // 자원 충족률
     let rf = 1;
