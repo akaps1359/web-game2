@@ -1,4 +1,4 @@
-// 외교: 국가 목록 · 전쟁 · 진영 · 국가 상세(정당화·선전포고·보장·불가침·통행권·진영)
+// 외교: 국가 목록 · 전쟁 · 진영 · 국가 상세(정당화·선전포고·보장·불가침·통행권·진영·무기 대여)
 import { h, onTap } from '../dom.js';
 import { icon } from '../icons.js';
 import { btn, flag, bar, stat, card, item, empty, setBar } from './common.js';
@@ -7,6 +7,8 @@ import { atWar, allied, atWarAny, fmtDate } from '../../engine/world.js';
 import { warsOf, warBetween, canDeclareWar, declareWar, canJustify, justifyDays, startJustify, canGuarantee, guarantee, guaranteeCost, signNap, grantAccess, createFaction, joinFaction, leaveFaction, surrenderLimit, whitePeace } from '../../engine/diplomacy.js';
 import { aiAcceptsMember, aiAcceptsNap, aiAcceptsAccess, militaryRatio } from '../../engine/ai.js';
 import { divsOf } from '../../engine/military.js';
+import { sendEquipment } from '../../engine/economy.js';
+import { EQUIPMENT } from '../../data/units.js';
 import { fmtNum, pct, fmtDays } from '../fmt.js';
 import { showDialog } from '../modal.js';
 
@@ -211,6 +213,19 @@ export const countryPanel = {
       acts.appendChild(bar((X.surrender || 0) / surrenderLimit(G, X), 'red'));
     }
     body.appendChild(acts);
+    // 무기 대여: 비축 장비의 10%씩 보낸다
+    if (!war && !X.capitulated) {
+      const LL = ['inf_eq', 'sup_eq', 'art', 'at', 'aa', 'mot', 'ltank', 'mtank', 'htank', 'fighter', 'cas', 'tac'].filter((e) => EQUIPMENT[e] && (C.stock[e] || 0) >= 10);
+      if (LL.length) {
+        const ll = card(`${icon('handshake')} 무기 대여 <small>비축 장비의 10%씩 보냅니다</small>`);
+        for (const e of LL) {
+          const n = Math.floor((C.stock[e] || 0) * 0.1);
+          ll.appendChild(item({ t: EQUIPMENT[e].name, d: `비축 ${fmtNum(C.stock[e])} · 지금까지 받은 양 ${fmtNum(X.stats.lendGot?.[e] || 0)}`,
+            right: btn(`${fmtNum(n)} 보내기`, () => { const k = sendEquipment(G, C, X, e, n); app.toast(`${X.name}에 ${EQUIPMENT[e].name} ${fmtNum(k)} 대여`, 'peace'); ctx.rerender(); }, 'sm') }));
+        }
+        body.appendChild(ll);
+      }
+    }
     const locate = btn('수도 보기', () => { if (X.capital >= 0 && !app.map.virtual[X.capital]) { app.sheet.close(); app.r.focusState(X.capital, Math.max(0.12, app.r.cam.s)); app.r.sel.state = X.capital; app.dirty = true; } }, 'wide', 'locate');
     body.appendChild(locate);
     body.appendChild(h('div', { class: 'pad-bottom' }));

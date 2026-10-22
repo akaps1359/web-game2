@@ -7,7 +7,7 @@ import { M } from './mods.js';
 import { atWar, atWarAny, allied, enemiesOf, friendlyCtrl, yearFrac, ymd, hourOfDate, news } from './world.js';
 import { techAvailable, startResearch } from './research.js';
 import { focusBlocked, selectFocus, lawBlocked, enactLaw, advisorBlocked, hireAdvisor, decisionBlocked, takeDecision } from './politics.js';
-import { canBuild, queueBuild, setLine, stateSlots, stateUsedSlots, shipUnlocked } from './economy.js';
+import { canBuild, queueBuild, setLine, stateSlots, stateUsedSlots, shipUnlocked, sendEquipment } from './economy.js';
 import { tplStats, tplAvailable, divsOf, divPower, orderMove, findPath, moveCost, manpowerAvailable, enemyDivsIn, divStats, eqLevel, eqCost, editTemplate, MinHeap } from './military.js';
 import { canDeclareWar, declareWar, canJustify, startJustify, joinFaction, guarantee, canGuarantee, signNap } from './diplomacy.js';
 import { createWing, WING_SIZE, wingCoverage } from './air.js';
@@ -59,6 +59,7 @@ export function aiDaily(G) {
     if ((day + h) % 2 === 0) aiNavy(G, C);
     if ((day + h) % 5 === 2 && atWarAny(G, tag)) aiInvasion(G, C);
     if ((day + h) % 7 === 3) aiDiplomacy(G, C);
+    if ((day + h) % 7 === 5) aiLendLease(G, C);
     if (!atWarAny(G, tag) && (day + h) % 10 === 0) peacetimeDeploy(G, C);
   }
 }
@@ -317,6 +318,44 @@ export function aiProduction(G, C, init) {
 }
 function totalStateFac(G, C, type) { let n = 0; for (const S of G.st) if (S.owner === C.tag && S.ctrl === C.tag) n += S[type] || 0; return n + (C.offmap?.[type] || 0); }
 
+// ───────── 무기 대여 ─────────
+// 미국(무기 대여법 이후)과 영국은 자국 군대에 필요한 양을 넘는 비축 장비를, 독일과 싸우며 장비가 모자란 우방에 보낸다.
+// 실제 무기 대여처럼 트럭·항공기·전차가 먼저이고 소총은 마지막이며, 받는 나라마다 한 주에 공업력 1,000 상당까지(소련 생산의 10~15%)
+const LL_EQ = ['mot', 'fighter', 'mtank', 'ltank', 'sup_eq', 'cas', 'tac', 'art', 'at', 'aa', 'inf_eq'];
+const LL_WEEK_IC = 1000;
+function armyNeed(G, C) { const U = {}; for (const D of divsOf(G, C.tag)) { const st = divStats(G, D); for (const e in st.eq) U[e] = (U[e] || 0) + st.eq[e]; } return U; }
+function aiLendLease(G, C) {
+  if (!(C.flags?.lendlease || (C.tag === 'ENG' && atWarAny(G, C.tag)))) return;
+  const foes = enemiesOf(G, C.tag);
+  const recips = [];
+  for (const t in G.countries) {
+    const X = G.countries[t];
+    if (t === C.tag || !X.alive || X.capitulated || X.ideology === 'fas' || atWar(G, C.tag, t)) continue;
+    if (!atWar(G, t, 'GER') && !foes.some((e) => atWar(G, t, e))) continue;
+    recips.push(X);
+  }
+  if (!recips.length) return;
+  const mine = armyNeed(G, C);
+  const needs = new Map(recips.map((X) => [X, armyNeed(G, X)]));
+  const spent = new Map();
+  for (const e of LL_EQ) {
+    const air = EQUIPMENT[e]?.air, cost = Math.max(0.5, eqCost(C, e));
+    const keep = air ? 400 : (mine[e] || 0) * 0.5 + 1000 / cost;
+    const surplus = (C.stock[e] || 0) - keep;
+    if (surplus <= 0) continue;
+    let budget = surplus * 0.2; // 한 주에 남는 양의 5분의 1
+    // 모자란 양이 큰 나라부터(비축 목표: 군대 보유량의 20%, 항공기 200대)
+    const list = recips.map((X) => [X, (air ? 200 : (needs.get(X)[e] || 0) * 0.2) - (X.stock[e] || 0)]).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
+    for (const [X, d] of list) {
+      if (budget < 1) break;
+      const room = (LL_WEEK_IC - (spent.get(X) || 0)) / cost;
+      if (room < 1) continue;
+      const n = sendEquipment(G, C, X, e, Math.min(budget, d, room));
+      budget -= n; spent.set(X, (spent.get(X) || 0) + n * cost);
+    }
+  }
+}
+
 // ───────── 편제 개선 ─────────
 // 중형 전차가 생기고 비축분이 충분하면 기갑 사단의 경전차 대대를 중형 전차로 바꾼다
 function aiTemplates(G, C) {
@@ -336,7 +375,7 @@ function aiRecruit(G, C) {
   const nDiv = divs.length + C.training.length;
   const war = atWarAny(G, C.tag);
   const mil = C.eco.mil || 0;
-  let target = 6 + mil * (C.major ? 2.4 : 2.0) + (war ? 10 : 0) + G.tension * 20;
+  let target = 6 + mil * (C.major ? 1.6 : 2.0) + (war ? 10 : 0) + G.tension * 20;
   if (C.tag === 'SOV') target += 40;
   target *= C.aiProfile?.army ?? 1; // 해양 강국(영국)은 육군 규모가 작다
   if (C.tag === 'USA') target *= war ? 1 : 0.4;

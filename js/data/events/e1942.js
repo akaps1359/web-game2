@@ -15,10 +15,35 @@ export const E1942 = [
     title: '안톤 작전', desc: '11월 11일 독일군이 비시 프랑스의 비점령 지역으로 진주했다. 이탈리아군은 니스와 코르시카를 차지했다. 11월 27일 툴롱 항의 프랑스 함대는 독일에 넘어가지 않으려고 스스로 배를 가라앉혔다.',
     opts: [{ t: '남프랑스를 점령한다', ai: 9, fx: [['cede', VIC_METRO, 'GER'], ['if', [['alive', 'ITA'], ['faction', 'ITA', 'axis']], [['for', 'ITA', [['cede', ['nice', 'corse'], 'ITA']]]]], ['puppet', 'VIC'], ['for', 'VIC', [['joinWarOf', 'GER', 'ENG']]]] }, { t: '비시와의 협정을 지킨다', ai: 0, fx: [] }] },
 
+  // ── 연합군의 반격 ──
+  { id: 'eng_husky', who: 'ENG', trig: [['after', '1943-07-10'], ['atWar', 'ENG', 'ITA'], ['controls', 'ITA', ['palermo']], ['isAI', 'ENG']], pic: 'ships', news: true, newsText: '허스키 작전: 연합군이 시칠리아에 상륙했습니다.',
+    immediate: [['amphib', { palermo: 6, catania: 4 }], ['if', [['alive', 'USA'], ['atWar', 'USA', 'ITA'], ['isAI', 'USA']], [['for', 'USA', [['amphib', { palermo: 6 }]]]]]],
+    title: '허스키 작전', desc: '7월 10일 영국 제8군과 미국 제7군이 시칠리아 남부 해안에 상륙했다. 3,000척이 넘는 함선과 16만 명이 동원된 당시 최대의 상륙 작전이었다. 몽고메리와 패튼은 메시나를 향해 경주했다.',
+    opts: [{ t: '메시나로!', fx: [] }] },
+  { id: 'sov_guards', who: 'SOV', trig: [['after', '1942-11-19'], ['atWar', 'SOV', 'GER']], pic: 'soldiersSnow', news: true, newsText: '천왕성 작전: 붉은 군대가 대반격에 나섰습니다.',
+    title: '붉은 군대의 재건', desc: '1942년 가을 스탑카는 전차 군단과 기계화 군단을 다시 편성하고 포병 돌파 사단을 만들었다. 지휘관들은 1941년의 패배에서 배웠다. 11월 19일 스탈린그라드에서 시작된 천왕성 작전은 그 첫 결실이었다. 나흘 만에 두 집게가 칼라치에서 만나 독일 제6군 30만 명을 가두었다.',
+    opts: [{ t: '근위대가 앞장선다', fx: [['spirit', 'sov_guards'], ['rmSpirit', 'sov_surprise']] }] },
+  { id: 'sov_bagration', who: 'SOV', trig: [['after', '1944-06-22'], ['atWar', 'SOV', 'GER']], pic: 'tanks', news: true, newsText: '바그라티온 작전: 붉은 군대가 대공세를 시작했습니다.',
+    title: '바그라티온 작전', desc: '독일군 침공 3주년인 6월 22일, 4개 전선군 170만 명이 벨라루스의 중부 집단군을 덮쳤다. 전날 밤 빨치산이 철도 1,000여 곳을 끊었다. 두 달 만에 독일군 28개 사단이 사라졌다.',
+    opts: [{ t: '서쪽으로!', fx: [['spirit', 'sov_bagration', 120]] }] },
+  { id: 'ger_bombing', who: 'GER', trig: [['after', '1943-03-01'], ['atWar', 'GER', 'ENG'], ['atWar', 'GER', 'USA']], pic: 'ruins',
+    title: '연합군 합동 폭격', desc: '카사블랑카 회담에서 처칠과 루스벨트는 독일 공업에 대한 밤낮없는 폭격에 합의했다. 7월 함부르크에서는 화염 폭풍으로 하룻밤에 3만 명이 숨졌다. 군수장관 슈페어는 공장을 흩어 숨기며 생산을 지켜 냈다.',
+    opts: [{ t: '공장을 분산하라', fx: [['spirit', 'ger_bombed']] }] },
+  { id: 'ger_oil', who: 'GER', trig: [['after', '1944-05-12'], ['atWar', 'GER', 'USA']], pic: 'ruins', style: 'telegram',
+    title: '석유 공세', desc: '5월 12일 미국 제8공군이 로이나와 메르제부르크의 합성 연료 공장을 폭격했다. 슈페어는 히틀러에게 보고했다. "적이 우리의 가장 약한 곳을 찾아냈습니다." 항공 연료 생산은 넉 달 만에 10분의 1로 줄었다.',
+    opts: [{ t: '남은 연료를 아껴라', fx: [['spirit', 'ger_oil_crisis']] }] },
+
+  { id: 'ger_volkssturm', who: 'GER', trig: [['after', '1943-12-01'], ['atWar', 'GER', 'SOV'], ['surrender', 'GER', 0.2]], pic: 'troops', news: true, newsText: '독일이 국민돌격대를 창설했습니다. 마지막 한 사람까지 싸우겠다고 선언합니다.',
+    title: '국민돌격대', desc: '적이 국경에 다가오자 총통은 16세부터 60세까지 무기를 들 수 있는 모든 남자를 국민돌격대로 불러냈다. 연합국의 무조건 항복 요구는 협상의 여지를 남기지 않았다. 독일은 마지막 한 사람까지 싸운다.',
+    opts: [{ t: '마지막 한 사람까지', fx: [['spirit', 'ger_volkssturm'], ['units', [['inf9', 8, 'berlin']]], ['manpower', 300000]] }] },
+
   { id: 'ita_armistice', who: 'ITA', trig: [['faction', 'ITA', 'axis'], ['atWar', 'ITA', 'ENG'], ['or', [['surrender', 'ITA', 0.3], ['and', [['after', '1943-07-20'], ['enemyControls', 'ITA', ITALY_SOUTH]]]]]], pic: 'crowd',
     news: true, newsText: '무솔리니가 실각했습니다. 이탈리아가 연합국과 휴전합니다!',
     // 독일군이 북부·중부와 해외 점령지의 이탈리아군을 무장 해제했다. 남부의 소수 부대만 공동 교전군으로 남는다
-    immediate: [['disband', ITALY_SOUTH, 8], ['leaveFaction'], ['leaveWar'], ['gov', { leader: '피에트로 바돌리오', title: '총리', ideology: 'neu', gov: '왕국 정부', party: '바돌리오 내각' }], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]], ['if', [['alive', 'GER']], [['event', 'ger_achse', 'GER', 0]]]],
+    immediate: [['disband', ITALY_SOUTH, 8], ['leaveFaction'], ['leaveWar'], ['gov', { leader: '피에트로 바돌리오', title: '총리', ideology: 'neu', gov: '왕국 정부', party: '바돌리오 내각' }], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]], ['if', [['alive', 'GER']], [['event', 'ger_achse', 'GER', 0]]],
+      // 연합군이 살레르노·타란토에 올라와 남부를 지킨다(애벌랜치 작전)
+      ['if', [['controls', 'ITA', ['napoli']], ['atWar', 'ENG', 'GER'], ['isAI', 'ENG']], [['for', 'ENG', [['deploy', 6, 'napoli']]]]],
+      ['if', [['controls', 'ITA', ['napoli']], ['atWar', 'USA', 'GER'], ['isAI', 'USA']], [['for', 'USA', [['deploy', 8, 'napoli']]]]]],
     title: '무솔리니 실각', desc: '7월 24일 밤 파시즘 대평의회가 무솔리니를 불신임했고, 이튿날 국왕은 그를 체포했다. 바돌리오 정부는 9월 8일 연합국과의 휴전을 발표했다. 국왕과 정부는 로마를 떠나 남쪽으로 피했다.',
     opts: [{ t: '휴전', fx: [['stab', -0.1]] }] },
   { id: 'ger_achse', who: 'GER', manual: true, pic: 'troops',

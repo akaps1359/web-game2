@@ -311,7 +311,8 @@ export function surrenderProgress(G, tag) {
   for (let i = 0; i < G.st.length; i++) {
     const S = G.st[i];
     if (S.owner !== tag) continue;
-    const v = Math.max(0.5, S.vp);
+    // 병합한 남의 땅(비핵심)은 4분의 1만 센다: 점령지를 잃는다고 본토가 무너지지는 않는다
+    const v = Math.max(0.5, S.vp) * (S.cores.includes(tag) ? 1 : 0.25);
     total += v;
     if (S.ctrl !== tag && atWar(G, tag, S.ctrl)) lost += v;
   }

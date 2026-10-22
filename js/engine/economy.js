@@ -293,6 +293,16 @@ function lawTradeOutput(C) {
   return t === 'free' ? 0.15 : t === 'export' ? 0.1 : t === 'limited' ? 0.05 : 0;
 }
 
+// 무기 대여: 비축 장비를 다른 나라에 보낸다. 보낸 수량을 돌려준다
+export function sendEquipment(G, A, B, e, n) {
+  n = Math.floor(Math.min(n, A.stock[e] || 0));
+  if (n <= 0) return 0;
+  A.stock[e] -= n; B.stock[e] = (B.stock[e] || 0) + n;
+  const s = (A.stats.lendSent ||= {}); s[e] = (s[e] || 0) + n;
+  const g = (B.stats.lendGot ||= {}); g[e] = (g[e] || 0) + n;
+  return n;
+}
+
 export function queueBuild(G, C, type, st, repeat = 1) {
   const why = canBuild(G, C, type, st);
   if (why) return why;

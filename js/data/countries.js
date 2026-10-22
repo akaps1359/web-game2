@@ -114,7 +114,7 @@ export const COUNTRIES = {
     generals: [['드와이트 D. 아이젠하워', 4], ['조지 S. 패튼', 5, 'arm'], ['오마 브래들리', 4], ['마크 웨인 클라크', 3], ['매슈 리지웨이', 4]],
     advisors: { workhorse: '해리 홉킨스', economy: '헨리 모겐소', diplomat: '코델 헐', propaganda: '엘리너 루스벨트', armament: '윌리엄 크누센', construction: '해럴드 이키스', science: '버니바 부시', army: '조지 마셜', navy: '어니스트 킹', air: '헨리 아널드' },
     offmap: { name: '미국 본토', civ: 129, mil: 10, dock: 22, pop: 128, mpFactor: 1, res: { oil: 680, alu: 176, tung: 137, steel: 505, rub: 20, chr: 1 } },
-    ai: { aggr: 0.1, plan: 'USA', exp: 0.75, air: 0.35 },
+    ai: { aggr: 0.1, plan: 'USA', exp: 0.75, air: 0.35, army: 0.5 }, // 육군보다 해군·공군·무기 대여에 힘을 쏟았다(1945년 육군 89개 사단)
   },
   POL: {
     name: '폴란드', full: '폴란드 공화국', color: '#c46b7f', ideology: 'neu', gov: '사나치아 체제',

@@ -74,6 +74,11 @@ export const SPIRITS = {
   sov_surprise: { name: '기습당한 붉은 군대', mods: { 'land.org': -0.25, 'land.atk': -0.25, 'land.def': -0.1, 'land.planning': -0.5 }, desc: '스탈린은 거듭된 경고를 무시했다. 국경의 부대들은 포탄도 연료도 없이 흩어져 있었고, 숙청으로 지휘관 대부분이 경험 없는 신참이었다.' },
   sov_patriotic: { name: '대조국전쟁', mods: { 'land.def': 0.1, manpower: 0.1, stability: 0.1, 'warSupport.target': 0.2, surrender: 0.15 }, desc: '온 나라가 침략자에 맞서 일어섰다. 공장은 우랄 너머로 옮겨 가고, 모스크바가 위협받아도 항복은 없다.' },
   sov_noretreat: { name: '한 걸음도 물러서지 마라', mods: { 'land.def': 0.15, 'land.atk': -0.05 } },
+  sov_guards: { name: '붉은 군대의 재건', mods: { 'land.atk': 0.1, 'land.org': 0.1, 'land.planning': 0.1 }, desc: '전차 군단과 포병 돌파 사단을 다시 편성하고, 1941년의 패배에서 배운 지휘관들이 전선을 이끈다.' },
+  sov_bagration: { name: '바그라티온 작전', mods: { 'land.atk': 0.15, 'land.brk': 0.15, 'land.planning': 0.2 }, desc: '기만 작전으로 숨긴 170만 대군이 빨치산의 철도 파괴와 함께 일제히 공세에 나섰다.' },
+  ger_bombed: { name: '연합군 합동 폭격', mods: { factoryOutput: -0.15, construction: -0.2 }, desc: '영국 공군은 밤에, 미국 육군 항공대는 낮에 독일의 도시와 공장을 폭격한다.' },
+  ger_oil_crisis: { name: '석유 위기', mods: { fuelGain: -0.6 }, desc: '연합군의 석유 공세로 합성 연료 공장과 플로이에슈티 정유소가 잿더미가 되었다.' },
+  ger_volkssturm: { name: '최후의 항전', mods: { surrender: 0.15, 'warSupport.target': 0.15, 'land.def': 0.1 }, desc: '열여섯 살 소년과 예순 살 노인까지 국민돌격대로 끌려 나왔다. 무조건 항복 요구 앞에서 정권은 마지막 한 사람까지 싸우라고 명령했다.' },
   // 프랑스
   fra_disjointed: { name: '분열된 정부', mods: { ppFactor: -0.3, stability: -0.05 }, desc: '잦은 내각 교체로 정부가 마비되어 있다.' },
   fra_victors: { name: '1차 대전의 승전국', mods: { 'warSupport.target': -0.15, 'land.def': 0.05 }, desc: '또 다른 대전을 원하는 이는 없다.' },

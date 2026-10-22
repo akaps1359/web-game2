@@ -229,17 +229,24 @@ export function captureState(G, st, byTag) {
   }
   S.ctrl = newCtrl;
   S.ctrlSince = G.hour;
-  // 남아 있던 적 사단 유린(퇴각 중이거나 조직력 0)
+  // 남아 있던 적 사단: 퇴각 중이거나 조직력이 바닥난 사단은 낙오병과 장비를 잃으며 더 물러나고,
+  // 이미 반 넘게 무너졌거나 빠져나갈 길이 없으면 유린당해 궤멸한다
   for (const id of [...(G.divsAt[st] || [])]) {
     const E = G.divs[id];
     if (E && atWar(G, newCtrl, E.tag)) {
-      if (E.retreat || E.org <= 0.5) { destroyDivision(G, E, 'overrun'); news(G, `${E.name}(${G.countries[E.tag].name})이(가) ${G.map.name[st]}에서 유린당해 궤멸했습니다.`, { tags: [E.tag, newCtrl], kind: 'mil' }); }
-      else retreatDivision(G, E);
+      if (E.retreat || E.org <= 0.5) {
+        const EC = G.countries[E.tag], lost = E.str * 0.3;
+        E.str -= lost; if (EC) EC.mp.dead += divStats(G, E).mp * lost;
+        if (E.str < 0.25 || !canRetreat(G, E)) { destroyDivision(G, E, 'overrun'); news(G, `${E.name}(${EC?.name})이(가) ${G.map.name[st]}에서 유린당해 궤멸했습니다.`, { tags: [E.tag, newCtrl], kind: 'mil' }); }
+        else retreatDivision(G, E);
+      } else retreatDivision(G, E);
     }
   }
   G.mapDirty = true;
   if (G.onCapture) G.onCapture(st, prevCtrl, newCtrl);
 }
+
+function canRetreat(G, D) { return G.map.nb[D.loc].some((v) => friendlyCtrl(G, D.tag, v) && !enemyDivsIn(G, D.tag, v).length); }
 
 // 퇴각: 적이 없는 인접 아군 주로. 없으면 궤멸
 export function retreatDivision(G, D) {
