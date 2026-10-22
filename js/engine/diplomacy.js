@@ -175,6 +175,7 @@ export function killCountry(G, tag) {
   if (C.faction) leaveFaction(G, tag);
   for (const w of G.wars) { w.att = w.att.filter((t) => t !== tag); w.def = w.def.filter((t) => t !== tag); }
   for (const t in G.countries) { const X = G.countries[t]; if (X.master === tag) X.master = null; X.guarantees = (X.guarantees || []).filter((g) => g !== tag); }
+  G._ally = null;
   cleanupWars(G);
   rebuildWarCache(G);
 }
@@ -182,7 +183,7 @@ export function killCountry(G, tag) {
 export function setPuppet(G, master, sub) {
   const S = G.countries[sub];
   if (S.faction) leaveFaction(G, sub);
-  S.master = master;
+  S.master = master; G._ally = null;
   // 종주국 진영에 편입
   const Mm = G.countries[master];
   if (Mm.faction) joinFaction(G, sub, Mm.faction, true);
@@ -209,7 +210,7 @@ export function createFaction(G, leader, id) {
   const L = G.countries[leader];
   if (L.faction) leaveFaction(G, leader);
   G.factions[id] = { id, name: def.name, color: def.color, leader, members: [leader] };
-  L.faction = id;
+  L.faction = id; G._ally = null;
   news(G, `${L.name}이(가) ${def.name}을(를) 결성했습니다.`, { kind: 'faction', big: 1, tags: [leader] });
   return G.factions[id];
 }
@@ -218,7 +219,7 @@ export function joinFaction(G, tag, id, silent) {
   const C = G.countries[tag];
   if (C.faction === id) return;
   if (C.faction) leaveFaction(G, tag);
-  F.members.push(tag); C.faction = id;
+  F.members.push(tag); C.faction = id; G._ally = null;
   addTension(G, 0.03, tag);
   // 진영 지도자가 치르는 전쟁에 합류
   for (const w of G.wars) {
@@ -228,7 +229,7 @@ export function joinFaction(G, tag, id, silent) {
   if (!silent) news(G, `${C.name}이(가) ${F.name}에 가입했습니다.`, { kind: 'faction', tags: [tag] });
 }
 export function leaveFaction(G, tag) {
-  const C = G.countries[tag]; const F = G.factions[C.faction]; C.faction = null;
+  const C = G.countries[tag]; const F = G.factions[C.faction]; C.faction = null; G._ally = null;
   if (!F) return;
   F.members = F.members.filter((t) => t !== tag);
   if (F.leader === tag) F.leader = F.members[0] || null;
@@ -389,6 +390,7 @@ export function settleCapitulation(G, tag, victor, enemies, opts = {}) {
     // 남은 영토는 승자에게
     for (let i = 0; i < G.st.length; i++) { const S = G.st[i]; if (S.owner === tag) { S.owner = victor; S.ctrl = victor; S.ctrlSince = G.hour; } }
     if ((alliesFighting && C.faction) || opts.exile) {
+      if (C.capital >= 0) C.homeCap = C.capital;
       C.capitulated = true; C.exiled = true; C.capital = -1;
       for (const w of G.wars) { /* 망명정부는 전쟁에 남되 항복 상태 */ }
       news(G, `${C.name} 정부가 망명했습니다.`, { kind: 'diplo', tags: [tag] });
@@ -413,11 +415,20 @@ export function dailyLiberation(G) {
       const c = S.ctrl;
       if (C.faction && G.countries[c]?.faction === C.faction) back.push(i);
     }
-    if (back.length) {
+    if (!back.length) continue;
+    // 망명 정부는 수도(또는 핵심 승점의 절반)를 되찾아야 귀환한다. 그 전에는 동맹군이 관리
+    if (C.capitulated) {
+      let coreVP = 0, freeVP = 0;
+      for (let i = 0; i < G.st.length; i++) { const S = G.st[i]; if (!S.cores.includes(tag)) continue; const v = Math.max(1, S.vp); coreVP += v; if (back.includes(i)) freeVP += v; }
+      const home = C.homeCap ?? -1;
+      if (!(home >= 0 && back.includes(home)) && freeVP < coreVP * 0.5) continue;
+    }
+    {
       for (const i of back) { const S = G.st[i]; S.owner = tag; S.ctrl = tag; S.ctrlSince = G.hour; }
+      if (C.homeCap >= 0 && back.includes(C.homeCap)) C.capital = C.homeCap;
       if (C.capitulated) {
         C.capitulated = false; C.exiled = false; C.alive = true;
-        relocateCapital(G, C);
+        if (!(C.capital >= 0 && G.st[C.capital].ctrl === tag)) relocateCapital(G, C);
         news(G, `${C.name}이(가) 해방되어 정부가 귀환했습니다!`, { kind: 'peace', big: 1, tags: [tag] });
         if (G.onLiberated) G.onLiberated(tag);
       }

@@ -8,10 +8,10 @@ const SHIP_FUEL = { dd: 4, cl: 7, ca: 11, bb: 24, cv: 18, ss: 2 };
 
 export function fleetPower(G, F) {
   const C = G.countries[F.tag];
-  let atk = 0, hp = 0;
-  for (const k of SHIP_KEYS) { const n = F.ships[k] || 0; if (!n) continue; atk += SHIPS[k].atk * n; hp += SHIPS[k].hp * n; }
+  let atk = 0, hp = 0, asw = 0;
+  for (const k of SHIP_KEYS) { const n = F.ships[k] || 0; if (!n) continue; atk += SHIPS[k].atk * n; hp += SHIPS[k].hp * n; asw += (SHIPS[k].asw || 0) * n; }
   atk *= 1 + (C ? M(C, 'navy.atk') : 0);
-  return { atk, hp, ships: SHIP_KEYS.reduce((s, k) => s + (F.ships[k] || 0), 0) };
+  return { atk, hp, asw, sub: hp > 0 ? ((F.ships.ss || 0) * SHIPS.ss.hp) / hp : 0, ships: SHIP_KEYS.reduce((s, k) => s + (F.ships[k] || 0), 0) };
 }
 export function fleetSize(F) { return SHIP_KEYS.reduce((s, k) => s + (F.ships[k] || 0), 0); }
 
@@ -107,8 +107,14 @@ export function dailyNaval(G) {
 function navalBattle(G, A, B, z) {
   const rng = G.rng;
   const pa = fleetPower(G, A), pb = fleetPower(G, B);
-  const hitA = pb.atk * (0.6 + rng() * 0.8) * 0.6; // A가 입는 피해
-  const hitB = pa.atk * (0.6 + rng() * 0.8) * 0.6;
+  // 잠수함 위주 함대는 대잠 전력에 발견되어야 교전이 벌어진다
+  const spotted = (hunter, subs) => G.rng() < Math.min(0.5, hunter.asw / (hunter.asw + (subs.ships.ss || 0) * 40 + 1));
+  if (pb.sub > 0.6 && !spotted(pa, B)) return;
+  if (pa.sub > 0.6 && !spotted(pb, A)) return;
+  // 잠수함에는 대잠 능력으로만 피해를 준다(잠항해 대부분 빠져나감)
+  const vs = (p, target) => p.atk * (1 - target.sub) + p.asw * target.sub * 0.1;
+  const hitA = vs(pb, pa) * (0.6 + rng() * 0.8) * 0.6; // A가 입는 피해
+  const hitB = vs(pa, pb) * (0.6 + rng() * 0.8) * 0.6;
   const sunkA = applyNavalDamage(G, A, hitA), sunkB = applyNavalDamage(G, B, hitB);
   const nameA = G.countries[A.tag].name, nameB = G.countries[B.tag].name;
   const zn = G.map.seas[z].name;
@@ -191,9 +197,9 @@ export function canInvade(G, tag, target) {
 
 // 매 시간: 승선 중인 사단 처리
 export function hourlyEmbarked(G) {
-  for (const id in G.divs) {
-    const D = G.divs[id];
-    if (!D.sea) continue;
+  const list = G._embarked || Object.values(G.divs);
+  for (const D of list) {
+    if (!D.sea || G.divs[D.id] !== D) continue;
     if (G.hour < D.sea.eta) continue;
     const t = D.sea.to;
     const kind = D.sea.kind;

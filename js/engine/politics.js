@@ -57,7 +57,7 @@ export function normalizePop(C) {
 export function completeFocus(G, C, node) {
   const F = C.focus;
   F.done[node.id] = 1; F.cur = null; F.prog = 0;
-  news(G, `${C.name}: 국가 중점 「${node.name}」 완료`, { kind: 'focus', tags: [C.tag], quiet: C.tag !== G.player });
+  if (C.major || C.tag === G.player) news(G, `${C.name}: 국가 중점 「${node.name}」 완료`, { kind: 'focus', tags: [C.tag], quiet: C.tag !== G.player });
   applyEffects(G, C, node.fx || [], { src: 'focus:' + node.id });
   C.modsDirty = true;
   if (G.onFocusDone) G.onFocusDone(C, node);

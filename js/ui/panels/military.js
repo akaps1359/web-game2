@@ -3,7 +3,7 @@ import { h, onTap } from '../dom.js';
 import { icon } from '../icons.js';
 import { btn, bar, stat, card, item, empty, setBar, flag } from './common.js';
 import { BATTALIONS, BAT_KEYS, SUPPORT, SUP_KEYS, EQUIPMENT, AIR_TYPES, AIR_MISSIONS, SHIPS, SHIP_KEYS } from '../../data/units.js';
-import { tplStats, tplAvailable, getTpl, divsOf, divStats, manpowerAvailable, eqLevel, eqCost, createArmy, deleteArmy, armiesOf, assignArmy, setupArmies } from '../../engine/military.js';
+import { tplStats, tplAvailable, getTpl, divsOf, divStats, manpowerAvailable, eqLevel, eqCost, createArmy, deleteArmy, armiesOf, assignArmy, setupArmies, editTemplate } from '../../engine/military.js';
 import { createWing, wingCoverage, WING_SIZE } from '../../engine/air.js';
 import { fleetSize, fleetPower } from '../../engine/naval.js';
 import { atWarAny, enemiesOf } from '../../engine/world.js';
@@ -220,7 +220,7 @@ function designer(app, body, ctx) {
     T.id && !used && C.templates.length > 1 ? btn('삭제', () => { C.templates = C.templates.filter((x) => x.id !== T.id); C.training = C.training.filter((x) => x.tpl !== T.id); editTpl = null; ctx.rerender(); }, 'danger', 'trash') : null,
     btn(T.id ? '저장' : '만들기', () => {
       if (!nBat) { app.toast('대대가 하나 이상 필요합니다', 'war'); return; }
-      if (T.id) { const X = getTpl(C, T.id); X.name = T.name || X.name; X.bats = { ...T.bats }; X.sup = [...T.sup]; if (C._tpl) delete C._tpl[X.id]; C.techVer++; }
+      if (T.id) editTemplate(app.G, C, T.id, T.bats, T.sup, T.name || getTpl(C, T.id).name);
       else C.templates.push({ id: G.nextId++, key: 'custom', name: T.name || '새 사단', bats: { ...T.bats }, sup: [...T.sup] });
       app.toast(used ? `편제 저장 — ${used}개 사단이 새 장비를 보충합니다` : '편제 저장', 'peace');
       editTpl = null; ctx.rerender();

@@ -17,14 +17,23 @@ export function rebuildWarCache(G) {
     }
   }
   G.warRel = rel;
+  G._ally = null;
 }
 export const atWar = (G, a, b) => !!(G.warRel[a] && G.warRel[a][b]);
 export const atWarAny = (G, a) => !!G.warRel[a] && Object.keys(G.warRel[a]).length > 0;
 export const enemiesOf = (G, a) => Object.keys(G.warRel[a] || {});
 
 // 같은 편: 동일 국가 / 같은 진영 / 종주-괴뢰 / 같은 전쟁의 같은 편
+// 결과는 시간 단위로 기억한다(전쟁 관계가 바뀌면 rebuildWarCache가 지운다)
 export function allied(G, a, b) {
   if (a === b) return true;
+  if (G._allyHour !== G.hour || !G._ally) { G._allyHour = G.hour; G._ally = new Map(); }
+  const key = a < b ? a + b : b + a;
+  let r = G._ally.get(key);
+  if (r === undefined) { r = alliedRaw(G, a, b); G._ally.set(key, r); }
+  return r;
+}
+function alliedRaw(G, a, b) {
   const A = G.countries[a], B = G.countries[b];
   if (!A || !B) return false;
   if (A.faction && A.faction === B.faction) return true;

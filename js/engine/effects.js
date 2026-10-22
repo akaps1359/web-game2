@@ -60,7 +60,7 @@ function applyOne(G, C, e, ctx) {
     case 'annexBy': { const X = G.countries[b]; if (X?.alive) annexCountry(G, a, b, { noTension: true }); break; }
     case 'transfer': { const to = b === 'THIS' || b == null ? C.tag : b; transferStates(G, [].concat(a), to, { core: !!c }); break; }
     case 'puppet': { const X = G.countries[a]; if (X?.alive) setPuppet(G, C.tag, a); break; }
-    case 'unpuppet': { const X = G.countries[a]; if (X) X.master = null; break; }
+    case 'unpuppet': { const X = G.countries[a]; if (X) X.master = null; G._ally = null; break; }
     case 'war': { const t = a; if (G.countries[t]?.alive && !atWar(G, C.tag, t) && !allied(G, C.tag, t)) { if (C.naps) delete C.naps[t]; declareWar(G, C.tag, t, { forced: true, name: b, ...(c || {}) }); } break; }
     case 'warOn': { const att = a, def = b; if (G.countries[att]?.alive && G.countries[def]?.alive && !atWar(G, att, def)) { if (G.countries[att].naps) delete G.countries[att].naps[def]; declareWar(G, att, def, { forced: true, name: c, ...(e[4] || {}) }); } break; }
     case 'joinWarOf': { // [joinWarOf, ally, enemy]
@@ -150,13 +150,32 @@ function applyOne(G, C, e, ctx) {
       const map = G.map; const rows = [];
       for (let i = 0; i < map.nGeo; i++) { const S = G.st[i]; if (S.owner !== C.tag || S.ctrl !== C.tag) continue; const k = map.nb[i].filter((v) => G.st[v].owner !== C.tag && (!c || G.st[v].owner === c)).length; if (k) rows.push([i, k + (S.vp || 0) * 0.1]); }
       rows.sort((x, y) => y[1] - x[1]);
-      for (const [i] of rows.slice(0, a)) G.st[i].fort = Math.min(10, (G.st[i].fort || 0) + (b || 1));
+      for (const [i] of rows.slice(0, a)) G.st[i].fort = Math.max(G.st[i].fort || 0, Math.min(4, (G.st[i].fort || 0) + (b || 1)));
+      break;
+    }
+    // 각본 상륙: [amphib, {주: 사단 수}] — 전선에 있지 않은 아군 사단을 해상·공수로 해당 주에 투입(제해권 무시)
+    case 'amphib': {
+      const pool = [];
+      for (const id in G.divs) { const D = G.divs[id]; if (D.tag === C.tag && !D.sea && D.att < 0 && !D.retreat && !G.map.nb[D.loc].some((v) => atWar(G, C.tag, G.st[v].ctrl))) pool.push(D); }
+      pool.sort((x, y) => y.str + y.org / 100 - (x.str + x.org / 100));
+      let k = 0;
+      for (const key in a) {
+        const i = idxOf(G, key); if (i == null) continue;
+        for (let n = 0; n < a[key] && pool.length; n++) { const D = pool.shift(); D.path = []; D.prog = 0; D.sea = { kind: 'invade', to: i, eta: G.hour + 12 + (k++ % 6) * 2, from: D.loc }; }
+      }
       break;
     }
     // 강제 항복(정부 붕괴 등)
     case 'capitulate': if (G.warRel[C.tag] && Object.keys(G.warRel[C.tag]).length) capitulate(G, C.tag); break;
     // AI 공세 보류: [aiHold, [태그], '1940-05-10']
-    case 'aiHold': { C.aiState ||= {}; C.aiState.hold ||= {}; for (const t of [].concat(a)) C.aiState.hold[t] = hourOf(b); break; }
+    case 'aiHold': {
+      C.aiState ||= {}; C.aiState.hold ||= {};
+      const tags = [].concat(a);
+      for (const t of tags) C.aiState.hold[t] = hourOf(b);
+      // 진행 중인 공격도 멈춘다
+      if (C.isAI) for (const id in G.divs) { const D = G.divs[id]; if (D.tag !== C.tag) continue; const tgt = D.att >= 0 ? D.att : D.path[0]; if (tgt != null && tags.includes(G.st[tgt].ctrl)) { D.att = -1; D.path = []; D.prog = 0; } }
+      break;
+    }
     case 'removeWargoal': C.wargoals = C.wargoals.filter((w) => w.target !== a); C.justify = C.justify.filter((j) => j.target !== a); break;
     case 'ownCores': { // 자국이 통제 중인 이 나라 핵심 주를 소유
       for (const S of G.st) if (S.cores.includes(a) && S.ctrl === C.tag && S.owner !== C.tag) S.owner = C.tag; G.mapDirty = true; G.indexDirty = true; break;

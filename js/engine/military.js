@@ -115,6 +115,7 @@ export function createDivision(G, tag, tplId, loc, opts = {}) {
     ent: 0, plan: 0, att: -1, retreat: false, army: opts.army ?? 0, sup: 1, amphib: -1, sea: null,
   };
   G.divs[id] = D;
+  if (G._byTag) (G._byTag[tag] ||= []).push(D);
   return D;
 }
 
@@ -161,20 +162,20 @@ export function findPath(G, tag, from, to, mode = 'attack') {
   const map = G.map, n = map.n;
   const dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1);
   dist[from] = 0;
-  const open = [from];
-  const inOpen = new Uint8Array(n); inOpen[from] = 1;
-  while (open.length) {
-    let bi = 0; for (let i = 1; i < open.length; i++) if (dist[open[i]] < dist[open[bi]]) bi = i;
-    const u = open[bi]; open.splice(bi, 1); inOpen[u] = 0;
+  const heap = new MinHeap(); heap.push(from, 0);
+  const access = G.countries[tag].access;
+  while (heap.size) {
+    const [u, du] = heap.pop();
+    if (du > dist[u]) continue;
     if (u === to) break;
     for (const v of map.nb[u]) {
       const c = G.st[v].ctrl;
-      const friendly = c === tag || allied(G, tag, c) || G.countries[tag].access?.includes(c);
+      const friendly = c === tag || allied(G, tag, c) || access?.includes(c);
       const hostile = atWar(G, tag, c);
       if (!friendly && !(hostile && mode === 'attack')) continue;
       // 적 영토를 지나 계속 가는 것은 허용하되 비용 가중
       const w = moveCost(G, u, v) * (hostile ? 1.6 : 1);
-      if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; if (!inOpen[v]) { open.push(v); inOpen[v] = 1; } }
+      if (du + w < dist[v]) { dist[v] = du + w; prev[v] = u; heap.push(v, dist[v]); }
     }
   }
   if (prev[to] < 0) return null;
@@ -201,11 +202,11 @@ export function enemyDivsIn(G, tag, st) {
   return out;
 }
 
-// 위치 색인 재구성 (매 시간)
+// 위치·국가별 색인 재구성 (매 시간). _로 시작하는 필드는 저장되지 않는다
 export function rebuildDivIndex(G) {
-  const at = {};
-  for (const id in G.divs) { const D = G.divs[id]; (at[D.loc] ||= []).push(D.id); }
-  G.divsAt = at;
+  const at = {}, by = {}, sea = [];
+  for (const id in G.divs) { const D = G.divs[id]; (at[D.loc] ||= []).push(D.id); (by[D.tag] ||= []).push(D); if (D.sea) sea.push(D); }
+  G.divsAt = at; G._byTag = by; G._embarked = sea;
 }
 
 // 점령 처리
@@ -241,7 +242,7 @@ export function retreatDivision(G, D) {
     if (!friendlyCtrl(G, D.tag, v)) continue;
     if (enemyDivsIn(G, D.tag, v).length) continue;
     const underAtk = G.battles[v] ? 1 : 0;
-    const score = (G.supplyOf?.[D.tag]?.[v] ?? 0.5) * 2 - underAtk * 2 + Math.random() * 0.1;
+    const score = (G.supplyOf?.[D.tag]?.[v] ?? 0.5) * 2 - underAtk * 2 + G.rng() * 0.1;
     if (score > bestScore) { bestScore = score; best = v; }
   }
   if (best < 0) {
@@ -249,7 +250,8 @@ export function retreatDivision(G, D) {
     destroyDivision(G, D, 'encircled');
     return false;
   }
-  D.path = [best]; D.prog = 0; D.att = -1; D.retreat = true; D.ent = 0; D.plan = 0;
+  // 전투 중에 이미 뒤로 빠지고 있었으므로 이동의 대부분을 끝낸 상태로 시작(바로 유린당하지 않게)
+  D.path = [best]; D.prog = moveCost(G, D.loc, best) * 0.75; D.att = -1; D.retreat = true; D.ent = 0; D.plan = 0;
   return true;
 }
 
@@ -299,7 +301,8 @@ export function hourlyDivisions(G) {
     if (D.org > maxOrg) D.org = maxOrg;
     const maxEnt = 5 + (st.mods.entrench || 0) + M(C, 'land.entrench') * 5;
     D.ent = Math.min(maxEnt, D.ent + 1 / 24);
-    if (D.army && G.armies[D.army]?.order === 'attack') {
+    // 공세 계획: 공격 명령을 받은 군, AI는 전선에서 대기 중인 사단
+    if ((D.army && G.armies[D.army]?.order === 'attack') || (C.isAI && G.warRel[D.tag] && enemyAround(G, D))) {
       const maxPlan = 0.3 + M(C, 'land.planning');
       D.plan = Math.min(maxPlan, D.plan + 0.3 / (10 * 24));
     }
@@ -389,7 +392,11 @@ export function firstControlled(G, tag) { for (let i = 0; i < G.st.length; i++) 
 
 export function manpowerAvailable(C) { return Math.max(0, C.mp.total - C.mp.inDivs - C.mp.training); }
 
-export function divsOf(G, tag) { const out = []; for (const id in G.divs) if (G.divs[id].tag === tag) out.push(G.divs[id]); return out; }
+export function divsOf(G, tag) {
+  const L = G._byTag?.[tag];
+  if (L) return L.filter((D) => G.divs[D.id] === D && D.tag === tag);
+  const out = []; for (const id in G.divs) if (G.divs[id].tag === tag) out.push(G.divs[id]); return out;
+}
 
 export function divPower(G, D) {
   const st = divStats(G, D);
@@ -442,6 +449,23 @@ export function disbandDivision(G, D) {
   delete G.divs[D.id];
   const a = G.divsAt?.[D.loc]; if (a) { const i = a.indexOf(D.id); if (i >= 0) a.splice(i, 1); }
 }
+// 편제 수정: 이 편제를 쓰는 사단의 장비를 반납하고 새 편제 장비를 비축분에서 채운다(부족분만큼 전력 감소)
+export function editTemplate(G, C, tplId, bats, sup, name) {
+  const X = getTpl(C, tplId); if (!X) return;
+  const divs = divsOf(G, C.tag).filter((D) => D.tpl === tplId);
+  const old = tplStats(C, X);
+  for (const D of divs) for (const e in old.eq) C.stock[e] = (C.stock[e] || 0) + old.eq[e] * D.str;
+  X.bats = { ...bats }; X.sup = [...sup]; if (name) X.name = name;
+  if (C._tpl) delete C._tpl[X.id];
+  C.techVer++;
+  const st = tplStats(C, X);
+  for (const D of divs) {
+    const r = Math.min(1, eqFillRatio(C, st.eq, D.str));
+    consumeEq(C, st.eq, D.str * r);
+    D.str = Math.max(0.1, D.str * r);
+    D.org = Math.min(D.org, st.org);
+  }
+}
 // 편제 변경 (장비가 부족하면 전력이 떨어진 채로 보충됨)
 export function changeTemplate(G, D, tplId) {
   const C = G.countries[D.tag];
@@ -456,4 +480,25 @@ export function changeTemplate(G, D, tplId) {
   for (const e in st.eq) C.stock[e] = Math.max(0, (C.stock[e] || 0) - st.eq[e] * ratio);
   D.str = ratio; D.org = Math.min(D.org, st.org * 0.5);
   return true;
+}
+
+// 최소 힙 (경로 탐색용)
+export class MinHeap {
+  constructor() { this.k = []; this.p = []; }
+  get size() { return this.k.length; }
+  push(key, pri) {
+    const k = this.k, p = this.p; let i = k.length; k.push(key); p.push(pri);
+    while (i > 0) { const j = (i - 1) >> 1; if (p[j] <= pri) break; k[i] = k[j]; p[i] = p[j]; i = j; }
+    k[i] = key; p[i] = pri;
+  }
+  pop() {
+    const k = this.k, p = this.p; const top = [k[0], p[0]];
+    const lk = k.pop(), lp = p.pop(); const n = k.length;
+    if (n) {
+      let i = 0;
+      for (;;) { let c = 2 * i + 1; if (c >= n) break; if (c + 1 < n && p[c + 1] < p[c]) c++; if (p[c] >= lp) break; k[i] = k[c]; p[i] = p[c]; i = c; }
+      k[i] = lk; p[i] = lp;
+    }
+    return top;
+  }
 }

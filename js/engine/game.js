@@ -264,8 +264,7 @@ export function tick(G) {
   rebuildDivIndex(G);
   assignDivSupply(G);
   hourlyEmbarked(G);
-  hourlyDivisions(G);
-  rebuildDivIndex(G);
+  hourlyDivisions(G); // 이동은 divsAt를 직접 갱신한다
   hourlyCombat(G);
   aiHourly(G);
   if (G.indexDirty) rebuildIndexes(G);

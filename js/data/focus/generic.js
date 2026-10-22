@@ -20,7 +20,7 @@ export const GENERIC = [
   { id: 'gen_army', name: '육군 증강', icon: 'army', x: 4, y: 0, ai: 2,
     fx: [['rbonus', 'inf', 0.5, 1], ['units', [['inf9', 1]]]], desc: '보병 사단을 늘리고 장비를 개선한다.' },
   { id: 'gen_fort', name: '국경 요새', icon: 'fort', x: 3, y: 1, req: ['gen_army'],
-    fx: [['fortBorder', 3, 2]], desc: '위협받는 국경을 따라 요새를 쌓는다.' },
+    fx: [['fortBorder', 3, 1]], desc: '위협받는 국경을 따라 요새를 쌓는다.' },
   { id: 'gen_conscript', name: '징병 확대', icon: 'manpower', x: 5, y: 1, req: ['gen_army'],
     fx: [['manpower', 30000], ['units', [['inf9', 2]]]], desc: '징집 대상을 넓혀 병력을 늘린다.' },
   { id: 'gen_doctrine', name: '군사 교리 정비', icon: 'doctrine', x: 4, y: 2, req: [['gen_fort', 'gen_conscript']],

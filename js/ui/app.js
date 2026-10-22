@@ -74,6 +74,8 @@ export class App {
     const G = this.G;
     G.onNews = (n) => this.onNews(n);
     G.onEvent = () => {};
+    // 이벤트로 플레이 국가가 바뀌면(비시 프랑스로 계속 등) 화면을 새 국가 기준으로 다시 구성
+    Object.defineProperty(G, 'onPlayerChange', { enumerable: false, configurable: true, writable: true, value: () => { this.playerChanged = true; } });
     this.sel.divs.clear(); this.sel.mode = 'none'; this.picker = null;
     this.r.labels = null; this.r.staticDirty = true;
     this.r.showLabels = this.settings().labels !== false;
@@ -121,6 +123,14 @@ export class App {
         }
         if (acc > 6) acc = 6;
         if (n) { this.dirty = true; this.hudDirty = true; }
+      }
+      if (this.playerChanged && !G.pending.length) {
+        this.playerChanged = false;
+        if (!Object.values(G.armies).some((A) => A.tag === G.player)) setupArmies(G, G.player);
+        this.afterLoad();
+        const C = G.countries[G.player];
+        if (C.capital >= 0 && !this.map.virtual[C.capital]) this.r.focusState(C.capital, Math.max(0.12, this.r.cam.s));
+        this.toast(`이제 ${C.full || C.name}을(를) 이끕니다`, 'peace');
       }
       if (G?.mapDirty) { G.mapDirty = false; this.r.labels = null; this.mapStale = true; }
       if (this.mapStale && now - (this.lastMapRedraw || 0) > 350) { this.mapStale = false; this.lastMapRedraw = now; this.r.staticDirty = true; this.dirty = true; }
@@ -180,6 +190,7 @@ export class App {
     const hud = clear($('#hud'));
     const G = this.G, C = G.countries[G.player];
     this.hud = {};
+    this.hudSig = JSON.stringify(C.flag) + C.name;
     const flag = h('div', { class: 'hud-flag' }, h('img', { src: flagURL(C.flag, 69, 46), alt: '' }));
     onTap(flag, () => this.openPanel('politics'));
     const name = h('div', { class: 'hud-name' }, h('b', null, C.name), this.hud.leader = h('small', null, ''));
@@ -201,6 +212,8 @@ export class App {
   updateHUD() {
     const G = this.G; if (!this.hud || !G) return;
     const C = G.countries[G.player]; if (!C) return;
+    // 국호·국기 변경(정부 교체 이벤트 등)
+    if (JSON.stringify(C.flag) + C.name !== this.hudSig) { this.buildHUD(); return; }
     const t = ymd(G.hour);
     this.hud.date.textContent = `${t.y}.${String(t.m).padStart(2, '0')}.${String(t.d).padStart(2, '0')}`;
     this.hud.hour.textContent = this.speed === 0 ? '일시정지' : `${String(t.h).padStart(2, '0')}:00`;

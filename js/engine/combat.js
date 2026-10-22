@@ -4,7 +4,7 @@ import { M } from './mods.js';
 import { atWar, ymd, news } from './world.js';
 import { divStats, retreatDivision, getTpl } from './military.js';
 
-export const COMBAT_K = 1.8; // 주 단위 전투 가속 계수 (주 하나가 HOI4의 여러 지방에 해당)
+export const COMBAT_K = 0.75; // 피해 배율 (HOI4 1시간 판정 기준 ≒ 1)
 
 const xpF = (xp) => 0.85 + 0.35 * xp;
 const strF = (str) => Math.max(0.1, Math.ceil(str * 10) / 10);
@@ -103,7 +103,7 @@ function resolve(G, t, Gp, prev) {
       const riverPen = amphib ? 0.3 : e ? (e.river === 2 ? 0.4 : e.river === 1 ? 0.7 : e.river === 3 ? 0.5 : 1) : 1;
       const tb = terrBonus(C, D, st, terrain, riverKey ? [riverKey] : amphib ? ['amphib'] : []);
       const fortLv = Math.max(0, (S.fort || 0) - (dirs - 1));
-      const fortPen = Math.max(0.25, 1 - 0.15 * fortLv);
+      const fortPen = 1 / (1 + 0.2 * fortLv); // 요새 1단계 0.83, 4단계 0.56, 6단계 0.45
       const supPen = 0.75 + 0.25 * Math.min(1, sup);
       u.atk = baseAtk * (1 + T.atk) * (1 + tb) * riverPen * fortPen * supPen * (1 + D.plan) * (st.mods.artAtk ? 1 + st.mods.artAtk * 0.3 : 1);
       u.dfn = st.brk * (1 + M(C, 'land.brk')) * (1 - air) * (0.35 + 0.65 * Math.min(1, sup)) * gen * xpF(D.xp);
@@ -118,9 +118,11 @@ function resolve(G, t, Gp, prev) {
     u.orgDmg = 0; u.hpDmg = 0;
     return u;
   };
-  const pickFront = (list, side) => {
+  // 전열: 이미 싸우고 있는 사단은 조직력이 바닥나 물러날 때까지 전열에 남고, 빈 너비만 예비대가 채운다
+  const pickFront = (list, side, prevIds) => {
     const units = list.map((D) => prep(D, side));
-    units.sort((a, b) => (b.D.org / Math.max(1, b.st.org) + b.D.str) - (a.D.org / Math.max(1, a.st.org) + a.D.str));
+    const was = new Set(prevIds || []);
+    units.sort((a, b) => (was.has(b.D.id) - was.has(a.D.id)) || ((b.D.org / Math.max(1, b.st.org) + b.D.str) - (a.D.org / Math.max(1, a.st.org) + a.D.str)));
     const front = []; let used = 0;
     for (const u of units) {
       if (front.length && used + u.st.w > width * 1.1) continue;
@@ -129,18 +131,18 @@ function resolve(G, t, Gp, prev) {
     }
     return { front, used, all: units };
   };
-  const A = pickFront(Gp.atk, 'atk');
-  const Dd = pickFront(Gp.def, 'def');
+  const A = pickFront(Gp.atk, 'atk', prev?.fa);
+  const Dd = pickFront(Gp.def, 'def', prev?.fd);
 
   const strike = (attackers, defenders) => {
-    const pool = new Map(defenders.map((u) => [u, u.dfn / 10]));
+    const pool = new Map(defenders.map((u) => [u, u.dfn]));
     for (const a of attackers) {
       if (!defenders.length) break;
       let t;
       if (rng() < 0.5) { t = defenders[0]; for (const d of defenders) if (d.D.org < t.D.org) t = d; }
       else t = defenders[Math.floor(rng() * defenders.length)];
       const hard = t.st.hard;
-      let attacks = ((a.st.sa * (1 - hard) + a.st.ha * hard) * a.atk) / 10;
+      let attacks = (a.st.sa * (1 - hard) + a.st.ha * hard) * a.atk;
       attacks *= 0.85 + rng() * 0.3;
       const p = pool.get(t);
       const blocked = Math.min(attacks, p);
@@ -165,7 +167,7 @@ function resolve(G, t, Gp, prev) {
       let aa = 0; for (const u of enemyFront) aa += u.st.aa;
       const aaRed = Math.max(0.25, 1 - aa / 120);
       const per = (pow * aaRed) / enemyFront.length;
-      for (const u of enemyFront) { u.orgDmg += per * 0.06; u.hpDmg += per * 0.03; }
+      for (const u of enemyFront) { u.orgDmg += per * 0.15; u.hpDmg += per * 0.06; }
     }
   }
 
@@ -205,6 +207,8 @@ function resolve(G, t, Gp, prev) {
   const B = prev || { st: t, start: G.hour, atkTag, defTag, losses: [0, 0] };
   B.atkTag = atkTag; B.defTag = defTag; B.atkIds = atkIds; B.defIds = defIds; B.dirs = [...Gp.dirs]; B.win = win; B.width = width;
   B.frontA = A.front.length; B.frontD = Dd.front.length;
+  B.fa = A.front.filter((u) => u.D.org > 0.5 && G.divs[u.D.id]).map((u) => u.D.id);
+  B.fd = Dd.front.filter((u) => u.D.org > 0.5 && G.divs[u.D.id]).map((u) => u.D.id);
   if (!prev && G.onBattleStart) G.onBattleStart(B);
   return B;
 }

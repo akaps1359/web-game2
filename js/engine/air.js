@@ -79,16 +79,24 @@ export function dailyAir(G) {
       pen[i] = Math.max(0, (1 - sup[i]) - 0.4) * 0.35 / 0.6;
     }
   }
-  // 공중전 손실
+  // 공중전 손실: 적 전투기가 있는 담당 구역에서 제공권 열세만큼 잃는다.
+  // 지상전이 벌어지는 구역이 있으면 출격이 격렬해진다(가짜 전쟁 같은 소강기에는 손실이 적다)
   for (const a of active) {
     const enemies = Object.keys(G.warRel[a.W.tag] || {});
     if (!enemies.length) continue;
-    let enemyPow = 0;
-    for (const s of a.cov) for (const e of enemies) enemyPow += fighter[e]?.[s] || 0;
-    enemyPow /= a.cov.length;
-    if (enemyPow <= 0) continue;
+    const sup = G.airSup[a.W.tag];
+    let contested = 0, inferior = 0, hot = 0;
+    for (const s of a.cov) {
+      let en = 0; for (const e of enemies) en += fighter[e]?.[s] || 0;
+      if (en <= 0) continue;
+      contested++; inferior += 1 - (sup ? sup[s] : 0.5);
+      if (G.battles[s]) hot++;
+    }
+    if (!contested) continue;
+    const share = inferior / contested; // 0(우세) ~ 1(열세)
+    const intensity = 0.15 + 0.85 * Math.min(1, hot / Math.max(1, contested * 0.1));
     const def = (a.st.def || 10) * (1 + M(a.C, 'air.def')) * (1 + (a.st.agi || 30) / 100);
-    const loss = Math.min(a.W.n * 0.15, (enemyPow / 6) * 0.004 / Math.max(1, def / 12));
+    const loss = a.W.n * Math.min(0.08, 0.025 * share * intensity / Math.max(0.6, def / 12)) * (contested / a.cov.length * 0.5 + 0.5);
     a.W.n = Math.max(0, a.W.n - loss);
     a.C.stats.planesLost = (a.C.stats.planesLost || 0) + loss;
   }

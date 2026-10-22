@@ -41,7 +41,7 @@ export const COUNTRIES = {
     generals: [['앨런 브룩', 4], ['버나드 몽고메리', 4], ['해럴드 알렉산더', 4], ['아치볼드 웨이벌', 3], ['클로드 오친렉', 4], ['리처드 오코너', 4, 'arm'], ['존 베레커(고트 자작)', 2]],
     advisors: { workhorse: '네빌 체임벌린', propaganda: '윈스턴 처칠', economy: '존 사이먼', diplomat: '앤서니 이든', science: '헨리 티자드', armament: '비버브룩 경', army: '시릴 디버럴', navy: '앤드루 커닝엄', air: '휴 다우딩' },
     offmap: { name: '영연방 자치령·인도', civ: 8, mil: 4, dock: 6, pop: 40, mpFactor: 0.35, res: { rub: 60, steel: 80, chr: 110, tung: 30, alu: 40, oil: 15 } },
-    ai: { aggr: 0.2, plan: 'ENG' },
+    ai: { aggr: 0.2, plan: 'ENG', army: 0.4, exp: 0.25 },
   },
   FRA: {
     name: '프랑스', full: '프랑스 공화국', color: '#3e5fae', ideology: 'dem', gov: '제3공화국',
@@ -60,7 +60,7 @@ export const COUNTRIES = {
     generals: [['모리스 가믈랭', 2], ['막심 베강', 3], ['알퐁스 조르주', 3], ['샤를 드골', 4, 'arm'], ['앙리 지로', 3], ['장 드 라트르 드 타시니', 4], ['필리프 르클레르', 4, 'arm']],
     advisors: { workhorse: '레옹 블룸', economy: '폴 레노', security: '에두아르 달라디에', propaganda: '조르주 망델', diplomat: '이봉 델보스', armament: '라울 도트리', army: '모리스 가믈랭', navy: '프랑수아 다를랑', air: '조제프 뷔유맹' },
     offmap: { name: '프랑스령 인도차이나·서아프리카', civ: 3, mil: 1, dock: 1, pop: 25, mpFactor: 0.2, res: { rub: 30, chr: 50, tung: 15, steel: 20 } },
-    ai: { aggr: 0.2, plan: 'FRA' },
+    ai: { aggr: 0.2, plan: 'FRA', exp: 0.15 },
   },
   ITA: {
     name: '이탈리아', full: '이탈리아 왕국', color: '#4f8c3c', ideology: 'fas', gov: '파시스트 정권',
@@ -96,7 +96,7 @@ export const COUNTRIES = {
     generals: [['게오르기 주코프', 5], ['콘스탄틴 로코솝스키', 5], ['알렉산드르 바실렙스키', 5], ['이반 코네프', 4], ['미하일 투하쳅스키', 5, 'arm'], ['세묜 티모셴코', 3], ['니콜라이 바투틴', 4], ['클리멘트 보로실로프', 1]],
     advisors: { workhorse: '뱌체슬라프 몰로토프', security: '라브렌티 베리야', propaganda: '안드레이 즈다노프', economy: '니콜라이 보즈네센스키', construction: '라자르 카가노비치', armament: '드미트리 우스티노프', diplomat: '막심 리트비노프', army: '보리스 샤포시니코프', navy: '니콜라이 쿠즈네초프', air: '알렉산드르 노비코프' },
     offmap: { name: '시베리아·중앙아시아', civ: 8, mil: 6, dock: 1, pop: 30, mpFactor: 0.8, res: { chr: 120, steel: 80, alu: 30, tung: 30, oil: 40 } }, offmapVP: 40,
-    ai: { aggr: 0.5, plan: 'SOV' },
+    ai: { aggr: 0.5, plan: 'SOV', exp: 0.15 },
   },
   USA: {
     name: '미국', full: '아메리카 합중국', color: '#33589c', ideology: 'dem', gov: '연방 공화국',
@@ -114,7 +114,7 @@ export const COUNTRIES = {
     generals: [['드와이트 D. 아이젠하워', 4], ['조지 S. 패튼', 5, 'arm'], ['오마 브래들리', 4], ['마크 웨인 클라크', 3], ['매슈 리지웨이', 4]],
     advisors: { workhorse: '해리 홉킨스', economy: '헨리 모겐소', diplomat: '코델 헐', propaganda: '엘리너 루스벨트', armament: '윌리엄 크누센', construction: '해럴드 이키스', science: '버니바 부시', army: '조지 마셜', navy: '어니스트 킹', air: '헨리 아널드' },
     offmap: { name: '미국 본토', civ: 129, mil: 10, dock: 22, pop: 128, mpFactor: 1, res: { oil: 680, alu: 176, tung: 137, steel: 505, rub: 20, chr: 1 } },
-    ai: { aggr: 0.1, plan: 'USA' },
+    ai: { aggr: 0.1, plan: 'USA', exp: 0.75 },
   },
   POL: {
     name: '폴란드', full: '폴란드 공화국', color: '#c46b7f', ideology: 'neu', gov: '사나치아 체제',
@@ -273,7 +273,7 @@ export const COUNTRIES = {
   ETH: {
     name: '에티오피아', full: '에티오피아 제국', color: '#5a8a3a', ideology: 'neu', gov: '제국', leader: '하일레 셀라시에', title: '황제', party: '황실', capital: 'addis',
     pp: 10, stability: 0.4, warSupport: 0.8, pop: 10, fac: [1, 1, 0], rslots: 1, laws: { conscription: 'extensive' }, techs: ['sup_eq', 'engineers'], spirits: ['minor_army', 'eth_war'], pop0: { neu: 0.9, dem: 0.05, fas: 0, com: 0.05 },
-    flag: { t: 'h', c: ['#078930', '#fcdd09', '#da121a'], emblem: 'star' }, div: [['gar', 8], ['inf9', 4, 'harar']], ai: { aggr: 0 },
+    flag: { t: 'h', c: ['#078930', '#fcdd09', '#da121a'], emblem: 'star' }, div: [['gar', 8], ['inf9', 2, 'harar']], ai: { aggr: 0 },
   },
   IRQ: { name: '이라크', full: '이라크 왕국', color: '#a0a070', ideology: 'neu', gov: '입헌 군주제', leader: '가지 1세', title: '국왕', party: '국민형제당', capital: 'baghdad', pp: 15, stability: 0.5, warSupport: 0.3, pop: 3.5, fac: [2, 1, 0], rslots: 1, laws: {}, techs: ['base'], spirits: ['minor_army'], pop0: { neu: 0.8, dem: 0.1, fas: 0.05, com: 0.05 }, flag: { t: 'iq' }, div: [['inf9', 3]], ai: { aggr: 0 } },
   PER: { name: '이란', full: '이란 제국', color: '#6c9a4c', ideology: 'neu', gov: '절대 왕정', leader: '레자 샤 팔라비', title: '샤', party: '무정당', capital: 'tehran', pp: 15, stability: 0.6, warSupport: 0.2, pop: 14, fac: [3, 1, 0], rslots: 1, laws: {}, techs: ['base'], spirits: ['minor_army'], pop0: { neu: 0.9, dem: 0.04, fas: 0.03, com: 0.03 }, flag: { t: 'h', c: ['#239f40', '#f4f2ec', '#da0000'], emblem: 'sun' }, div: [['inf9', 6], ['cav', 2]], ai: { aggr: 0 } },

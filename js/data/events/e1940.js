@@ -6,7 +6,19 @@ const VIC_STATES = ['auvergne', 'limousin', 'toulouse', 'languedoc', 'marseille'
 const CRO_STATES = ['zagreb', 'split', 'osijek', 'banjaluka', 'sarajevo', 'mostar'];
 
 export const E1940 = [
-  { id: 'join_allies_invaded', who: ['BEL', 'HOL', 'LUX', 'NOR', 'GRE', 'YUG', 'DEN'], trig: [['atWar', 'GER', 'THIS'], ['noFaction', 'THIS'], ['faction', 'ENG', 'allies'], ['notPuppet', 'THIS']], pic: 'troops',
+  { id: 'ger_weser_landing', who: 'GER', trig: [['atWar', 'GER', 'NOR'], ['after', '1940-04-08'], ['controls', 'NOR', 'oslo']], pic: 'ships', style: 'telegram',
+    title: '베저위붕: 노르웨이 상륙', desc: '4월 9일 새벽, 구축함과 수송선에 나눠 탄 산악병들이 오슬로·베르겐·트론헤임·크리스티안산·나르비크에 동시에 상륙했다. 공수부대는 오슬로 비행장을 점령했다. 오슬로 피오르에서는 중순양함 블뤼허가 해안포에 격침되었다.',
+    opts: [
+      { t: '동시 상륙을 감행한다', ai: 9, fx: [['amphib', { oslo: 3, kristiansand: 1, bergen: 2, trondheim: 2, narvik: 1 }]] },
+      { t: '상륙은 위험하다', ai: 0, fx: [] },
+    ] },
+  { id: 'den_occupation', who: 'DEN', trig: [['atWar', 'GER', 'THIS'], ['notPuppet', 'THIS']], pic: 'troops', style: 'telegram',
+    title: '베저위붕 작전', desc: '4월 9일 새벽 독일군이 국경을 넘고 코펜하겐 항구에 상륙했다. 독일 대사는 "보호"를 받아들이라는 각서를 내밀었다. 몇 시간 만에 국왕 크리스티안 10세와 스타우닝 정부는 저항을 멈추기로 했다.',
+    opts: [
+      { t: '저항을 멈춘다', ai: 9, fx: [['capitulate']] },
+      { t: '끝까지 싸운다', ai: 0, fx: [['ws', 0.2], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]]] },
+    ] },
+  { id: 'join_allies_invaded', who: ['BEL', 'HOL', 'LUX', 'NOR', 'GRE', 'YUG'], trig: [['atWar', 'GER', 'THIS'], ['noFaction', 'THIS'], ['faction', 'ENG', 'allies'], ['notPuppet', 'THIS']], pic: 'troops',
     title: '연합국 가담', desc: '독일의 침공을 받은 {country} 정부는 영국·프랑스와 손잡고 싸우기로 했다.',
     opts: [{ t: '연합국에 합류한다', ai: 9, fx: [['joinFaction', 'ENG']] }, { t: '홀로 싸운다', ai: 0, fx: [] }] },
   { id: 'gre_italy_allies', who: 'GRE', trig: [['atWar', 'ITA', 'THIS'], ['noFaction', 'THIS'], ['faction', 'ENG', 'allies']], pic: 'mountain',
@@ -70,7 +82,8 @@ export const E1940 = [
       { t: '거부한다', ai: 0, fx: [['ws', 0.2], ['warOn', 'GER', 'THIS', '유고슬라비아 침공']] },
     ] },
   { id: 'yug_coup', who: 'YUG', manual: true, pic: 'crowd', news: true, newsText: '베오그라드에서 쿠데타가 일어나 유고슬라비아가 삼국 동맹을 뒤집었습니다!',
-    immediate: [['leaveFaction'], ['gov', { leader: '페타르 2세', title: '국왕' }], ['warOn', 'GER', 'THIS', '유고슬라비아 침공']],
+    immediate: [['leaveFaction'], ['gov', { leader: '페타르 2세', title: '국왕' }], ['warOn', 'GER', 'THIS', '유고슬라비아 침공'], ['spirit', 'yug_disunity', 120],
+      ['for', 'ITA', [['if', [['faction', 'ITA', 'axis']], [['joinWarOf', 'GER', 'YUG']]]]]],
     title: '3월 27일 쿠데타', desc: '베오그라드 시민들이 "조약보다 전쟁을, 노예보다 무덤을!"이라 외쳤다. 공군 장교들이 섭정을 몰아내고 17세의 페타르 2세를 즉위시켰다. 격노한 히틀러는 유고슬라비아를 "군사적으로, 그리고 국가로서" 파괴하라고 명령했다.',
     opts: [{ t: '조국을 위하여!', fx: [['ws', 0.2]] }] },
   { id: 'yug_partition', who: 'YUG', manual: true, pic: 'ruins',
@@ -87,6 +100,9 @@ export const E1940 = [
     title: '십자군', desc: '독일이 소련을 침공했다. 동맹국으로서 {country}도 볼셰비즘에 맞선 "십자군"에 나서야 한다.',
     opts: [{ t: '동부 전선으로', ai: 9, fx: [['joinWarOf', 'GER', 'SOV']] }, { t: '참전을 미룬다', ai: 0, fx: [] }] },
 
+  { id: 'sov_barbarossa', who: 'SOV', trig: [['atWar', 'GER', 'SOV'], ['before', '1942-01-01']], pic: 'tanks', style: 'telegram',
+    title: '6월 22일', desc: '새벽 3시 15분, 3천 km에 이르는 국경 전체에서 포격이 시작되었다. 독일군 300만 명이 국경을 넘었고, 비행장에 늘어서 있던 소련 항공기 1,200대가 첫날 파괴되었다. 몰로토프가 라디오에서 말했다. "우리의 대의는 정당하다."',
+    opts: [{ t: '반격하라! (명령 제3호)', ai: 1, fx: [['spirit', 'sov_surprise', 150]] }, { t: '종심으로 물러나며 시간을 번다', ai: 9, fx: [['spirit', 'sov_surprise', 150], ['aiHold', ['GER', 'ROM', 'HUN', 'SLO', 'FIN', 'ITA', 'BUL'], '1941-12-05']] }] },
   { id: 'sov_militia', who: 'SOV', trig: [['atWar', 'GER', 'SOV'], ['surrender', 'SOV', 0.12]], pic: 'crowd',
     title: '인민 의용군', desc: '독일군이 모스크바와 레닌그라드로 다가오자 노동자와 학생 수십만 명이 인민 의용군(오폴체니예)에 자원했다. 훈련도 장비도 부족했지만 그들은 시간을 벌었다.',
     opts: [{ t: '조국을 지켜라', fx: [['units', [['inf9', 8, 'moskva'], ['inf9', 6, 'leningrad']]], ['manpower', 400000], ['ws', 0.1]] }] },
