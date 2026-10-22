@@ -53,8 +53,8 @@ export const E1938 = [
     title: '폴란드 독립 보장', desc: '프라하 점령으로 유화 정책은 파산했다. 3월 31일 체임벌린은 "폴란드의 독립이 위협받으면 영국은 모든 힘을 다해 폴란드를 도울 것"이라고 하원에서 선언했다. 프랑스도 뜻을 같이했다.',
     opts: [
       // (AI) 전쟁이 나도 1940년 5월까지는 독일 영토로 공세를 펴지 않는다 — 가짜 전쟁
-      { t: '폴란드와 루마니아를 보장한다', ai: 9, fx: [['guarantee', 'POL'], ['guarantee', 'ROM'], ['guarantee', 'GRE'], ['rmSpirit', 'eng_appease'], ['ws', 0.1], ['aiHold', ['GER'], '1940-05-10'],
-        ['for', 'FRA', [['guarantee', 'POL'], ['guarantee', 'ROM'], ['ws', 0.1], ['aiHold', ['GER'], '1940-05-10']]], ['news', '영국과 프랑스가 폴란드의 독립을 보장했습니다.', 1]] },
+      { t: '폴란드와 루마니아를 보장한다', ai: 9, fx: [['guarantee', 'POL'], ['guarantee', 'ROM'], ['guarantee', 'GRE'], ['rmSpirit', 'eng_appease'], ['ws', 0.1], ['aiHold', ['GER'], '1941-01-01'],
+        ['for', 'FRA', [['guarantee', 'POL'], ['guarantee', 'ROM'], ['ws', 0.1], ['aiHold', ['GER'], '1941-01-01']]], ['news', '영국과 프랑스가 폴란드의 독립을 보장했습니다.', 1]] },
       { t: '대륙의 일에 휘말리지 않는다', ai: 0, fx: [['stab', -0.03]] },
     ] },
   { id: 'alb_ultimatum', who: 'ALB', manual: true, pic: 'ships',
@@ -90,7 +90,7 @@ export const E1938 = [
   { id: 'fra_saar', who: 'FRA', trig: [['atWar', 'FRA', 'GER'], ['before', '1940-03-01']], pic: 'troops',
     title: '자르 공세', desc: '9월 7일 프랑스군 11개 사단이 자르 지방으로 8km 남짓 진격했다. 독일군은 지뢰밭과 부비트랩만 남기고 물러섰다. 폴란드가 무너지자 가믈랭은 공세를 멈추고 마지노선 뒤로 돌아갔다.',
     opts: [
-      { t: '마지노선 뒤에서 기다린다', ai: 9, fx: [['aiHold', ['GER'], '1940-05-10'], ['for', 'ENG', [['aiHold', ['GER'], '1940-05-10']]], ['stab', 0.02], ['spirit', 'fra_command', 480]] },
+      { t: '마지노선 뒤에서 기다린다', ai: 9, fx: [['aiHold', ['GER'], '1941-01-01'], ['for', 'ENG', [['aiHold', ['GER'], '1941-01-01']]], ['stab', 0.02], ['spirit', 'fra_command', 480]] },
       { t: '라인강까지 밀어붙인다', ai: 0, fx: [['ws', 0.05], ['spirit', 'fra_command', 480]] },
     ] },
   { id: 'ger_sitzkrieg', who: 'GER', trig: [['atWar', 'GER', 'FRA'], ['before', '1940-03-01']], pic: 'troops', style: 'telegram',

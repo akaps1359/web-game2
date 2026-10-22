@@ -65,19 +65,20 @@ export const SPIRITS = {
   ger_autarky: { name: '4개년 계획', mods: { 'milfac.cost': -0.1, construction: 0.1, resources: 0.05 } },
   ger_wehrmacht: { name: '독일 국방군', mods: { 'land.org': 0.1, 'land.planning': 0.15, 'land.atk': 0.1 }, desc: '임무형 지휘(Auftragstaktik)와 철저한 제병 협동 훈련. 하급 지휘관이 스스로 판단해 기회를 잡는다.' },
   ger_blitz: { name: '전격전 교리', mods: { 'arm.atk': 0.1, 'land.speed': 0.05 } },
-  ger_total: { name: '총력전', mods: { factoryOutput: 0.15, consumerGoods: -0.05 } },
+  ger_total: { name: '총력전', mods: { factoryOutput: 0.15, consumerGoods: -0.05, surrender: 0.12 }, desc: '"여러분은 총력전을 원합니까?" 괴벨스의 스포츠궁전 연설 이후 독일은 마지막 한 사람까지 싸울 태세에 들어갔다.' },
   // 소련
   sov_purge: { name: '대숙청', mods: { 'land.org': -0.15, 'land.atk': -0.1, stability: -0.05, pp: 0.2 }, desc: '스탈린의 숙청으로 장교단이 와해되었다.' },
   sov_plan: { name: '5개년 계획', mods: { construction: 0.1, factoryOutput: 0.05 } },
   sov_winter: { name: '러시아의 겨울', mods: { winter: 0.5 }, hidden: 0 },
   yug_disunity: { name: '무너지는 왕국군', mods: { 'land.org': -0.35, 'land.def': -0.2, 'land.atk': -0.2 }, desc: '동원이 끝나기도 전에 침공이 시작되었다. 크로아티아 부대들은 싸우기를 거부하거나 흩어졌다.' },
-  sov_surprise: { name: '기습당한 붉은 군대', mods: { 'land.org': -0.3, 'land.atk': -0.3, 'land.def': -0.15, 'land.planning': -0.5 }, desc: '스탈린은 거듭된 경고를 무시했다. 국경의 부대들은 포탄도 연료도 없이 흩어져 있었고, 숙청으로 지휘관 대부분이 경험 없는 신참이었다.' },
-  sov_patriotic: { name: '대조국전쟁', mods: { 'land.def': 0.1, manpower: 0.1, stability: 0.1, 'warSupport.target': 0.2 } },
+  sov_surprise: { name: '기습당한 붉은 군대', mods: { 'land.org': -0.25, 'land.atk': -0.25, 'land.def': -0.1, 'land.planning': -0.5 }, desc: '스탈린은 거듭된 경고를 무시했다. 국경의 부대들은 포탄도 연료도 없이 흩어져 있었고, 숙청으로 지휘관 대부분이 경험 없는 신참이었다.' },
+  sov_patriotic: { name: '대조국전쟁', mods: { 'land.def': 0.1, manpower: 0.1, stability: 0.1, 'warSupport.target': 0.2, surrender: 0.15 }, desc: '온 나라가 침략자에 맞서 일어섰다. 공장은 우랄 너머로 옮겨 가고, 모스크바가 위협받아도 항복은 없다.' },
   sov_noretreat: { name: '한 걸음도 물러서지 마라', mods: { 'land.def': 0.15, 'land.atk': -0.05 } },
   // 프랑스
   fra_disjointed: { name: '분열된 정부', mods: { ppFactor: -0.3, stability: -0.05 }, desc: '잦은 내각 교체로 정부가 마비되어 있다.' },
   fra_victors: { name: '1차 대전의 승전국', mods: { 'warSupport.target': -0.15, 'land.def': 0.05 }, desc: '또 다른 대전을 원하는 이는 없다.' },
   fra_command: { name: '경직된 지휘 체계', mods: { 'land.org': -0.1, 'land.planning': -0.15, 'land.speed': -0.1 }, desc: '가믈랭의 총사령부에는 무전기 하나 없었다. 명령이 전령과 전화로 전선에 닿기까지 며칠이 걸렸다.' },
+  fra_defeatism: { name: '패배주의', mods: { 'land.org': -0.15, 'land.def': -0.1, surrender: -0.15 }, desc: '전선이 뚫리자 정부와 군 지휘부는 싸울 의지를 잃었다. 피난민 수백만 명이 도로를 메웠다.' },
   fra_maginot: { name: '마지노선 사고방식', mods: { 'land.entrench': 0.2, 'land.atk': -0.05 } },
   // 영국
   eng_empire: { name: '대영 제국', mods: { manpower: 0.25 }, desc: '영연방 자치령과 인도의 병력이 본국을 뒷받침한다.' },

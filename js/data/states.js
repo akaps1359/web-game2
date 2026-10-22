@@ -122,7 +122,8 @@ export const STATES = [
   ['brussel', '브뤼셀', 'BEL', 4.35, 50.85, { vp: 10, ind: 3 }],
   ['antwerpen', '안트베르펜', 'BEL', 4.40, 51.22, { vp: 5, ind: 2, port: 4 }],
   ['vlaanderen', '플랑드르', 'BEL', 3.72, 51.05, { vp: 3, ind: 1, port: 2 }],
-  ['liege', '리에주', 'BEL', 5.57, 50.63, { x: [[5.72, 50.00]], vp: 5, ind: 2, t: 'forest', fort: 3, res: { steel: 4 } }],
+  ['liege', '리에주', 'BEL', 5.57, 50.63, { vp: 5, ind: 2, t: 'forest', fort: 3, res: { steel: 4 } }],
+  ['ardennes', '아르덴', 'BEL', 5.55, 49.95, { vp: 1, ind: 0.2, t: 'forest' }],
   ['luxembourg', '룩셈부르크', 'LUX', 6.13, 49.61, { vp: 3, ind: 1, t: 'forest', res: { steel: 6 } }],
 
   // ───────────────────────── 프랑스 본토 ─────────────────────────

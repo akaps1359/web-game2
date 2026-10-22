@@ -427,14 +427,22 @@ export function dailyLiberation(G) {
       for (const i of back) { const S = G.st[i]; S.owner = tag; S.ctrl = tag; S.ctrlSince = G.hour; }
       if (C.homeCap >= 0 && back.includes(C.homeCap)) C.capital = C.homeCap;
       if (C.capitulated) {
-        C.capitulated = false; C.exiled = false; C.alive = true;
-        if (!(C.capital >= 0 && G.st[C.capital].ctrl === tag)) relocateCapital(G, C);
+        restoreGovernment(G, C, G.st[back[0]].ctrl);
         news(G, `${C.name}이(가) 해방되어 정부가 귀환했습니다!`, { kind: 'peace', big: 1, tags: [tag] });
         if (G.onLiberated) G.onLiberated(tag);
       }
       G.mapDirty = true; G.indexDirty = true;
     }
   }
+}
+
+// 망명 정부 복귀: 항복 상태를 풀고 진영 지도자(없으면 helper)의 전쟁에 다시 참가
+export function restoreGovernment(G, C, helper) {
+  C.capitulated = false; C.exiled = false; C.alive = true;
+  if (!(C.capital >= 0 && G.st[C.capital].ctrl === C.tag)) relocateCapital(G, C);
+  const lead = G.factions[C.faction]?.leader || helper;
+  for (const w of G.wars) { if (w.att.includes(lead)) joinWar(G, w, C.tag, 'att'); else if (w.def.includes(lead)) joinWar(G, w, C.tag, 'def'); }
+  G.mapDirty = true; G.indexDirty = true;
 }
 
 // ───────── 내전 ─────────

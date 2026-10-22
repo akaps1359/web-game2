@@ -232,32 +232,44 @@ function aiConstruction(G, C) {
 // ───────── 생산 ─────────
 export function desiredMix(G, C) {
   const y = yearFrac(G.hour);
-  const war = atWarAny(G, C.tag);
-  const mix = { inf_eq: 30, sup_eq: 6, art: 11, at: 5, aa: 3, mot: 4, fighter: 14, cas: 5, tac: 4 };
-  if (C.eq.ltank >= 1) mix.ltank = y < 1939 ? 7 : 3;
-  if (C.eq.mtank >= 1) { mix.mtank = C.major ? 12 : 4; mix.ltank = 1; }
-  if (C.eq.htank >= 1 && C.major && y > 1941) mix.htank = 2;
-  if (C.eq.mech >= 1 && C.major) mix.mech = 4;
-  if (!C.major) { mix.fighter = 8; mix.cas = 2; mix.tac = 1; mix.inf_eq = 40; mix.mot = 2; }
-  if (C.tag === 'GER' || C.tag === 'JAP') mix.cas = 9; // 급강하 폭격기(슈투카)
-  if (C.tag === 'SOV' && y >= 1940) mix.cas = 9; // Il-2
-  if (war) mix.inf_eq += 8;
-  // 부족분 반영
-  const need = {};
-  for (const D of divsOf(G, C.tag)) { const st = divStats(G, D); for (const e in st.eq) need[e] = (need[e] || 0) + st.eq[e] * (1 - D.str); }
-  for (const T of C.training) { const tpl = C.templates.find((t) => t.id === T.tpl); if (!tpl) continue; const st = tplStats(C, tpl); for (const e in st.eq) need[e] = (need[e] || 0) + st.eq[e]; }
-  for (const e in need) { const deficit = need[e] - (C.stock[e] || 0); if (deficit > 0 && mix[e] != null) mix[e] *= 1 + Math.min(2, deficit * EQUIPMENT[e].ic[1] / 3000); }
-  // 비축 과잉 장비는 생산 축소 (야전 사단 보유량의 30%를 넘으면). 아직 편제에 없는 신형 장비는 제외
-  const field = {};
-  for (const D of divsOf(G, C.tag)) { const st = divStats(G, D); for (const e in st.eq) field[e] = (field[e] || 0) + st.eq[e]; }
-  for (const e in mix) {
-    if (EQUIPMENT[e]?.air || !field[e]) continue;
-    const ref = field[e] * 0.3 + 1000 / EQUIPMENT[e].ic[1];
-    const have = C.stock[e] || 0;
-    if (have > ref) mix[e] *= Math.max(0.12, ref / have);
+  // 공군: 기종 비율과 공장 비중
+  const air = { fighter: 14, cas: C.tag === 'GER' || C.tag === 'JAP' || (C.tag === 'SOV' && y >= 1940) ? 9 : 5, tac: 4 };
+  if (!C.major) { air.fighter = 8; air.cas = 2; air.tac = 1; }
+  const airShare = C.major ? (C.aiProfile?.air ?? 0.28) : 0.12;
+  // 육군 장비 수요 = 지금 군대의 구성(사단·훈련 중) + 새로 만들 보병·기갑 사단 + 부족분
+  const U = {}, need = {};
+  const add = (st, k, miss) => { for (const e in st.eq) { U[e] = (U[e] || 0) + st.eq[e] * k; if (miss) need[e] = (need[e] || 0) + st.eq[e] * miss; } };
+  const divs = divsOf(G, C.tag);
+  for (const D of divs) add(divStats(G, D), 1, 1 - D.str);
+  for (const T of C.training) { const tpl = C.templates.find((t) => t.id === T.tpl); if (tpl) add(tplStats(C, tpl), 1, 1); }
+  const inf = C.templates.find((t) => t.key === 'inf72' && tplAvailable(C, t)) || C.templates.find((t) => t.key === 'inf9' && tplAvailable(C, t));
+  if (inf) add(tplStats(C, inf), Math.max(3, divs.length * 0.15), 0);
+  const arm = C.templates.find((t) => t.key === 'arm');
+  if (arm && C.major && tplAvailable(C, arm)) {
+    const want = Math.round(divs.length * (y > 1939 ? 0.12 : 0.08));
+    const have = divs.filter((D) => divStats(G, D).armored).length;
+    add(tplStats(C, arm), Math.max(1, want - have + 1), 0);
   }
-  // 해당 장비 사용 불가 제거
-  for (const e in mix) if ((e === 'sup_eq' || e === 'mot' ? 1 : C.eq[e] || 0) < 1) delete mix[e];
+  // 경전차 편제를 중형 전차로 바꿀 준비
+  if (arm?.bats.lt && C.unlock.mtank1 && eqLevel(C, 'mtank') >= 1) U.mtank = (U.mtank || 0) + (U.ltank || 0) * 0.8;
+  const land = {};
+  for (const e in U) {
+    if (EQUIPMENT[e]?.air || (eqLevel(C, e) < 1 && e !== 'inf_eq')) continue;
+    const cost = eqCost(C, e);
+    let w = U[e] * cost;
+    const deficit = (need[e] || 0) - (C.stock[e] || 0);
+    if (deficit > 0) w *= 1 + Math.min(3, (deficit / Math.max(1, U[e])) * 6);
+    // 비축이 군대 보유량의 30%를 넘으면 감산
+    const ref = U[e] * 0.3 + 1000 / cost, have = C.stock[e] || 0;
+    if (have > ref) w *= Math.max(0.05, ref / have);
+    if (w > 0) land[e] = w;
+  }
+  const mix = {};
+  const lsum = Object.values(land).reduce((a, b) => a + b, 0) || 1;
+  for (const e in land) mix[e] = (land[e] / lsum) * (1 - airShare) * 100;
+  const airOk = Object.keys(air).filter((e) => (C.eq[e] || 0) >= 1);
+  const asum = airOk.reduce((a, e) => a + air[e], 0) || 1;
+  for (const e of airOk) mix[e] = (air[e] / asum) * airShare * 100;
   return mix;
 }
 export function aiProduction(G, C, init) {
@@ -558,12 +570,15 @@ function armyAI(G, C, A) {
 }
 
 // 같은 진영 동맹국의 전선(우리 적과 맞닿은 동맹국 주) — 원정군 파견용
+// 바다 건너 원정은 해양 강국(영국·미국)만. 나머지는 육로로 이어진 동맹국 전선에만 간다
 function alliedFrontStates(G, C) {
   const tag = C.tag, map = G.map, out = [];
   if (!C.faction) return out;
+  const land = (NAVAL_POWERS[tag] || 0) >= 0.9 || C.capital < 0 ? null : friendlyDistances(G, tag, C.capital);
   for (let s = 0; s < map.nGeo; s++) {
     const c = G.st[s].ctrl;
     if (c === tag || G.countries[c]?.faction !== C.faction) continue;
+    if (land && !isFinite(land[s])) continue;
     if (map.nb[s].some((v) => atWar(G, tag, G.st[v].ctrl) && atWar(G, c, G.st[v].ctrl))) out.push(s);
   }
   return out;
@@ -764,6 +779,11 @@ function offensive(G, C, fronts, usable, enemyPow, opts) {
   for (let i = 0; i < map.n; i++) theirs += enemyPow[i];
   if (theirs > 0 && ours / theirs >= 2.5) threshold *= 0.65;
   else if (theirs > 0 && ours / theirs >= 1.6) threshold *= 0.85;
+  // 보충할 소총이 바닥나면 무리한 공세를 줄인다(병력 보존)
+  {
+    let field = 0; for (const D of usable) field += (divStats(G, D).eq.inf_eq || 0);
+    if (field > 0 && (C.stock.inf_eq || 0) < field * 0.03) threshold *= 1.35;
+  }
   const targets = new Map();
   const hold = C.isAI ? C.aiState.hold : null;
   for (const f of fronts) for (const v of map.nb[f]) {

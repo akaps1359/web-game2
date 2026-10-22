@@ -116,7 +116,7 @@ export const GER = [
     avail: [['alive', 'YUG']], availText: '유고슬라비아가 존재',
     fx: [['event', 'yug_tripartite', 'YUG', 1], ['if', [['atWar', 'ITA', 'GRE']], [['joinWarOf', 'ITA', 'GRE']]]],
     desc: '유고슬라비아를 삼국 동맹에 끌어들이고, 고전하는 이탈리아를 도와 그리스로 진격한다.' },
-  { id: 'ger_barbarossa', name: '바르바로사 작전', icon: 'swords', x: 15, y: 8, req: ['ger_tripartite'], days: 35, ai: 20, aiIf: [['after', '1941-02-01']],
+  { id: 'ger_barbarossa', name: '바르바로사 작전', icon: 'swords', x: 15, y: 8, req: ['ger_tripartite'], days: 35, ai: 20, aiIf: [['after', '1941-02-01'], ['dead', 'FRA']],
     avail: [['alive', 'SOV']], availText: '소련이 존재',
     fx: [['breakNap', 'SOV'], ['ws', 0.1], ['wargoalAt', 'SOV', { at: '1941-06-22', name: '독소 전쟁' }]],
     desc: '1941년 6월 22일 새벽, 300만 대군이 소련 국경을 넘었다. 인류 역사상 가장 거대한 지상전의 시작이었다.' },

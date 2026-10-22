@@ -32,6 +32,12 @@ export const E1940 = [
       { t: '비교전 상태를 유지한다', ai: 1, fx: [['stab', 0.05]] },
     ] },
 
+  { id: 'fra_sedan', who: 'FRA', trig: [['atWar', 'GER', 'THIS'], ['after', '1940-05-10'], ['before', '1941-06-01'], ['or', [['enemyControls', 'FRA', ['lille', 'champagne', 'picardie', 'lorraine', 'alsace', 'bourgogne', 'rouen', 'paris']], ['surrender', 'FRA', 0.1], ['dead', 'BEL']]]], pic: 'tanks', style: 'telegram',
+    title: '스당 돌파', desc: '5월 13일 구데리안의 기갑군단이 아르덴 숲을 빠져나와 스당에서 뫼즈강을 건넜다. 슈투카의 급강하 폭격에 프랑스 제55사단이 무너졌고, 기갑 부대는 영불 해협을 향해 질주했다. 레노 총리는 처칠에게 전화했다. "우리는 졌습니다."',
+    opts: [{ t: '베강 장군에게 지휘를 맡긴다', fx: [['spirit', 'fra_defeatism']] }] },
+  { id: 'fra_petain', who: 'FRA', trig: [['atWar', 'GER', 'THIS'], ['spirit', 'fra_defeatism'], ['or', [['enemyControls', 'FRA', ['paris']], ['surrender', 'FRA', 0.35]]]], pic: 'ruins',
+    title: '보르도의 내각', desc: '6월 10일 정부는 파리를 버리고 투르를 거쳐 보르도로 옮겼다. 레노 총리는 북아프리카에서 싸움을 이어 가자고 했지만 내각은 휴전을 원했다. 6월 16일 레노가 사임하고 84세의 페탱 원수가 총리가 되었다. "싸움을 멈춰야 한다고 오늘 무거운 마음으로 말씀드립니다."',
+    opts: [{ t: '휴전을 요청한다 (페탱)', ai: 9, fx: [['capitulate']] }, { t: '북아프리카에서 싸움을 이어 간다 (레노)', ai: 0, fx: [['ws', 0.15], ['stab', -0.1], ['rmSpirit', 'fra_defeatism']] }] },
   { id: 'fra_compiegne', who: 'FRA', manual: true, pic: 'ruins', news: true, newsText: '프랑스가 독일과 휴전했습니다. 비시에 새 정부가 들어섭니다.',
     immediate: [['stockTo', 'VIC', 0.2], ['spawnCtrl', 'VIC', VIC_STATES], ['settleCap', 'GER', { exile: true, puppet: false, fleetTo: 'VIC' }],
       ['for', 'VIC', [['units', [['inf9', 6, 'auvergne'], ['gar', 4, 'alger'], ['gar', 2, 'tunis'], ['gar', 2, 'damascus']]], ['equip', 'inf_eq', 4000]]],
@@ -82,7 +88,7 @@ export const E1940 = [
       { t: '거부한다', ai: 0, fx: [['ws', 0.2], ['warOn', 'GER', 'THIS', '유고슬라비아 침공']] },
     ] },
   { id: 'yug_coup', who: 'YUG', manual: true, pic: 'crowd', news: true, newsText: '베오그라드에서 쿠데타가 일어나 유고슬라비아가 삼국 동맹을 뒤집었습니다!',
-    immediate: [['leaveFaction'], ['gov', { leader: '페타르 2세', title: '국왕' }], ['warOn', 'GER', 'THIS', '유고슬라비아 침공'], ['spirit', 'yug_disunity', 120],
+    immediate: [['leaveFaction'], ['leaveWar'], ['gov', { leader: '페타르 2세', title: '국왕' }], ['warOn', 'GER', 'THIS', '유고슬라비아 침공'], ['spirit', 'yug_disunity', 120],
       ['for', 'ITA', [['if', [['faction', 'ITA', 'axis']], [['joinWarOf', 'GER', 'YUG']]]]]],
     title: '3월 27일 쿠데타', desc: '베오그라드 시민들이 "조약보다 전쟁을, 노예보다 무덤을!"이라 외쳤다. 공군 장교들이 섭정을 몰아내고 17세의 페타르 2세를 즉위시켰다. 격노한 히틀러는 유고슬라비아를 "군사적으로, 그리고 국가로서" 파괴하라고 명령했다.',
     opts: [{ t: '조국을 위하여!', fx: [['ws', 0.2]] }] },
@@ -102,7 +108,9 @@ export const E1940 = [
 
   { id: 'sov_barbarossa', who: 'SOV', trig: [['atWar', 'GER', 'SOV'], ['before', '1942-01-01']], pic: 'tanks', style: 'telegram',
     title: '6월 22일', desc: '새벽 3시 15분, 3천 km에 이르는 국경 전체에서 포격이 시작되었다. 독일군 300만 명이 국경을 넘었고, 비행장에 늘어서 있던 소련 항공기 1,200대가 첫날 파괴되었다. 몰로토프가 라디오에서 말했다. "우리의 대의는 정당하다."',
-    opts: [{ t: '반격하라! (명령 제3호)', ai: 1, fx: [['spirit', 'sov_surprise', 150]] }, { t: '종심으로 물러나며 시간을 번다', ai: 9, fx: [['spirit', 'sov_surprise', 150], ['aiHold', ['GER', 'ROM', 'HUN', 'SLO', 'FIN', 'ITA', 'BUL'], '1941-12-05']] }] },
+    // (AI) 1941년 겨울 반격 전까지는 방어, 추축 소국 본토로의 진격은 역사적 시기(1944년)까지 미룬다
+    opts: [{ t: '반격하라! (명령 제3호)', ai: 1, fx: [['spirit', 'sov_surprise', 120]] }, { t: '종심으로 물러나며 시간을 번다', ai: 9, fx: [['spirit', 'sov_surprise', 120], ['aiHold', ['GER', 'ITA'], '1941-10-15'],
+      ['aiHold', ['ROM'], '1944-04-01'], ['aiHold', ['FIN'], '1944-06-09'], ['aiHold', ['HUN', 'SLO', 'BUL', 'CRO'], '1944-08-20']] }] },
   { id: 'sov_militia', who: 'SOV', trig: [['atWar', 'GER', 'SOV'], ['surrender', 'SOV', 0.12]], pic: 'crowd',
     title: '인민 의용군', desc: '독일군이 모스크바와 레닌그라드로 다가오자 노동자와 학생 수십만 명이 인민 의용군(오폴체니예)에 자원했다. 훈련도 장비도 부족했지만 그들은 시간을 벌었다.',
     opts: [{ t: '조국을 지켜라', fx: [['units', [['inf9', 8, 'moskva'], ['inf9', 6, 'leningrad']]], ['manpower', 400000], ['ws', 0.1]] }] },

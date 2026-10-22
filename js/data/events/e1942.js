@@ -2,10 +2,22 @@
 const ITALY_SOUTH = ['palermo', 'catania', 'sardegna', 'calabria', 'bari', 'napoli'];
 const RSI_STATES = ['milano', 'torino', 'genova', 'venezia', 'trieste', 'trento', 'bologna'];
 
+const VIC_NORTH_AFRICA = ['alger', 'oran', 'constantine', 'ghardaia', 'tamanrasset', 'rabat', 'fes', 'marrakech', 'oujda'];
+const VIC_METRO = ['auvergne', 'limousin', 'toulouse', 'languedoc', 'marseille', 'lyon', 'alpes'];
+
 export const E1942 = [
+  // ── 횃불 작전과 안톤 작전 ──
+  { id: 'vic_torch', who: 'VIC', trig: [['flag', 'torch'], ['exists', 'FRA'], ['notPuppet', 'THIS']], pic: 'ships', news: true, newsText: '횃불 작전: 연합군이 모로코와 알제리에 상륙했습니다. 북아프리카의 프랑스군이 연합국 편에 섰습니다.',
+    immediate: [['cede', VIC_NORTH_AFRICA, 'FRA'], ['for', 'FRA', [['returnGov', 'alger'], ['units', [['inf9', 4, 'alger'], ['inf9', 2, 'rabat']]], ['equip', 'inf_eq', 4000]]], ['flag', 'torch_done']],
+    title: '횃불 작전', desc: '11월 8일 미군과 영국군이 카사블랑카·오랑·알제에 상륙했다. 비시 정부군은 사흘을 버티다 알제에 있던 다를랑 제독의 명령으로 싸움을 멈췄다. 프랑스령 북아프리카가 연합국 편으로 넘어갔다.',
+    opts: [{ t: '북아프리카를 잃었다', fx: [['stab', -0.1]] }] },
+  { id: 'ger_anton', who: 'GER', trig: [['flag', 'torch_done'], ['exists', 'VIC'], ['notPuppet', 'VIC']], pic: 'tanks', style: 'telegram',
+    title: '안톤 작전', desc: '11월 11일 독일군이 비시 프랑스의 비점령 지역으로 진주했다. 이탈리아군은 니스와 코르시카를 차지했다. 11월 27일 툴롱 항의 프랑스 함대는 독일에 넘어가지 않으려고 스스로 배를 가라앉혔다.',
+    opts: [{ t: '남프랑스를 점령한다', ai: 9, fx: [['cede', VIC_METRO, 'GER'], ['if', [['alive', 'ITA'], ['faction', 'ITA', 'axis']], [['for', 'ITA', [['cede', ['nice', 'corse'], 'ITA']]]]], ['puppet', 'VIC'], ['for', 'VIC', [['joinWarOf', 'GER', 'ENG']]]] }, { t: '비시와의 협정을 지킨다', ai: 0, fx: [] }] },
+
   { id: 'ita_armistice', who: 'ITA', trig: [['faction', 'ITA', 'axis'], ['atWar', 'ITA', 'ENG'], ['or', [['surrender', 'ITA', 0.3], ['and', [['after', '1943-07-20'], ['enemyControls', 'ITA', ITALY_SOUTH]]]]]], pic: 'crowd',
     news: true, newsText: '무솔리니가 실각했습니다. 이탈리아가 연합국과 휴전합니다!',
-    immediate: [['leaveFaction'], ['leaveWar'], ['gov', { leader: '피에트로 바돌리오', title: '총리', ideology: 'neu', gov: '왕국 정부', party: '바돌리오 내각' }], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]], ['event', 'ger_achse', 'GER', 0]],
+    immediate: [['leaveFaction'], ['leaveWar'], ['gov', { leader: '피에트로 바돌리오', title: '총리', ideology: 'neu', gov: '왕국 정부', party: '바돌리오 내각' }], ['if', [['faction', 'ENG', 'allies']], [['joinFaction', 'ENG']]], ['if', [['alive', 'GER']], [['event', 'ger_achse', 'GER', 0]]]],
     title: '무솔리니 실각', desc: '7월 24일 밤 파시즘 대평의회가 무솔리니를 불신임했고, 이튿날 국왕은 그를 체포했다. 바돌리오 정부는 9월 8일 연합국과의 휴전을 발표했다. 국왕과 정부는 로마를 떠나 남쪽으로 피했다.',
     opts: [{ t: '휴전', fx: [['stab', -0.1]] }] },
   { id: 'ger_achse', who: 'GER', manual: true, pic: 'troops',

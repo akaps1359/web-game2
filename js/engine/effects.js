@@ -1,7 +1,7 @@
 // 효과·조건 해석기 (국가 중점·이벤트·결정 데이터에서 사용)
 // 효과: [연산, ...인수] 배열의 목록. 조건도 같은 형식(모두 참이어야 함)
 import { atWar, atWarAny, allied, news, hourOfDate, yearFrac } from './world.js';
-import { addTension, declareWar, transferStates, annexCountry, setPuppet, createFaction, joinFaction, leaveFaction, signNap, grantAccess, civilWar, spawnCountry, relocateCapital, joinWar, warBetween, settleCapitulation, cleanupWars, capitulate } from './diplomacy.js';
+import { addTension, declareWar, transferStates, annexCountry, setPuppet, createFaction, joinFaction, leaveFaction, signNap, grantAccess, civilWar, spawnCountry, relocateCapital, joinWar, warBetween, settleCapitulation, cleanupWars, capitulate, restoreGovernment } from './diplomacy.js';
 import { rebuildWarCache } from './world.js';
 import { addSpirit, removeSpirit, enactLaw } from './politics.js';
 import { grantTech } from './research.js';
@@ -165,6 +165,8 @@ function applyOne(G, C, e, ctx) {
       }
       break;
     }
+    // 망명 정부가 영토를 되찾아 복귀: [returnGov, 수도]
+    case 'returnGov': { if (a) { const i = idxOf(G, a); if (i != null && G.st[i].owner === C.tag) C.capital = i; } restoreGovernment(G, C, G.factions[C.faction]?.leader); break; }
     // 강제 항복(정부 붕괴 등)
     case 'capitulate': if (G.warRel[C.tag] && Object.keys(G.warRel[C.tag]).length) capitulate(G, C.tag); break;
     // AI 공세 보류: [aiHold, [태그], '1940-05-10']

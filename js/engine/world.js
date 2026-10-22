@@ -36,6 +36,7 @@ export function allied(G, a, b) {
 function alliedRaw(G, a, b) {
   const A = G.countries[a], B = G.countries[b];
   if (!A || !B) return false;
+  if (atWar(G, a, b)) return false; // 서로 싸우는 나라는 어떤 경우에도 동맹이 아니다
   if (A.faction && A.faction === B.faction) return true;
   if (A.master === b || B.master === a || (A.master && A.master === B.master)) return true;
   for (const w of G.wars) {

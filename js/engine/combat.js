@@ -152,7 +152,7 @@ function resolve(G, t, Gp, prev) {
       if (t.st.arm > a.st.prc) { const r = a.st.prc / Math.max(1, t.st.arm); dmgF = r >= 0.75 ? 0.8 : r >= 0.5 ? 0.65 : 0.5; }
       const orgDie = a.st.arm > t.st.prc ? 3.5 : 2.5;
       t.orgDmg += hits * 0.053 * orgDie * dmgF * COMBAT_K;
-      t.hpDmg += hits * 0.09 * dmgF * COMBAT_K;
+      t.hpDmg += hits * 0.06 * dmgF * COMBAT_K; // 내구도 피해는 HOI4의 약 2/3: AI가 쉬지 않고 싸우므로 장비 소모를 맞춘다
     }
   };
   strike(A.front, Dd.front);

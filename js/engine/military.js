@@ -337,16 +337,18 @@ export function dailyMilitary(G, C) {
   // 보충: 약한 사단부터
   divs.sort((a, b) => a.str - b.str);
   const rate = 0.05 * (1 + M(C, 'land.reinforce'));
+  // 전투로 잃은 전력의 장비 가운데 40%는 회수·수리되어 돌아온다(새 장비는 60%만 든다)
+  const SALVAGE = 0.6;
   for (const D of divs) {
     if (D.str >= 0.999 || D.retreat || D.sup < 0.08) continue;
     const st = divStats(G, D);
     const frac = Math.min(rate * Math.min(1, D.sup + 0.2) * (1 + (st.mods.reinforce || 0)), 1 - D.str);
-    let ratio = eqFillRatio(C, st.eq, frac);
+    let ratio = eqFillRatio(C, st.eq, frac * SALVAGE);
     const avail = manpowerAvailable(C);
     if (st.mp * frac > avail) ratio = Math.min(ratio, avail / (st.mp * frac));
     if (ratio <= 0.001) continue;
     ratio = Math.min(1, ratio);
-    consumeEq(C, st.eq, frac * ratio);
+    consumeEq(C, st.eq, frac * ratio * SALVAGE);
     C.mp.inDivs += st.mp * frac * ratio;
     D.str = Math.min(1, D.str + frac * ratio);
   }
