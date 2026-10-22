@@ -89,11 +89,11 @@ export class App {
     this.lastMonth = ymd(G.hour).m;
     this.hudDirty = true;
   }
-  save(slot = 'auto') {
+  save(slot = 'auto', quiet = false) {
     let data;
     try { data = serialize(this.G); } catch (e) { console.error(e); this.toast('저장 실패', 'war'); return false; }
     const ok = setItem(SAVE_PREFIX + slot, data) && setItem(SAVE_PREFIX + slot + '.meta', JSON.stringify({ tag: this.G.player, name: this.G.countries[this.G.player].name, hour: this.G.hour, at: Date.now(), size: data.length }));
-    if (!ok) { this.toast('저장 실패: 이 브라우저에서는 저장할 수 없거나 저장 공간이 부족합니다', 'war'); return false; }
+    if (!ok) { if (!quiet) this.toast('저장 실패: 이 브라우저에서는 저장할 수 없거나 저장 공간이 부족합니다', 'war'); return false; }
     return true;
   }
   load(slot = 'auto') {
@@ -143,7 +143,7 @@ export class App {
   onNewDay() {
     const G = this.G;
     const m = ymd(G.hour).m;
-    if (m !== this.lastMonth) { this.lastMonth = m; if (G.player && this.settings().autosave !== false) this.save('auto'); }
+    if (m !== this.lastMonth) { this.lastMonth = m; if (G.player && this.settings().autosave !== false) this.save('auto', true); }
     const C = G.countries[G.player];
     if (C && !C.alive && !this.gameOverShown) { this.gameOverShown = true; this.setSpeed(0); showDialog(this, { title: '패배', body: `${C.name}은(는) 더 이상 존재하지 않습니다.`, buttons: [{ text: '타이틀로', primary: true, fn: () => showTitle(this) }, { text: '계속 관전', fn: () => {} }] }); }
   }

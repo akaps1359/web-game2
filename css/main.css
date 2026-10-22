@@ -1,5 +1,6 @@
 /* 철혈전선 — 세로 모드 모바일 UI */
 :root {
+  color-scheme: dark;
   --ink: #0b0e13;
   --bg0: #0f1319;
   --bg1: #141922;
