@@ -116,6 +116,12 @@ function applyOne(G, C, e, ctx) {
       break;
     }
     case 'evacuate': C.evac = { until: G.hour + a * 24, frac: b ?? 0.5 }; break; // [일수, 비율] 공장 소개령
+    // 통제권만 넘긴다(괴뢰국 영토에 종주국 군이 주둔 등): [ctrlTo, [주], 나라]
+    case 'ctrlTo': {
+      const to = b || C.tag;
+      for (const k of [].concat(a)) { const i = idxOf(G, k); if (i == null) continue; const S = G.st[i]; if (S.ctrl === to || atWar(G, S.ctrl, to)) continue; S.ctrl = to; S.ctrlSince = G.hour; }
+      G.mapDirty = true; G.indexDirty = true; break;
+    }
     case 'disband': { // [남길 주 목록, 최대 사단 수] — 그 밖의 사단은 무장 해제된다(이탈리아 휴전 등)
       const keepSet = new Set((a || []).map((k) => idxOf(G, k)));
       let kept = 0;

@@ -220,6 +220,7 @@ export function captureState(G, st, byTag) {
     for (const c of S.cores) { if (c !== byTag && allied(G, byTag, c) && G.countries[c]?.alive && !G.countries[c].capitulated) { newCtrl = c; break; } }
   }
   if (prevCtrl === newCtrl) return;
+  const BC = G.countries[byTag]; if (BC) (BC.aiState ||= {}).lastCap = G.hour; // AI 교착 판단용
   // 공장 소개(疏開): 소개령이 내려진 동안 빼앗기는 자국 주의 공장 일부를 지도 밖 후방으로 옮긴다(1941년 소련)
   const O = G.countries[S.owner];
   if (O?.evac && G.hour < O.evac.until && prevCtrl === S.owner && !S.evacuated && atWar(G, newCtrl, S.owner)) {

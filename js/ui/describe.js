@@ -60,6 +60,7 @@ export function describeEffects(G, C, fx, depth = 0) {
       case 'deploy': lines.push(`${st(b)}에 사단 ${a}개 파견`); break;
       case 'returnGov': lines.push(`정부 귀환: ${st(a)}`); break;
       case 'shock': lines.push(`<b class="bad">기습 피해</b>: 사단 조직력 ${p(a - 1)}${b != null && b < 1 ? `, 전력 ${p(b - 1)}` : ''}${c != null ? `, 항공기 ${p(c - 1)}` : ''}`); break;
+      case 'ctrlTo': lines.push(`${[].concat(a).map(st).join(', ')}을(를) ${nm(b || 'THIS')}이(가) 장악`); break;
       case 'evacuate': lines.push(`공장 소개령 ${a}일: 빼앗기는 주의 공장 ${Math.round((b ?? 0.5) * 100)}%를 후방으로 옮김`); break;
       case 'disband': lines.push(`<b class="bad">군대 무장 해제</b> (${[].concat(a).length ? `${[].concat(a).map(st).join('·')}의 ` : ''}최대 ${b}개 사단만 남음)`); break;
       case 'if': { const inner = describeEffects(G, C, b, depth + 1); if (inner) lines.push(`(조건부) ${inner}`); break; }

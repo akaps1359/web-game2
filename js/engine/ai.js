@@ -375,7 +375,8 @@ function aiRecruit(G, C) {
   const nDiv = divs.length + C.training.length;
   const war = atWarAny(G, C.tag);
   const mil = C.eco.mil || 0;
-  let target = 6 + mil * (C.major ? 1.6 : 2.0) + (war ? 10 : 0) + G.tension * 20;
+  // 강대국: 전쟁 초기에는 공장 하나당 2.2개 사단까지 동원하고, 총력전 단계(1941년~)에는 장비를 감당할 수 있는 1.6개로
+  let target = 6 + mil * (C.major ? (yearFrac(G.hour) < 1941 ? 2.2 : 1.6) : 2.0) + (war ? 10 : 0) + G.tension * 20;
   if (C.tag === 'SOV') target += 40;
   target *= C.aiProfile?.army ?? 1; // 해양 강국(영국)은 육군 규모가 작다
   if (C.tag === 'USA') target *= war ? 1 : 0.4;
@@ -897,6 +898,17 @@ function offensive(G, C, fronts, usable, enemyPow, opts) {
   {
     let field = 0; for (const D of usable) field += (divStats(G, D).eq.inf_eq || 0);
     if (field > 0 && (C.stock.inf_eq || 0) < field * 0.03) threshold *= 1.35;
+  }
+  // 교착: 공세적인 나라 가운데 전선에 맞닿은 적보다 전력이 대등하거나 우세한 쪽은, 마지막으로 땅을 빼앗은 지
+  // (또는 전쟁이 시작된 지) 석 달이 넘으면 한 달에 5%씩, 최대 25%까지 문턱을 낮춘다
+  // (밀리는 쪽은 무리한 반격을 하지 않고, 신중한 서방 연합국은 계획된 상륙 작전으로 움직인다)
+  let near = 0;
+  { const seen = new Set(); for (const f of fronts) for (const v of map.nb[f]) if (!seen.has(v)) { seen.add(v); near += enemyPow[v]; } }
+  if (aggr >= 0.3 && near > 0 && ours / near >= 0.9) {
+    let since = C.aiState?.lastCap ?? 0;
+    for (const w of G.wars) if ((w.att.includes(tag) || w.def.includes(tag)) && w.start > since) since = w.start;
+    const months = (G.hour - since) / (24 * 30);
+    if (months > 3) threshold *= Math.max(0.75, 1 - 0.05 * (months - 3));
   }
   const targets = new Map();
   const hold = C.isAI ? C.aiState.hold : null;

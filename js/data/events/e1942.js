@@ -1,6 +1,7 @@
 // 1942~1945 이벤트: 이탈리아 휴전과 사회 공화국, 루마니아·불가리아·핀란드의 이탈, 독일 항복, 지도자 교체
 const ITALY_SOUTH = ['palermo', 'catania', 'sardegna', 'calabria', 'bari', 'napoli'];
-const RSI_STATES = ['milano', 'torino', 'genova', 'venezia', 'trieste', 'trento', 'bologna'];
+// 독일군이 장악한 북부·중부(구스타프 선 이북). 남부는 연합군과 바돌리오 정부가 지킨다
+const RSI_STATES = ['milano', 'torino', 'genova', 'venezia', 'trieste', 'trento', 'bologna', 'firenze', 'ancona', 'pescara', 'roma'];
 
 const VIC_NORTH_AFRICA = ['alger', 'oran', 'constantine', 'ghardaia', 'tamanrasset', 'rabat', 'fes', 'marrakech', 'oujda'];
 const VIC_METRO = ['auvergne', 'limousin', 'toulouse', 'languedoc', 'marseille', 'lyon', 'alpes'];
@@ -47,7 +48,11 @@ export const E1942 = [
     title: '무솔리니 실각', desc: '7월 24일 밤 파시즘 대평의회가 무솔리니를 불신임했고, 이튿날 국왕은 그를 체포했다. 바돌리오 정부는 9월 8일 연합국과의 휴전을 발표했다. 국왕과 정부는 로마를 떠나 남쪽으로 피했다.',
     opts: [{ t: '휴전', fx: [['stab', -0.1]] }] },
   { id: 'ger_achse', who: 'GER', manual: true, pic: 'troops',
-    immediate: [['warOn', 'THIS', 'ITA', '이탈리아 전역'], ['spawnCtrl', 'RSI', RSI_STATES, 'GER'], ['for', 'RSI', [['units', [['inf9', 4, 'milano'], ['inf9', 2, 'bologna']]], ['equip', 'inf_eq', 3000]]]],
+    // 이탈리아 북부·중부를 떼어 독일의 괴뢰국으로(이탈리아 쪽에서 실행해야 그 주들을 찾는다).
+    // 실제로 그 땅을 지킨 것은 독일군이다: 밀라노 밖은 독일이 통제하고 케셀링·롬멜의 집단군이 들어간다
+    immediate: [['warOn', 'THIS', 'ITA', '이탈리아 전역'], ['for', 'ITA', [['spawnCtrl', 'RSI', RSI_STATES, 'GER']]], ['ctrlTo', RSI_STATES.filter((k) => k !== 'milano'), 'GER'],
+      ['units', [['inf9', 5, 'roma'], ['inf9', 3, 'pescara'], ['inf9', 3, 'firenze'], ['arm', 2, 'roma'], ['inf9', 3, 'bologna']]],
+      ['for', 'RSI', [['units', [['inf9', 4, 'milano']]], ['equip', 'inf_eq', 3000]]]],
     title: '아흐제 작전', desc: '독일군이 이탈리아군을 무장 해제하고 북부와 중부를 장악했다. 9월 12일 그란사소 산장에서 구출된 무솔리니가 북부에 "이탈리아 사회 공화국"을 세웠다.',
     opts: [{ t: '배신자를 응징하라', fx: [] }] },
   { id: 'rom_coup', who: 'ROM', trig: [['faction', 'ROM', 'axis'], ['after', '1944-03-01'], ['or', [['enemyControls', 'ROM', ['iasi', 'chisinau', 'galati', 'cernauti', 'budjak']], ['surrender', 'ROM', 0.2]]]], pic: 'crowd',
