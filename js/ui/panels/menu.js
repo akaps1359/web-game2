@@ -5,6 +5,7 @@ import { btn, card, item, empty } from './common.js';
 import { fmtDate } from '../../engine/world.js';
 import { showDialog } from '../modal.js';
 import { showTitle } from '../title.js';
+import { setItem } from '../store.js';
 
 const SLOTS = ['1', '2', '3'];
 
@@ -100,8 +101,8 @@ export const helpPanel = {
   render(app, body) {
     body.appendChild(h('p', { class: 'note', style: { fontSize: '12.5px', margin: '0 2px 10px' } }, '1936년 1월 1일, 유럽은 다시 전쟁의 그림자 아래 있습니다. 한 나라를 이끌어 공업을 일으키고, 군대를 키우고, 외교와 전쟁으로 역사를 바꾸세요.'));
     for (const [t, ic, d] of HELP) body.appendChild(card(`${icon(ic)} ${t}`, h('div', { class: 'note', style: { fontSize: '12.5px', color: 'var(--text)' } }, d)));
-    body.appendChild(btn('시작하기', () => { localStorage.setItem('chulhyeol.tutorialDone', '1'); app.sheet.close(); }, 'primary wide'));
+    body.appendChild(btn('시작하기', () => { setItem('chulhyeol.tutorialDone', '1'); app.sheet.close(); }, 'primary wide'));
     body.appendChild(h('div', { class: 'pad-bottom' }));
   },
-  onClose() { localStorage.setItem('chulhyeol.tutorialDone', '1'); },
+  onClose() { setItem('chulhyeol.tutorialDone', '1'); },
 };

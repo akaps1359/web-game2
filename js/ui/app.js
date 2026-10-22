@@ -15,6 +15,7 @@ import { Sheet } from './sheet.js';
 import { PANELS } from './panels/index.js';
 import { showEventModal, showDialog, closeModal } from './modal.js';
 import { showTitle } from './title.js';
+import { getItem, setItem } from './store.js';
 
 const SPEEDS = [0, 4, 10, 24, 60, 160]; // 게임 시간(시간)/초
 const SAVE_PREFIX = 'chulhyeol.save.';
@@ -68,7 +69,7 @@ export class App {
     else this.r.focusOn(-2500, -6500, 0.07);
     this.setSpeed(0);
     this.toast(`${C.full} — ${C.leader} ${C.title}`, 'peace');
-    if (!localStorage.getItem('chulhyeol.tutorialDone')) setTimeout(() => this.openPanel('help'), 400);
+    if (!getItem('chulhyeol.tutorialDone')) setTimeout(() => this.openPanel('help'), 400);
   }
   afterLoad() {
     const G = this.G;
@@ -89,20 +90,19 @@ export class App {
     this.hudDirty = true;
   }
   save(slot = 'auto') {
-    try {
-      const data = serialize(this.G);
-      localStorage.setItem(SAVE_PREFIX + slot, data);
-      localStorage.setItem(SAVE_PREFIX + slot + '.meta', JSON.stringify({ tag: this.G.player, name: this.G.countries[this.G.player].name, hour: this.G.hour, at: Date.now(), size: data.length }));
-      return true;
-    } catch (e) { console.error(e); this.toast('저장 실패: 저장 공간이 부족합니다', 'war'); return false; }
+    let data;
+    try { data = serialize(this.G); } catch (e) { console.error(e); this.toast('저장 실패', 'war'); return false; }
+    const ok = setItem(SAVE_PREFIX + slot, data) && setItem(SAVE_PREFIX + slot + '.meta', JSON.stringify({ tag: this.G.player, name: this.G.countries[this.G.player].name, hour: this.G.hour, at: Date.now(), size: data.length }));
+    if (!ok) { this.toast('저장 실패: 이 브라우저에서는 저장할 수 없거나 저장 공간이 부족합니다', 'war'); return false; }
+    return true;
   }
   load(slot = 'auto') {
-    const data = localStorage.getItem(SAVE_PREFIX + slot);
+    const data = getItem(SAVE_PREFIX + slot);
     if (!data) return false;
     try { this.G = deserialize(data, this.map); setPlayer(this.G, this.G.player); this.afterLoad(); const C = this.G.countries[this.G.player]; if (C.capital >= 0 && !this.map.virtual[C.capital]) this.r.focusState(C.capital, 0.14); this.setSpeed(0); return true; }
     catch (e) { console.error(e); this.toast('불러오기 실패', 'war'); return false; }
   }
-  saveMeta(slot) { try { return JSON.parse(localStorage.getItem(SAVE_PREFIX + slot + '.meta') || 'null'); } catch { return null; } }
+  saveMeta(slot) { try { return JSON.parse(getItem(SAVE_PREFIX + slot + '.meta') || 'null'); } catch { return null; } }
 
   // ───────── 루프 ─────────
   loop() {
@@ -153,8 +153,8 @@ export class App {
     this.updateHUD();
   }
   togglePause() { this.setSpeed(this.speed > 0 ? 0 : this.prevSpeed || 2); }
-  settings() { try { return JSON.parse(localStorage.getItem('chulhyeol.settings') || '{}'); } catch { return {}; } }
-  setSetting(k, v) { const s = this.settings(); s[k] = v; localStorage.setItem('chulhyeol.settings', JSON.stringify(s)); }
+  settings() { try { return JSON.parse(getItem('chulhyeol.settings') || '{}'); } catch { return {}; } }
+  setSetting(k, v) { const s = this.settings(); s[k] = v; setItem('chulhyeol.settings', JSON.stringify(s)); }
 
   // ───────── 이벤트 / 뉴스 ─────────
   onEventPending() {
