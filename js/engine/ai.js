@@ -39,6 +39,11 @@ export function aiDaily(G) {
     const h = hashTag(tag);
     if (!C.isAI) { // 플레이어 보조: 자동 설정이 켜진 항목만
       if (C.autoResearch) aiResearch(G, C);
+      if (C.autoCons && (day + h) % 3 === 0) aiConstruction(G, C);
+      if (C.autoProd && (day + h) % 7 === 0) aiProduction(G, C);
+      if (C.autoRecruit && (day + h) % 4 === 0) aiRecruit(G, C);
+      if (C.autoAir && (day + h) % 3 === 1) aiAir(G, C);
+      if (C.autoNavy && (day + h) % 2 === 0) aiNavy(G, C);
       continue;
     }
     aiResearch(G, C);
@@ -467,7 +472,29 @@ function militaryAI(G, C) {
 // 플레이어 자동 군
 function armyAI(G, C, A) {
   const divs = A.divs.map((id) => G.divs[id]).filter((D) => D && !D.sea);
-  runFront(G, C, divs, { aggr: A.order === 'attack' ? 0.8 : 0, only: A.front?.length ? new Set(A.front) : null, enemy: A.enemy || null });
+  if (!divs.length) return;
+  let only = A.front?.length ? new Set(A.front) : null;
+  if (!only) {
+    // 같은 적을 맡은 다른 자동 군과 전선을 나눔: 각 전선 주를 가장 가까운 군에 배정
+    const peers = Object.values(G.armies).filter((B) => B.tag === C.tag && B.auto && !B.front?.length && (B.enemy || null) === (A.enemy || null) && B.divs.some((id) => G.divs[id]));
+    if (peers.length > 1) {
+      const map = G.map;
+      const centers = peers.map((B) => {
+        let x = 0, y = 0, n = 0;
+        for (const id of B.divs) { const D = G.divs[id]; if (!D) continue; const t = D.path.length ? D.path[D.path.length - 1] : D.loc; x += map.cx[t]; y += map.cy[t]; n++; }
+        return [x / n, y / n, B];
+      });
+      let fronts = frontStates(G, C.tag);
+      if (A.enemy) fronts = fronts.filter((f) => map.nb[f].some((v) => G.st[v].ctrl === A.enemy || (allied(G, A.enemy, G.st[v].ctrl) && atWar(G, C.tag, G.st[v].ctrl))));
+      const mine = fronts.filter((f) => {
+        let best = null, bd = Infinity;
+        for (const [x, y, B] of centers) { const d = (map.cx[f] - x) ** 2 + (map.cy[f] - y) ** 2; if (d < bd) { bd = d; best = B; } }
+        return best === A;
+      });
+      if (mine.length) only = new Set(mine);
+    }
+  }
+  runFront(G, C, divs, { aggr: A.order === 'attack' ? 0.8 : 0, only, enemy: A.enemy || null });
 }
 
 export function runFront(G, C, divs, opts) {

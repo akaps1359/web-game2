@@ -355,9 +355,14 @@ export function dailyMilitary(G, C) {
       if (loc == null || G.st[loc].ctrl !== tag) loc = C.capital >= 0 && G.st[C.capital].ctrl === tag ? C.capital : firstControlled(G, tag);
       if (loc < 0) continue;
       C.mp.training -= T.mp;
-      const D = createDivision(G, tag, T.tpl, loc, { str: ratio, xp: 0.1, army: T.army || 0 });
+      let army = T.army && G.armies[T.army] ? T.army : 0;
+      if (!army && !C.isAI) { // 플레이어: 가장 작은 군에 편입
+        let best = null; for (const id in G.armies) { const A = G.armies[id]; if (A.tag === tag && (!best || A.divs.length < best.divs.length)) best = A; }
+        if (best) army = best.id;
+      }
+      const D = createDivision(G, tag, T.tpl, loc, { str: ratio, xp: 0.1, army });
       (G.divsAt[loc] ||= []).push(D.id);
-      if (T.army && G.armies[T.army]) G.armies[T.army].divs.push(D.id);
+      if (army) G.armies[army].divs.push(D.id);
       C.mp.inDivs += st.mp * ratio;
       C.training.splice(i--, 1);
       if (G.onDivTrained) G.onDivTrained(D);
@@ -374,4 +379,66 @@ export function divsOf(G, tag) { const out = []; for (const id in G.divs) if (G.
 export function divPower(G, D) {
   const st = divStats(G, D);
   return (st.sa + st.ha * 1.2 + st.def * 0.25 + st.brk * 0.3) * D.str * (0.3 + 0.7 * (st.org > 0 ? D.org / st.org : 1));
+}
+
+// ───────── 군(플레이어 지휘 단위) ─────────
+export function createArmy(G, tag, name) {
+  const C = G.countries[tag];
+  C.armyNum = (C.armyNum || 0) + 1;
+  const id = G.nextId++;
+  const A = { id, tag, name: name || `제${C.armyNum}군`, divs: [], auto: true, order: 'hold', front: [], enemy: null, gen: null, player: true };
+  G.armies[id] = A;
+  return A;
+}
+export function assignArmy(G, D, armyId) {
+  if (D.army && G.armies[D.army]) { const A = G.armies[D.army]; A.divs = A.divs.filter((x) => x !== D.id); }
+  D.army = armyId || 0;
+  const A = armyId && G.armies[armyId];
+  if (A && !A.divs.includes(D.id)) A.divs.push(D.id);
+}
+export function deleteArmy(G, id) {
+  const A = G.armies[id]; if (!A) return;
+  for (const did of A.divs) { const D = G.divs[did]; if (D && D.army === id) D.army = 0; }
+  delete G.armies[id];
+}
+export function armiesOf(G, tag) { return Object.values(G.armies).filter((A) => A.tag === tag); }
+// 시작 시 사단을 지역별로 묶어 군 편성 (경도 순으로 최대 per개씩)
+export function setupArmies(G, tag, per = 24) {
+  const map = G.map, C = G.countries[tag];
+  for (const A of armiesOf(G, tag)) deleteArmy(G, A.id);
+  C.armyNum = 0;
+  const divs = divsOf(G, tag).sort((a, b) => (map.lon[a.loc] - map.lon[b.loc]) || (map.lat[b.loc] - map.lat[a.loc]));
+  const groups = Math.max(1, Math.ceil(divs.length / per));
+  const size = Math.ceil(divs.length / groups);
+  const gens = (C.generals || []).slice().sort((a, b) => b.skill - a.skill);
+  for (let g = 0; g < groups; g++) {
+    const A = createArmy(G, tag);
+    if (gens[g]) A.gen = gens[g].id;
+    for (const D of divs.slice(g * size, (g + 1) * size)) assignArmy(G, D, A.id);
+  }
+}
+// 사단 해산: 인력과 장비 일부 반환
+export function disbandDivision(G, D) {
+  const C = G.countries[D.tag];
+  const st = divStats(G, D);
+  for (const e in st.eq) C.stock[e] = (C.stock[e] || 0) + st.eq[e] * D.str * 0.8;
+  C.mp.inDivs = Math.max(0, C.mp.inDivs - st.mp * D.str);
+  if (D.army && G.armies[D.army]) { const A = G.armies[D.army]; A.divs = A.divs.filter((x) => x !== D.id); }
+  delete G.divs[D.id];
+  const a = G.divsAt?.[D.loc]; if (a) { const i = a.indexOf(D.id); if (i >= 0) a.splice(i, 1); }
+}
+// 편제 변경 (장비가 부족하면 전력이 떨어진 채로 보충됨)
+export function changeTemplate(G, D, tplId) {
+  const C = G.countries[D.tag];
+  const old = divStats(G, D);
+  const tpl = getTpl(C, tplId); if (!tpl) return false;
+  for (const e in old.eq) C.stock[e] = (C.stock[e] || 0) + old.eq[e] * D.str;
+  D.tpl = tplId;
+  const st = tplStats(C, tpl);
+  let ratio = 1;
+  for (const e in st.eq) ratio = Math.min(ratio, (C.stock[e] || 0) / st.eq[e]);
+  ratio = Math.max(0.1, Math.min(1, ratio));
+  for (const e in st.eq) C.stock[e] = Math.max(0, (C.stock[e] || 0) - st.eq[e] * ratio);
+  D.str = ratio; D.org = Math.min(D.org, st.org * 0.5);
+  return true;
 }
