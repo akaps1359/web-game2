@@ -1,8 +1,10 @@
 // 진입점
 import { App } from './ui/app.js';
+import { lockViewport } from './ui/viewport.js';
 
 const app = new App();
 window.__app = app;
+lockViewport((msg) => app.toast?.(msg));
 app.boot().catch((e) => {
   console.error(e);
   const m = document.querySelector('.boot-msg');

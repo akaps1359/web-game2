@@ -1,4 +1,6 @@
 // 지도 제스처: 드래그·핀치·탭·두 번 탭·길게 누르기·관성
+import { isZoomed } from './viewport.js';
+
 export class MapInput {
   constructor(el, renderer, handlers) {
     this.el = el; this.r = renderer; this.h = handlers;
@@ -11,9 +13,8 @@ export class MapInput {
     el.addEventListener('pointerup', (e) => this.up(e));
     el.addEventListener('pointercancel', (e) => this.up(e, true));
     el.addEventListener('wheel', (e) => { e.preventDefault(); this.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016)); }, { passive: false });
-    // iOS 사파리 기본 제스처 차단
-    for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
-    el.addEventListener('touchstart', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    // iOS 사파리 기본 제스처 차단(사파리 자체 확대 제스처는 viewport.js가 막는다). 페이지가 이미 확대됐다면 오므려 되돌릴 수 있게 둔다
+    el.addEventListener('touchstart', (e) => { if (e.touches.length > 1 && !isZoomed()) e.preventDefault(); }, { passive: false });
   }
   down(e) {
     this.el.setPointerCapture?.(e.pointerId);

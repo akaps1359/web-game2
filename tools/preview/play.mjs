@@ -25,7 +25,7 @@ const outDir = path.resolve(process.argv[3] || '.');
 fs.mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch();
 const dev = devices['iPhone 13'];
-const ctx = await browser.newContext({ ...dev, deviceScaleFactor: +(process.env.DPR || 2) });
+const ctx = await browser.newContext({ ...dev, deviceScaleFactor: +(process.env.DPR || 2), ...(process.env.DEVW ? { viewport: { width: +process.env.DEVW, height: +(process.env.DEVH || 740) }, screen: { width: +process.env.DEVW, height: +(process.env.DEVH || 740) } } : {}) });
 const page = await ctx.newPage();
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') { errors.push(m.text()); console.log('[console]', m.type(), m.text()); } });
