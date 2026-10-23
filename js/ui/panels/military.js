@@ -64,6 +64,7 @@ function armies(app, body, ctx) {
     const curK = !A.auto ? 'manual' : A.order;
     for (const [k, label] of opts) { const b = h('button', { class: curK === k ? 'on' : '' }, label); onTap(b, () => { if (k === 'manual') A.auto = false; else { A.auto = true; A.order = k; } ctx.rerender(); }); seg.appendChild(b); }
     c.appendChild(seg);
+    c.appendChild(h('div', { class: 'tiny muted', style: { margin: '6px 2px 0' } }, !A.auto ? '지도에서 사단을 직접 움직여 지휘합니다.' : A.order === 'attack' ? '유리한 곳부터 공격해 전선을 밀어붙입니다.' : '전선을 지키다가 적 공세가 꺾이면(적 조직력이 바닥나면) 반격해 빼앗긴 땅을 되찾습니다. 국경 너머 깊이 들어가지는 않습니다.'));
     if (A.auto && enemies.length > 1) {
       const es = h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '5px', marginTop: '8px' } }, h('span', { class: 'tiny muted' }, '상대:'));
       const mk = (tag, label) => { const b = h('button', { class: 'btn xs' + ((A.enemy || null) === tag ? ' primary' : '') }, label); onTap(b, () => { A.enemy = tag; ctx.rerender(); }); es.appendChild(b); };

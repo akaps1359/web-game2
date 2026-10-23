@@ -613,7 +613,9 @@ function armyAI(G, C, A) {
       if (mine.length) only = new Set(mine);
     }
   }
-  runFront(G, C, divs, { aggr: A.order === 'attack' ? 0.8 : 0, only, enemy: A.enemy || null });
+  // 자동 방어도 가만히 맞기만 하지 않는다: 적 공세가 꺾이면 빼앗긴 땅을 되찾는 반격까지(counter)
+  const hold = A.order !== 'attack';
+  runFront(G, C, divs, { aggr: hold ? 0.3 : 0.8, counter: hold, only, enemy: A.enemy || null });
 }
 
 // 같은 진영 동맹국의 전선(우리 적과 맞닿은 동맹국 주) — 원정군 파견용
@@ -688,7 +690,7 @@ export function runFront(G, C, divs, opts) {
   const spear = opts.whole ? spearhead(G, C, fronts, avail, enemyPow, opts) : null;
   const line = spear ? avail.filter((D) => !spear.ids.has(D.id)) : avail;
   // 공세 예비대 비율
-  const reserveFrac = opts.aggr >= 0.6 ? 0.3 : opts.aggr >= 0.3 ? 0.15 : 0.05;
+  const reserveFrac = opts.counter ? 0.1 : opts.aggr >= 0.6 ? 0.3 : opts.aggr >= 0.3 ? 0.15 : 0.05;
   const forFront = Math.max(Math.min(line.length, fronts.length), Math.round(line.length * (1 - reserveFrac)));
   // 배치 목표: 전선 길이(고르게)와 위협(집중)을 반씩
   const desired = new Map();
@@ -734,7 +736,7 @@ export function runFront(G, C, divs, opts) {
   if (opts.whole && lacking.length && free.length) repatriate(G, C, free, lacking, fronts);
   // 공세 (동맹국 전선 포함)
   // 공세에 동시에 투입할 수 있는 사단 수(나머지는 전선 방어)
-  if (opts.aggr > 0) offensive(G, C, fronts, avail, enemyPow, { ...opts, spear: spear?.sp, room: Math.floor(divs.length * (0.3 + opts.aggr * 0.4)) - (divs.length - usable.length) });
+  if (opts.aggr > 0) offensive(G, C, fronts, avail, enemyPow, { ...opts, spear: spear?.sp, room: Math.floor(divs.length * (opts.counter ? 0.25 : 0.3 + opts.aggr * 0.4)) - (divs.length - usable.length) });
   // 남은 자유 사단: 수용 여력이 있는 위협 큰 전선으로, 과밀한 주에 있으면 보급이 나은 후방으로
   const occ = new Map();
   for (const D of usable) { const t2 = D.path.length ? D.path[D.path.length - 1] : D.loc; occ.set(t2, (occ.get(t2) || 0) + 1); }
@@ -904,18 +906,29 @@ function offensive(G, C, fronts, usable, enemyPow, opts) {
   // (밀리는 쪽은 무리한 반격을 하지 않고, 신중한 서방 연합국은 계획된 상륙 작전으로 움직인다)
   let near = 0;
   { const seen = new Set(); for (const f of fronts) for (const v of map.nb[f]) if (!seen.has(v)) { seen.add(v); near += enemyPow[v]; } }
-  if (aggr >= 0.3 && near > 0 && ours / near >= 0.9) {
+  if (aggr >= 0.3 && !opts.counter && near > 0 && ours / near >= 0.9) {
     let since = C.aiState?.lastCap ?? 0;
     for (const w of G.wars) if ((w.att.includes(tag) || w.def.includes(tag)) && w.start > since) since = w.start;
     const months = (G.hour - since) / (24 * 30);
     if (months > 3) threshold *= Math.max(0.75, 1 - 0.05 * (months - 3));
   }
+  // 반격(자동 방어): 유리할 때만 — 빼앗긴 우리·동맹국 땅을 되찾거나, 공세가 꺾인(조직력이 바닥난) 적을 국경 바로 너머까지 밀어낸다
+  if (opts.counter) threshold = Math.max(threshold, 1.3);
+  const counterOk = (v) => {
+    const S = G.st[v];
+    if (S.owner === tag || S.cores.includes(tag) || (allied(G, tag, S.owner) && G.countries[S.owner]?.alive)) return true;
+    if (!map.nb[v].some((u) => G.st[u].owner === tag && G.st[u].ctrl === tag)) return false;
+    let org = 0, max = 0;
+    for (const id of G.divsAt[v] || []) { const E = G.divs[id]; if (E && atWar(G, tag, E.tag)) { org += E.org; max += divStats(G, E).org; } }
+    return max > 0 && org / max < 0.4;
+  };
   const targets = new Map();
   const hold = C.isAI ? C.aiState.hold : null;
   for (const f of fronts) for (const v of map.nb[f]) {
     if (!atWar(G, tag, G.st[v].ctrl)) continue;
     if (opts.enemy && G.st[v].ctrl !== opts.enemy && !allied(G, opts.enemy, G.st[v].ctrl)) continue;
     if (hold && hold[G.st[v].ctrl] > G.hour) continue; // 공세 보류(가짜 전쟁 등)
+    if (opts.counter && !counterOk(v)) continue;
     if (!targets.has(v)) targets.set(v, []);
     targets.get(v).push(f);
   }
