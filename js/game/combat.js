@@ -31,7 +31,8 @@ export function meleeAttack(game, P, t, mod = {}) {
   else if (mod.ang != null) P.turnTo(P.x + Math.cos(mod.ang), P.y + Math.sin(mod.ang));
   const hitT = st.atkTime * (mod.speed || 1), dur = hitT + 0.1;
   const style = mod.style || (st.wcat === 'axe' || st.wcat === 'mace' ? 'swing' : null);
-  P.setAnim('attack', dur, { hitAt: hitT / dur, style, basic: !!mod.basic, onHit: () => resolveMelee(game, P, swingTarget(game, P, t), mod) });
+  // 맞을 적이 없으면 앞쪽 손 닿는 곳의 상자·석관을 열고 통을 부순다
+  P.setAnim('attack', dur, { hitAt: hitT / dur, style, basic: !!mod.basic, onHit: () => { const tt = swingTarget(game, P, t); if (tt) resolveMelee(game, P, tt, mod); else { P.uninterruptible = false; game.smashFront?.(P); } } });
   P.uninterruptible = !!mod.uninterruptible;
   game.sfx(st.wcat === 'axe' || (st.wcat === 'mace' && st.wdmg[1] > 10) ? 'swing_heavy' : 'swing_light', P.x, P.y);
 }
@@ -424,6 +425,8 @@ export function updateMissiles(game, dt) {
       if (!L.inb(tx, ty) || !L.floor[ty * L.w + tx] || (L.flags[ty * L.w + tx] & F_SOLID && L.flags[ty * L.w + tx] & F_OPAQUE && !m.ghost)) {
         dead = true; missileEnd(game, m, null); break;
       }
+      // 플레이어 쪽 화살·주문은 통을 부수고 멈춘다
+      if (m.team === 0 && game.smash) { const o = L.obj(tx, ty); if (o && o.type === 'barrel' && !o.broken) { game.smash(o); dead = true; missileEnd(game, m, null); break; } }
       // 맞을 대상
       for (const a of L.actors) {
         if (a.dead || a.team === m.team || m.hit.has(a) || a.invuln > 0 || (a.kind === 'npc')) continue;
@@ -497,6 +500,8 @@ function missileEnd(game, m, a, timeout = false) {
 // 범위 피해(팀이 다른 액터 모두)
 export function areaDamage(game, x, y, r, dmg, type, src, team, extra = {}) {
   let n = 0;
+  // 플레이어 쪽 폭발·노바 등은 둘레의 통도 부순다
+  if (team === 0 && game.smash) for (const o of game.level.objects) if (o.type === 'barrel' && !o.broken && Math.hypot(o.x - x, o.y - y) <= r + 0.3) game.smash(o);
   for (const a of game.level.actors.slice()) {
     if (a.dead || a.team === team || a.kind === 'npc') continue;
     if (Math.hypot(a.x - x, a.y - y) > r + 0.3) continue;

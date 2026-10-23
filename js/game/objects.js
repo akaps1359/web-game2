@@ -215,8 +215,8 @@ export function objectVerb(o) {
     case 'door': return o.open ? null : '열기';
     case 'stairs_down': return '내려가기';
     case 'stairs_up': return '올라가기';
-    case 'chest': case 'sarc': return '열기';
-    case 'barrel': return '부수기';
+    // 상자·석관·통은 공격으로 열고 부순다(상호작용 단추에는 나오지 않는다)
+    case 'chest': case 'sarc': case 'barrel': return null;
     case 'shrine': return '만지기';
     case 'waypoint': return '순간 이동';
     case 'portal': return '들어가기';

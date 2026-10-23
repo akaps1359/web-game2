@@ -7,7 +7,7 @@ import { F_VIS, F_SOLID } from './level.js';
 import { buildLevel, LEVELS, levelName } from './world.js';
 import { Hero } from './hero.js';
 import { updateMonster } from './ai.js';
-import { updateMissiles, updateAreas, meleeAttack, rangedAttack, damageActor, MELEE_HIT } from './combat.js';
+import { updateMissiles, updateAreas, meleeAttack, rangedAttack, damageActor, MELEE_HIT, MELEE_ARC } from './combat.js';
 import { castSkill, skillDef, updateWhirl } from './skills.js';
 import { updateBuffs, tickRegen, addBuff } from './buffs.js';
 import { useObject, objectVerb, SHRINES } from './objects.js';
@@ -208,13 +208,47 @@ export class Game {
   aimDir() { const P = this.player; return this.stick ? this.stick.a : P.faceTo ?? P.face; }
   // 휘두르기·쏘기: 겨누는 거리 안에 적이 있으면 그쪽으로, 없으면 조이스틱(바라보는) 쪽 빈 곳으로.
   // 근접은 내려치는 순간 앞쪽 손 닿는 곳의 적을, 화살은 날아가다 처음 닿는 적을 맞힌다
+  // 겨눌 적이 없으면 손 닿는 곳의 상자·석관·통 쪽으로 휘둘러 열고 부순다(활을 들었으면 상자는 손으로 열고 통은 쏴서 부순다)
   freeAttack() {
     const P = this.player, ranged = this.hero.ranged();
-    const t = this.bestEnemy(ranged ? BOW_AIM : MELEE_AIM);
-    const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : this.aimDir();
+    const t = this.bestEnemy(ranged ? BOW_AIM : MELEE_AIM), o = t ? null : this.bestSmashable();
+    const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : o ? Math.atan2(o.y - P.y, o.x - P.x) : this.aimDir();
     if (t) this.setTarget(t);
+    if (ranged && o && o.type !== 'barrel') {
+      P.turnTo(o.x, o.y);
+      P.setAnim('special', 0.3, { hitAt: 0.5, onHit: () => this.smash(o) });
+      return;
+    }
     if (ranged) rangedAttack(this, P, t, { basic: true, point: { x: P.x + Math.cos(a) * 6, y: P.y + Math.sin(a) * 6 } });
     else meleeAttack(this, P, t, { basic: true, ang: a });
+  }
+  // 공격으로 여는·부수는 것: 닫힌 상자·석관, 멀쩡한 통
+  smashable(o) { return !!o && !o.hidden && (o.type === 'barrel' ? !o.broken : (o.type === 'chest' || o.type === 'sarc') && !o.open); }
+  smash(o) { if (!this.smashable(o)) return false; useObject(this, o); return true; }
+  // 손 닿는 곳(겨누는 거리)의 상자·석관·통: 조이스틱(바라보는) 쪽 것 먼저
+  bestSmashable() {
+    const P = this.player, L = this.level, ref = this.aimDir(), w = this.stick ? 2 : 0.8;
+    let best = null, bs = 1e9;
+    for (const o of L.objects) {
+      if (!this.smashable(o) || !(L.flags[o.y * L.w + o.x] & F_VIS)) continue;
+      const d = Math.hypot(o.x - P.x, o.y - P.y);
+      if (d > MELEE_AIM) continue;
+      const sc = d + Math.abs(angDiff(Math.atan2(o.y - P.y, o.x - P.x), ref)) * w;
+      if (sc < bs) { bs = sc; best = o; }
+    }
+    return best;
+  }
+  // 휘두른 순간 앞쪽 손 닿는 곳의 상자·석관을 열고 통을 부순다
+  smashFront(P = this.player) {
+    const fa = P.faceTo ?? P.face;
+    let best = null, bd = 1e9;
+    for (const o of this.level.objects) {
+      if (!this.smashable(o)) continue;
+      const d = Math.hypot(o.x - P.x, o.y - P.y);
+      if (d > MELEE_HIT + 0.35 || Math.abs(angDiff(Math.atan2(o.y - P.y, o.x - P.x), fa)) > MELEE_ARC + 0.2) continue;
+      if (d < bd) { bd = d; best = o; }
+    }
+    return best ? this.smash(best) : false;
   }
   // 거리와 방향으로 고른 적(조이스틱을 밀고 있으면 그 방향을 더 따진다). 지금 대상이 크게 나쁘지 않으면 그대로 둔다(대상이 이리저리 바뀌지 않게)
   bestEnemy(range) {

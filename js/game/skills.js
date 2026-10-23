@@ -443,6 +443,7 @@ export function castSkill(game, P, id, target, point) {
             resolveMelee(game, P, a, { dmgPct: s.dmgPct(lv), sure: false });
             n++;
           }
+          if (!n) game.smashFront?.(P);
           fx.ring(P.x + Math.cos(fa) * 0.6, P.y + Math.sin(fa) * 0.6, 0.3, 1.4, 0.2, [255, 230, 180], 2);
         },
       });
