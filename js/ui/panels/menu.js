@@ -8,6 +8,7 @@ import { showTitle } from '../title.js';
 import { setItem } from '../store.js';
 import { TRACKS, MOODS, MOOD_NAME } from '../../audio/score.js';
 import { BRAND } from '../../data/brand.js';
+import { TOPICS, tutorialDone } from '../tutorial.js';
 
 const SLOTS = ['1', '2', '3'];
 
@@ -62,9 +63,15 @@ export const menuPanel = {
     const playing = app.music?.playing;
     snd.appendChild(item({ ic: 'music', t: '음악 감상', d: playing ? `지금 재생 중: ${TRACKS[playing].name}` : '곡 목록에서 골라 들을 수 있습니다', onClick: () => app.openPanel('music') }));
     body.appendChild(snd);
+    // 튜토리얼: 주제별로 원할 때(각 화면 오른쪽 위 「?」로도 열린다)
+    const tut = card(`${icon('target')} 튜토리얼 <small>직접 눌러 보며 배우기 · 주제마다 1분</small>`);
+    for (const [k, T] of Object.entries(TOPICS)) {
+      const seen = tutorialDone(k);
+      tut.appendChild(item({ ic: seen ? 'check' : 'play', t: T.name, d: T.desc + (seen ? ' · 완료' : ''), onClick: () => { app.sheet.close(); app.coach.start(k); } }));
+    }
+    body.appendChild(tut);
     // 기타
     const etc = card(`${icon('info')} 기타`);
-    etc.appendChild(item({ ic: 'target', t: '튜토리얼 다시 보기', d: '직접 눌러 보며 기본 조작 익히기(1분)', onClick: () => { app.sheet.close(); app.setSpeed(0); app.coach.start(); } }));
     etc.appendChild(item({ ic: 'info', t: '게임 방법', d: '기본 조작과 규칙', onClick: () => app.openPanel('help') }));
     etc.appendChild(item({ ic: 'news', t: '세계 소식', d: '최근 뉴스 기록', onClick: () => app.openPanel('news') }));
     etc.appendChild(item({ ic: 'flag', t: '타이틀 화면', d: '현재 게임은 자동 저장됩니다', onClick: () => { app.save('auto'); app.sheet.close(); app.setSpeed(0); showTitle(app); } }));

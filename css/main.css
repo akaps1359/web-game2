@@ -60,6 +60,8 @@ button { font-family: inherit; color: inherit; }
 #coach .cb-text { font-size: 14px; line-height: 1.55; color: var(--paper); white-space: pre-line; }
 #coach .cb-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 #coach .cb-n { flex: 1; font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+.sheet-head .help-btn { font-family: var(--serif); font-weight: 800; font-size: 17px; color: var(--brass-hi); position: relative; flex: none; }
+.sheet-head .help-btn.new::after { content: ''; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--red-hi); }
 #coach .cb-skip { background: none; border: 0; color: var(--muted); font-size: 12.5px; padding: 6px 4px; cursor: pointer; }
 /* 게임 로고(임시 제목): 로마 비문 대문자 + 이탤릭 부제 (fonts/, SIL OFL, 로고 글자만 담은 부분 글꼴) */
 @font-face { font-family: 'Logo'; src: url(../fonts/logo.woff2) format('woff2'); font-weight: 700; font-display: block; }

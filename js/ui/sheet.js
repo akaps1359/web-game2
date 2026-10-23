@@ -1,6 +1,7 @@
 // 바텀 시트 (패널 컨테이너)
 import { h, clear, onTap } from './dom.js';
 import { icon } from './icons.js';
+import { TOPIC_OF, tutorialDone } from './tutorial.js';
 
 export class Sheet {
   constructor(el, app) {
@@ -42,7 +43,11 @@ export class Sheet {
     const title = P.title(app, this.arg);
     const hd = typeof title === 'string' ? h('h2', null, title) : title;
     const close = h('button', { class: 'ibtn', html: icon('close') }); onTap(close, () => this.close());
-    this.head.append(...(P.headLeft ? [P.headLeft(app, this.arg)] : []), hd, ...(P.headRight ? [P.headRight(app, this.arg)] : []), close);
+    // 이 화면의 튜토리얼(아직 안 본 주제는 빨간 점)
+    const topic = TOPIC_OF[this.current];
+    let help = null;
+    if (topic) { help = h('button', { class: 'ibtn help-btn' + (tutorialDone(topic) ? '' : ' new'), 'aria-label': '이 화면 튜토리얼' }, '?'); onTap(help, () => app.coach.start(topic)); }
+    this.head.append(...(P.headLeft ? [P.headLeft(app, this.arg)] : []), hd, ...(P.headRight ? [P.headRight(app, this.arg)] : []), ...(help ? [help] : []), close);
     if (P.tabs) {
       this.tabs.style.display = '';
       for (const [k, label] of P.tabs) { const b = h('button', { class: 'stab' + (k === this.tab ? ' on' : '') }, label); onTap(b, () => this.setTab(k)); this.tabs.appendChild(b); }
