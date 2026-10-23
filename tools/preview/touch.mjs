@@ -68,7 +68,7 @@ export default async function (page, { wait, log, shot, tap }) {
   // 옆의 아이템 → '줍기'
   await openSpot();
   const inv0 = await page.evaluate(async () => {
-    const g = window.__game, P = g.player, I = await import('/js/game/items.js'), Lo = await import('/js/game/loot.js');
+    const g = window.__game, P = g.player, I = await import(new URL('js/game/items.js', location.href).href), Lo = await import(new URL('js/game/loot.js', location.href).href);
     Lo.groundItem(g, I.makeItem('cap'), P.tx + 1, P.ty);
     return g.hero.data.inv.length;
   });
@@ -78,7 +78,7 @@ export default async function (page, { wait, log, shot, tap }) {
   check(`옆의 아이템 → 상호작용 단추 '${v2}' → 가방으로`, v2 === '줍기' && await page.evaluate(() => window.__game.hero.data.inv.length) === inv0 + 1);
   // 던전: 공격 단추는 조이스틱 방향의 적을 겨눈다
   const r = await page.evaluate(async () => {
-    const g = window.__game, AI = await import('/js/game/ai.js');
+    const g = window.__game, AI = await import(new URL('js/game/ai.js', location.href).href);
     g.god = true; g.enter(1, 'down');
     const L = g.level, P = g.player;
     const ok = (x, y) => { for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!L.free(x + dx, y + dy, P.id) || L.obj(x + dx, y + dy)) return false; return true; };
