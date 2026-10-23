@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>소리 시험대</title>
+<style>
+  :root { --bg: #0d0b0a; --panel: #1a1512; --line: #3a2e25; --text: #e6d9c6; --dim: #9c8b78; --accent: #c8913a; --on: #7a2b1d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 -apple-system, system-ui, sans-serif; padding: 12px 12px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 18px; margin: 4px 0 10px; color: var(--accent); letter-spacing: 0.05em; }
+  h2 { font-size: 13px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; }
+  .bar { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 6px 0 8px; border-bottom: 1px solid var(--line); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  button { font: inherit; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 9px 4px; min-height: 40px; overflow-wrap: anywhere; touch-action: manipulation; }
+  button:active { background: #2c231c; }
+  button.on { background: var(--on); border-color: #b0472f; }
+  button.big { padding: 10px 14px; font-size: 14px; }
+  label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  label span { width: 52px; color: var(--dim); }
+  input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+  .sliders { display: grid; grid-template-columns: 1fr; gap: 2px; }
+  #stat { font: 11px/1.4 ui-monospace, monospace; color: var(--dim); white-space: pre-wrap; }
+  #meter { height: 6px; background: var(--panel); border-radius: 3px; overflow: hidden; flex: 1; min-width: 60px; }
+  #meter i { display: block; height: 100%; width: 0; background: var(--accent); }
+  #pad { position: relative; width: 100%; max-width: 360px; aspect-ratio: 1; background: radial-gradient(circle, #241b15 0 16%, #17120f 17% 100%); border: 1px solid var(--line); border-radius: 8px; touch-action: none; }
+  #pad::after { content: '나'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--accent); font-size: 12px; }
+  #dot { position: absolute; width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: #e05a3a; left: 50%; top: 50%; }
+  select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-width: 100%; }
+  #log { font: 11px/1.4 ui-monospace, monospace; color: #d07a5a; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>소리 시험대</h1>
+<div class="bar">
+  <div class="row"><button class="big" id="unlock">소리 켜기</button><div id="meter"><i></i></div></div>
+  <div class="sliders">
+    <label><span>전체</span><input type="range" id="master" min="0" max="1" step="0.01"></label>
+    <label><span>효과음</span><input type="range" id="sfx" min="0" max="1" step="0.01"></label>
+    <label><span>음악</span><input type="range" id="music" min="0" max="1" step="0.01"></label>
+  </div>
+  <div class="row"><label><input type="checkbox" id="silent"> 무음 스위치를 켜도 소리 내기</label></div>
+</div>
+<div id="stat"></div>
+<div id="log"></div>
+<h2>배경음악</h2><div class="grid" id="music-grid"></div>
+<h2>스팅</h2><div class="grid" id="sting-grid"></div>
+<h2>분위기</h2><div class="grid" id="amb-grid"></div>
+<h2>위치 소리 (판을 누르면 그 자리에서)</h2>
+<div class="row"><select id="pos-name"></select></div>
+<div id="pad"><div id="dot"></div></div>
+<h2>점검</h2>
+<div class="row"><button id="prerender">효과음 모두 미리 그리기</button><button id="storm">40개 한꺼번에</button><button id="stopall">반복음 모두 멈춤</button></div>
+<div id="sfx-groups"></div>
+<script type="module">
+import { AudioSys, SFX_NAMES, SFX_GROUPS, MUSIC_TRACKS, STINGS, AMBIENCES } from '../js/audio/audio.js';
+
+const LABEL = { items: 'UI·아이템', combat: '전투', skills: '기술·주문', monsters: '괴물', world: '세계' };
+const KEY = 'audio-test-settings';
+let S = { master: 0.9, sfx: 0.9, music: 0.7, silentMode: true };
+try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* 저장소 없음 */ }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 저장소 없음 */ } };
+const audio = new AudioSys(() => S);
+window.audio = audio;
+window.AUDIO = { SFX_NAMES, SFX_GROUPS, MUSIC_TRACKS, STINGS, AMBIENCES };
+const $ = (id) => document.getElementById(id);
+const btn = (parent, text, fn) => { const b = document.createElement('button'); b.textContent = text; b.onclick = () => fn(b); parent.appendChild(b); return b; };
+
+for (const k of ['master', 'sfx', 'music']) { $(k).value = S[k]; $(k).oninput = (e) => { S[k] = +e.target.value; save(); audio.applySettings(); }; }
+$('silent').checked = S.silentMode;
+$('silent').onchange = (e) => { S.silentMode = e.target.checked; save(); audio.applySettings(); };
+$('unlock').onclick = () => audio.unlock();
+
+// 배경음악·스팅·분위기
+let musicOn = null, ambOn = null;
+const mb = {}, ab = {};
+for (const id of MUSIC_TRACKS) mb[id] = btn($('music-grid'), id, () => { musicOn = musicOn === id ? null : id; audio.setMusic(musicOn); for (const k in mb) mb[k].classList.toggle('on', k === musicOn); });
+for (const id of STINGS) btn($('sting-grid'), id, () => audio.sting(id));
+for (const id of AMBIENCES) ab[id] = btn($('amb-grid'), id, () => { ambOn = ambOn === id ? null : id; audio.setAmbience(ambOn); for (const k in ab) ab[k].classList.toggle('on', k === ambOn); });
+
+// 효과음: 무리별로. _loop는 누를 때마다 켜고 끈다
+const loops = {};
+for (const [g, names] of Object.entries(SFX_GROUPS)) {
+  const h = document.createElement('h2'); h.textContent = `${LABEL[g] || g} (${names.length})`; $('sfx-groups').appendChild(h);
+  const grid = document.createElement('div'); grid.className = 'grid'; $('sfx-groups').appendChild(grid);
+  for (const n of names) {
+    if (n.endsWith('_loop')) btn(grid, n + ' ⟳', (b) => { if (loops[n]) { loops[n].stop(); delete loops[n]; b.classList.remove('on'); } else { loops[n] = audio.loop(n); b.classList.add('on'); } });
+    else btn(grid, n, () => audio.play(n));
+  }
+}
+$('stopall').onclick = () => { for (const n in loops) loops[n].stop(); for (const n in loops) delete loops[n]; document.querySelectorAll('#sfx-groups button.on').forEach((b) => b.classList.remove('on')); };
+
+// 위치 소리: 판의 화면 좌표(타일)를 아이소메트릭 dx·dy로 되돌린다(화면 가로 = dx − dy, 세로 = (dx + dy) / 2)
+for (const n of SFX_NAMES) { const o = document.createElement('option'); o.value = o.textContent = n; $('pos-name').appendChild(o); }
+$('pos-name').value = 'hit_metal';
+$('pad').onpointerdown = (e) => {
+  const r = $('pad').getBoundingClientRect(), sx = ((e.clientX - r.left) / r.width - 0.5) * 40, sy = ((e.clientY - r.top) / r.height - 0.5) * 40;
+  const dx = sy + sx / 2, dy = sy - sx / 2;
+  $('dot').style.left = (e.clientX - r.left) + 'px'; $('dot').style.top = (e.clientY - r.top) + 'px';
+  audio.unlock(); audio.playAt($('pos-name').value, dx, dy);
+};
+$('storm').onclick = () => { for (let i = 0; i < 40; i++) audio.play(SFX_NAMES[Math.floor(Math.random() * SFX_NAMES.length)], { vol: 0.5 }); };
+$('prerender').onclick = async () => { $('log').textContent = '그리는 중…'; const r = await audio.prerender(); $('log').textContent = r ? `효과음 ${r.count}개: 걸린 시간 ${r.wallMs}ms, 그리기 합계 ${r.renderMs}ms\n가장 느린 것: ${r.slow.map(([k, v]) => k + ' ' + v + 'ms').join(', ')}` : '먼저 소리를 켜세요'; };
+
+// 상태·크기 막대
+const buf = new Float32Array(2048);
+setInterval(() => {
+  const s = audio.stats();
+  $('stat').textContent = `상태 ${s.state} · ${s.rate}Hz · 목소리 ${s.voices} · 반복음 ${s.loops} · 음악 ${s.music || '-'} · 분위기 ${s.ambience || '-'}\n그려 둔 소리 ${s.cached}개 (${s.mb}MB, 그리기 ${s.renderMs}ms, ${s.worker === false ? '메인 스레드' : '워커'})`;
+  const an = audio.analyser();
+  if (an) { an.getFloatTimeDomainData(buf); let p = 0; for (const v of buf) p = Math.max(p, Math.abs(v)); $('meter').firstChild.style.width = Math.min(100, p * 100) + '%'; }
+}, 150);
+</script>
+</body>
+</html>

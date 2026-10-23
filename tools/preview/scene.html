@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{position:absolute;inset:0;width:100%;height:100%}</style></head>
+<body><canvas id="view"></canvas>
+<script type="module">
+import { RNG } from '../../js/core/rng.js';
+import { generateDungeon } from '../../js/game/gen/dungeon.js';
+import { Renderer } from '../../js/render/renderer.js';
+import { Actor } from '../../js/game/actor.js';
+import { computeFOV } from '../../js/game/fov.js';
+import { CLASSES } from '../../js/data/classes.js';
+const P = new URLSearchParams(location.search);
+const theme = P.get('theme') || 'crypt';
+const rng = new RNG(+(P.get('seed') || 7));
+const L = generateDungeon(rng, theme, 1);
+const r = new Renderer(document.getElementById('view'));
+const hero = new Actor('player', L.start.x, L.start.y); hero.isPlayer = true;
+const cls = CLASSES[P.get('cls') || 'warrior'];
+hero.look = { ...cls.look, cols: { ...cls.look.cols }, wtype: 'sword', wlen: 30, wcol: '#c8ccd4', shield: { type: 'round', color: '#6a4a2a', rim: '#a89060' }, helm: { type: 'helm', color: '#8a8a90' } };
+if (P.get('cls') === 'rogue') Object.assign(hero.look, { wtype: 'bow', wlen: 0, wcol: '#7a5530', shield: null, helm: { type: 'hood', color: '#3a4a2a' } });
+if (P.get('cls') === 'sorcerer') Object.assign(hero.look, { wtype: 'staff', wlen: 52, shield: null, helm: null, gem: '#7ad0ff' });
+L.actors.push(hero);
+const mons = [];
+const looks = [
+  { plan: 'human', skel: true, head: 'skull', cols: { skin: '#d8d0b8', torso: '#d8d0b8', arms: '#d8d0b8', fore: '#d8d0b8', hands: '#d8d0b8', legs: '#d8d0b8', boots: '#d8d0b8' }, wtype: 'sword', wlen: 26, wcol: '#8a8070', glowEyes: '#ff4020' },
+  { plan: 'human', hunch: 0.35, reach: 1.0, cols: { skin: '#7a8a5a', hair: null, torso: '#4a4030', arms: '#7a8a5a', fore: '#7a8a5a', hands: '#7a8a5a', legs: '#3a3428', boots: '#7a8a5a' } },
+  { plan: 'human', h: 0.62, headS: 1.4, horns: 0.7, cols: { skin: '#b0402a', torso: '#a03a24', arms: '#b0402a', fore: '#b0402a', hands: '#b0402a', legs: '#8a3020', boots: '#5a2014' }, wtype: 'spear', wlen: 30, glowEyes: '#ffd040', tail: true },
+  { plan: 'quad', h: 0.9, cols: { skin: '#6a5040', torso: '#5a4030', legs: '#5a4030', boots: '#3a2a20' }, tail: true, spikes: '#2a1a10' },
+  { plan: 'flyer', h: 0.9, cols: { skin: '#3a2a2a', torso: '#3a2a2a', wing: '#2a1a1a' } },
+  { plan: 'human', head: 'goat', horns: 1, legs: 0.95, cols: { skin: '#6a5038', torso: '#5a4430', arms: '#6a5038', fore: '#6a5038', hands: '#4a3828', legs: '#4a3828', boots: '#2a1a10' }, wtype: 'axe', wlen: 24, wcol: '#9a9aa0' },
+  { plan: 'spider', h: 0.9, cols: { skin: '#2a2a2a', torso: '#1a1a1a', legs: '#2a2a2a' }, mark: '#c02020' },
+  { plan: 'serpent', h: 1, cols: { skin: '#4a6a3a', torso: '#3a5a2a' } },
+];
+for (let i = 0; i < looks.length; i++) {
+  const p = L.nearestFree(L.start.x + 2 + (i % 4) * 2, L.start.y + 1 + Math.floor(i / 4) * 2, 8);
+  if (!p) continue;
+  const m = new Actor('monster', p.x, p.y); m.team = 1; m.look = looks[i]; m.face = Math.PI * 1.25; m.hp = 5; m.hpMax = 10; m.barT = 1;
+  if (P.get('anim') === 'attack') m.anim = { name: 'attack', t: 0.45, dur: 1 };
+  L.actors.push(m); mons.push(m);
+}
+if (P.get('anim') === 'attack') hero.anim = { name: 'attack', t: 0.3, dur: 1 };
+computeFOV(L, hero.tx, hero.ty, 13);
+const game = { level: L, player: hero, lightRadius: () => 8, showLabels: true, showBars: true, itemLabel: (it) => it.name, itemColor: () => '#8888ff' };
+r.fx.game = game;
+r.cam.x = hero.x; r.cam.y = hero.y;
+if (P.get('zoom')) r.setUserZoom(+P.get('zoom'));
+let n = 0;
+function frame() { r.draw(game, 1 / 60); r.fx.update(1/60, game); if (++n < 3) requestAnimationFrame(frame); else document.title = 'done'; }
+requestAnimationFrame(frame);
+</script></body></html>
