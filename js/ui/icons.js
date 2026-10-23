@@ -97,6 +97,9 @@ const P = {
   map: `<path d="M3 6.5 8.5 4l7 2.5L21 4v13.5L15.5 20l-7-2.5L3 20z" ${S}/><path d="M8.5 4v13.5M15.5 6.5V20" ${S}/>`,
   book: `<path d="M4 4.5h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4zM20 4.5h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z" ${S}/>`,
   skull: `<path d="M12 3a7.5 7.5 0 0 0-4.5 13.5v3h9v-3A7.5 7.5 0 0 0 12 3z" ${S}/><circle cx="9.3" cy="11.5" r="1.6" fill="currentColor"/><circle cx="14.7" cy="11.5" r="1.6" fill="currentColor"/>`,
+  music: `<path d="M9 18.5V5.5l11-2v13" ${S}/><circle cx="6.5" cy="18.5" r="2.5" ${S}/><circle cx="17.5" cy="16.5" r="2.5" ${S}/>`,
+  sound: `<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" ${S}/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" ${S}/>`,
+  mute: `<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" ${S}/><path d="M16 9.5l5 5M21 9.5l-5 5" ${S}/>`,
 };
 
 export function icon(name, cls = '') {

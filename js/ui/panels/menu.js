@@ -6,6 +6,7 @@ import { fmtDate } from '../../engine/world.js';
 import { showDialog } from '../modal.js';
 import { showTitle } from '../title.js';
 import { setItem } from '../store.js';
+import { TRACKS, MOODS, MOOD_NAME } from '../../audio/score.js';
 
 const SLOTS = ['1', '2', '3'];
 
@@ -36,17 +37,30 @@ export const menuPanel = {
     // 설정
     const set = card(`${icon('settings')} 설정`);
     const S = app.settings();
-    const toggle = (key, label, desc, def = true) => {
-      const on = S[key] ?? def;
+    const toggle = (key, label, desc, box = set, after) => {
+      const on = S[key] ?? true;
       const chk = h('div', { class: 'chk' + (on ? ' on' : ''), html: on ? icon('check') : '' });
-      const el = item({ t: label, d: desc, right: chk, onClick: () => { app.setSetting(key, !on); ctx.rerender(); } });
-      set.appendChild(el);
+      const el = item({ t: label, d: desc, right: chk, onClick: () => { app.setSetting(key, !on); after?.(); ctx.rerender(); } });
+      box.appendChild(el);
     };
     toggle('autosave', '자동 저장', '매월 1일 자동으로 저장합니다.');
     toggle('pauseOnWar', '선전포고 시 일시정지', '우리나라가 관련된 전쟁이 시작되면 멈춥니다.');
     toggle('resumeAfterEvent', '이벤트 후 자동 재개', '이벤트 선택 후 원래 속도로 돌아갑니다.');
     toggle('labels', '지명 표시', '지도에 주 이름과 국가 이름을 표시합니다.');
     body.appendChild(set);
+    // 소리
+    const snd = card(`${icon('music')} 소리`);
+    const apply = () => app.music?.apply();
+    toggle('music', '배경음악', '평화·긴장·전쟁·진격·위기·승전 등 상황에 맞는 곡이 흐릅니다.', snd, apply);
+    if (S.music !== false) {
+      const vol = S.musicVol ?? 0.7;
+      const seg = h('div', { class: 'seg', style: { width: '150px' } }, [['작게', 0.4], ['보통', 0.7], ['크게', 1]].map(([t, v]) => { const b = h('button', { class: Math.abs(vol - v) < 0.05 ? 'on' : '' }, t); onTap(b, () => { app.setSetting('musicVol', v); apply(); ctx.rerender(); }); return b; }));
+      snd.appendChild(item({ t: '음량', right: seg }));
+      if (navigator.audioSession) toggle('musicSilent', '무음 모드에서도 재생', '아이폰 옆면 무음 스위치가 켜져 있어도 들립니다. 끄면 다른 앱의 음악과 함께 들을 수 있습니다.', snd, apply);
+    }
+    const playing = app.music?.playing;
+    snd.appendChild(item({ ic: 'music', t: '음악 감상', d: playing ? `지금 재생 중: ${TRACKS[playing].name}` : '곡 목록에서 골라 들을 수 있습니다', onClick: () => app.openPanel('music') }));
+    body.appendChild(snd);
     // 기타
     const etc = card(`${icon('info')} 기타`);
     etc.appendChild(item({ ic: 'info', t: '게임 방법', d: '기본 조작과 규칙', onClick: () => app.openPanel('help') }));
@@ -59,6 +73,36 @@ export const menuPanel = {
   onClose(app) {
     app.r.showLabels = app.settings().labels !== false; app.r.staticDirty = true; app.dirty = true;
   },
+};
+
+// 음악 감상: 곡을 골라 반복해 듣는다(패널을 닫으면 상황별 자동 선곡으로 돌아간다)
+export const musicPanel = {
+  size: 'tall',
+  title: () => '음악 감상',
+  render(app, body, arg, ctx) {
+    const M = app.music;
+    clearInterval(app._musicPoll);
+    if (!M) return;
+    const sig = M.sig();
+    app._musicPoll = setInterval(() => { if (app.sheet.current !== 'music') clearInterval(app._musicPoll); else if (M.sig() !== sig) ctx.rerender(); }, 400);
+    if (app.settings().music === false) {
+      body.appendChild(card(null, h('p', { class: 'note', style: { margin: '0 0 10px' } }, '배경음악이 꺼져 있습니다.'), btn('배경음악 켜기', () => { app.setSetting('music', true); M.apply(); ctx.rerender(); }, 'primary wide')));
+    }
+    const now = M.playing;
+    const list = h('div', { class: 'list' });
+    const mood = M.want && M.want[0] !== '@' ? MOOD_NAME[M.want] : null;
+    list.appendChild(item({ ic: 'globe', t: '상황별 자동 선곡', d: M.override ? '게임 상황에 맞춰 곡을 고릅니다' : mood ? `지금 분위기: ${mood}` : '게임 상황에 맞춰 곡을 고릅니다', cls: M.override ? '' : 'sel', onClick: () => { M.preview(null); ctx.rerender(); } }));
+    for (const m of Object.keys(MOODS)) {
+      for (const id of MOODS[m]) {
+        const T = TRACKS[id];
+        list.appendChild(item({ ic: now === id ? 'sound' : 'play', t: T.name, d: `${MOOD_NAME[m]} · ${T.desc}`, cls: M.override === id ? 'sel' : '', onClick: () => { M.preview(id); ctx.rerender(); } }));
+      }
+    }
+    body.appendChild(list);
+    body.appendChild(h('p', { class: 'note', style: { textAlign: 'center', margin: '12px 4px 0' } }, '모든 곡은 이 게임을 위해 작곡했고, 음원 파일 없이 기기에서 실시간으로 연주합니다. 곡을 고르면 이 화면을 닫을 때까지 반복합니다.'));
+    body.appendChild(h('div', { class: 'pad-bottom' }));
+  },
+  onClose(app) { clearInterval(app._musicPoll); app.music?.preview(null); },
 };
 
 const KIND_IC = { war: 'swords', peace: 'handshake', capitulate: 'flag', annex: 'crown', faction: 'shield', diplo: 'globe', focus: 'focus', mil: 'military', event: 'news' };

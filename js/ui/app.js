@@ -171,6 +171,7 @@ export class App {
   }
   onNews(n) {
     const G = this.G;
+    this.music?.onNews(n);
     const mine = n.tags?.includes(G.player);
     if (n.quiet) return;
     if (n.big || mine) this.toast(n.text, n.kind === 'war' || n.kind === 'capitulate' ? 'war' : n.kind === 'peace' ? 'peace' : '');

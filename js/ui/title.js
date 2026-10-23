@@ -32,6 +32,12 @@ export function showTitle(app) {
   const G = app.G;
   let selected = 'GER';
   const wrap = h('div', { class: 'ttl-wrap' });
+  // 배경음악 켜고 끄기(첫 탭에서 음악이 시작된다)
+  const snd = h('button', { class: 'ibtn ttl-snd', 'aria-label': '배경음악' });
+  const sndIcon = () => { snd.innerHTML = icon(app.settings().music === false ? 'mute' : 'sound'); };
+  onTap(snd, () => { app.setSetting('music', app.settings().music === false); app.music?.apply(); sndIcon(); });
+  sndIcon();
+  el.appendChild(snd);
   wrap.appendChild(h('div', { class: 'ttl-logo' }, h('div', { class: 't1' }, '철혈전선'), h('div', { class: 't2' }, '1936 – 1945 · 제2차 세계대전 대전략'), h('div', { class: 'rule' })));
   // 이어하기
   const auto = app.saveMeta('auto');

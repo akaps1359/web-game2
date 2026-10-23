@@ -1,5 +1,5 @@
-// 오프라인 캐시: 처음 받은 파일을 저장해 두고, 다음 실행부터는 캐시를 먼저 쓰면서 백그라운드로 갱신한다.
-const CACHE = 'chulhyeol-v1';
+// 오프라인 캐시: 온라인이면 항상 서버의 최신 파일을 쓰고(업데이트가 바로 반영되도록), 받은 파일은 저장해 두었다가 오프라인일 때 쓴다.
+const CACHE = 'chulhyeol-v2';
 const CORE = ['./', 'index.html', 'css/main.css', 'js/main.js', 'data/map.json', 'icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -11,9 +11,10 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(caches.open(CACHE).then(async (cache) => {
-    const hit = await cache.match(req);
-    const net = fetch(req).then((res) => { if (res.ok) cache.put(req, res.clone()); return res; }).catch(() => hit);
-    return hit || net;
-  }));
+  // no-cache: 브라우저 HTTP 캐시도 서버에 바뀌었는지 확인하게 한다(바뀌지 않았으면 304로 가볍게 끝난다)
+  const net = req.mode === 'navigate' ? fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(req, { cache: 'no-cache' });
+  e.respondWith(net.then((res) => {
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+    return res;
+  }).catch(() => caches.match(req).then((hit) => hit || caches.match('index.html'))));
 });

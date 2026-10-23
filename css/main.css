@@ -274,6 +274,7 @@ button { font-family: inherit; color: inherit; }
 #title { position: absolute; inset: 0; z-index: 80; display: none; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: radial-gradient(140% 70% at 50% 0%, rgba(30,40,55,.9), rgba(8,10,14,.97) 70%); }
 #title.show { display: block; }
 .ttl-wrap { min-height: 100%; padding: calc(var(--sat) + 30px) 18px calc(var(--sab) + 24px); display: flex; flex-direction: column; }
+.ttl-snd { position: absolute; top: calc(var(--sat) + 12px); right: calc(var(--sar) + 14px); z-index: 2; }
 .ttl-logo { text-align: center; margin: 12px 0 18px; }
 .ttl-logo .t1 { font-family: var(--serif); font-size: 52px; font-weight: 800; letter-spacing: 14px; padding-left: 14px; color: var(--paper); text-shadow: 0 3px 0 #000, 0 0 40px rgba(201,162,74,.35); }
 .ttl-logo .t2 { font-family: var(--serif); color: var(--brass); letter-spacing: 3px; font-size: 12.5px; margin-top: 6px; white-space: nowrap; }
