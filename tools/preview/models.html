@@ -1,0 +1,74 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>모델 전시</title>
+<style>html,body{margin:0;background:#120e0c;color:#c8b8a0;font:11px system-ui,sans-serif}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// 모델 전시: ?set=classes|monsters|bosses|npcs|gear&anim=idle|walk|attack|cast|hit|block|death|special&t=0.4&face=0.785&s=2.4&cols=4&cell=150&from=0&n=40
+import { drawActor } from '../../js/render/figures.js';
+import { MONSTERS, BOSSES, FAMILIES, monsterLook } from '../../js/data/monsters.js';
+import { NPCS } from '../../js/game/npcs.js';
+import { Hero, newHeroData } from '../../js/game/hero.js';
+import { makeItem } from '../../js/game/items.js';
+
+const Q = new URLSearchParams(location.search);
+const set = Q.get('set') || 'classes', anim = Q.get('anim') || 'idle';
+const T = +(Q.get('t') ?? 0.45), face = +(Q.get('face') ?? Math.PI / 4), S = +(Q.get('s') || 2.4);
+const cols = +(Q.get('cols') || 4), cell = +(Q.get('cell') || 150), cellH = +(Q.get('ch') || cell * 1.25);
+const from = +(Q.get('from') || 0), n = +(Q.get('n') || 999);
+
+function heroLook(cls, gear) {
+  const h = new Hero(newHeroData(cls, 'x'), null);
+  for (const b of gear) { const it = makeItem(b); h.data.inv.push(it); h.equip(it); }
+  h.recalc();
+  return h.buildLook();
+}
+const list = [];
+if (set === 'classes') {
+  list.push(['전사(시작)', heroLook('warrior', [])], ['로그(시작)', heroLook('rogue', [])], ['소서러(시작)', heroLook('sorcerer', [])]);
+  list.push(['전사 판금', heroLook('warrior', ['great_helm', 'full_plate_mail', 'bastard_sword', 'gothic_shield', 'gauntlets'])]);
+  list.push(['전사 사슬', heroLook('warrior', ['helm', 'chain_mail', 'battle_axe'])]);
+  list.push(['로그 가죽', heroLook('rogue', ['cap', 'studded_leather_armor', 'long_war_bow', 'leather_gloves'])]);
+  list.push(['소서러 로브', heroLook('sorcerer', ['crown', 'robe', 'war_staff'])]);
+  list.push(['소서러 망토', heroLook('sorcerer', ['skull_cap', 'cloak', 'long_staff'])]);
+} else if (set === 'monsters') {
+  for (const id in MONSTERS) list.push([MONSTERS[id].name, monsterLook(MONSTERS[id])]);
+} else if (set === 'families') {
+  for (const fid in FAMILIES) { const v = FAMILIES[fid].v[0]; list.push([MONSTERS[v[0]].name, monsterLook(MONSTERS[v[0]])]); }
+} else if (set === 'bosses') {
+  for (const id in BOSSES) { const B = BOSSES[id]; const lk = B.look || monsterLook(MONSTERS[FAMILIES[B.lookFrom[0]].v[B.lookFrom[1]][0]]); list.push([B.name, lk]); }
+} else if (set === 'weapons') {
+  for (const w of ['dagger', 'short_sword', 'falchion', 'bastard_sword', 'great_sword', 'axe', 'battle_axe', 'mace', 'morning_star', 'club', 'war_hammer', 'maul', 'long_bow', 'war_staff']) list.push([w, heroLook(w.endsWith('bow') ? 'rogue' : w.endsWith('staff') ? 'sorcerer' : 'warrior', [w])]);
+} else if (set === 'beasts') {
+  for (const id of ['scavenger', 'acid_beast', 'horned', 'fiend', 'cave_viper', 'fire_drake', 'gloom', 'frost_charger']) list.push([MONSTERS[id].name, monsterLook(MONSTERS[id])]);
+} else if (set === 'npcs') {
+  for (const id in NPCS) list.push([NPCS[id].name, NPCS[id].look]);
+}
+let items = list.slice(from, from + n);
+// faces=N: 항목마다 N방향으로 돌려 보기, ts=a,b,c: 동작 시점 여러 개
+const nf = +(Q.get('faces') || 0), ts = (Q.get('ts') || '').split(',').filter(Boolean).map(Number);
+if (nf) items = items.flatMap(([nm, lk]) => Array.from({ length: nf }, (_, k) => [nm + ' ' + k, lk, Math.PI / 4 + k * Math.PI * 2 / nf]));
+if (ts.length) items = items.flatMap(([nm, lk, fc]) => ts.map((t) => [nm + ' ' + t, lk, fc, t]));
+const rows = Math.ceil(items.length / cols);
+const cv = document.getElementById('c'), dpr = window.devicePixelRatio || 1;
+const W = cols * cell, H = rows * cellH;
+cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+const g = cv.getContext('2d');
+g.scale(dpr, dpr);
+function draw(time) {
+  g.fillStyle = '#120e0c'; g.fillRect(0, 0, W, H);
+  items.forEach(([name, look, fc, tt], i) => {
+    const cx = (i % cols) * cell + cell / 2, cy = Math.floor(i / cols) * cellH + cellH * 0.8 + +(Q.get('oy') || 0);
+    // 바닥 타일 느낌
+    const gr = g.createRadialGradient(cx, cy, 4, cx, cy, cell * 0.55);
+    gr.addColorStop(0, '#4a3e34'); gr.addColorStop(1, '#16110e');
+    g.fillStyle = gr; g.beginPath(); g.ellipse(cx, cy, cell * 0.48, cell * 0.24, 0, 0, Math.PI * 2); g.fill();
+    const dur = 1;
+    const T2 = tt ?? T;
+    const a = { id: i + 1, look, face: fc ?? face, flash: 0, portrait: true, anim: { name: anim === 'walk' || anim === 'run' ? 'idle' : anim, t: T2 * dur, dur, style: Q.get('style') || undefined, hitAt: Q.get('hit') ? +Q.get('hit') : undefined }, moving: anim === 'walk' || anim === 'run', walkPh: T2 * Math.PI * 2, gph: T2, ggb: anim === 'run' ? 1 : 0, fallDir: +(Q.get('fd') || 1), team: 1, speed: anim === 'run' ? 3 : 1 };
+    drawActor(g, a, cx, cy, S, time);
+    g.fillStyle = '#c8b8a0'; g.textAlign = 'center'; g.fillText(name, cx, Math.floor(i / cols) * cellH + 12);
+  });
+}
+draw(+(Q.get('time') || 1.3));
+document.title = 'done';
+</script></body></html>

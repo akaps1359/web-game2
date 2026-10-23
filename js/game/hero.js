@@ -159,10 +159,12 @@ export class Hero {
   // 겉모습: 장비가 보이게
   buildLook() {
     const C = this.C, eq = this.data.equip;
-    const look = { ...C.look, cols: { ...C.look.cols } };
+    const look = { ...C.look, cols: { ...C.look.cols }, female: C.gender === 'f' };
     const w = eq.weapon ? BASE[eq.weapon.b] : null;
     if (w) {
       look.wtype = (eq.weapon.u && eq.weapon.u === 'q_cleaver') ? 'cleaver' : w.wt; look.wlen = w.wlen || 0; look.wcol = w.icon?.c1 || '#c8ccd4'; look.wwide = w.wwide || 1; look.gem = w.gem;
+      look.twoHand = w.hands === 2 && w.wt !== 'bow' && w.wt !== 'staff';
+      look.double = !!w.icon?.double; look.wood = w.icon?.c2;
       if (w.cat === 'bow') look.wcol = w.icon?.c2 || '#7a5530';
       if (eq.weapon.q === 'unique') look.wglow = 'rgba(255,200,100,0.6)';
       else if (eq.weapon.q === 'rare') look.wglow = null;
@@ -171,6 +173,7 @@ export class Hero {
     look.shield = s ? { ...s.shield } : null;
     const b = eq.body ? BASE[eq.body.b] : null;
     if (b) {
+      look.armor = b.icon?.v === 'robe' ? 'cloth' : b.icon?.v;
       if (b.torso) { look.cols.torso = b.torso; look.cols.arms = b.weight === 'L' ? look.cols.arms : b.torso; }
       if (b.pads) { look.pads = true; look.cols.pad = b.pads; }
       if (b.weight === 'H') { look.cols.legs = shadeHex(b.torso, 0.85); look.cols.fore = b.torso; }

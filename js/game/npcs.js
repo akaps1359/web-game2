@@ -23,7 +23,7 @@ export const NPCS = {
   },
   healer: {
     name: '마렌', role: '치유사',
-    look: H(C('#e0b8a0', '#d8d8c8', '#c8c8b8', '#5a4a3a', { robe: '#d0d0c0', hair: '#7a4a2a' }), { robe: true, ponytail: true, waist: 0.85, bulk: 0.88, h: 0.97 }),
+    look: H(C('#e0b8a0', '#d8d8c8', '#c8c8b8', '#5a4a3a', { robe: '#d0d0c0', hair: '#7a4a2a' }), { robe: true, ponytail: true, waist: 0.85, bulk: 0.88, h: 0.97, female: true, calm: true }),
     greet: ['다쳤군요. 이리 와요, 상처를 봐 줄게요.', '무사히 돌아와서 다행이에요.', '빛이 당신과 함께하길.'],
     gossip: [
       '세라핀 성녀님은 제 스승이었어요. 그분이 돌아오지 않은 날을 아직도 기억해요.',
@@ -35,7 +35,7 @@ export const NPCS = {
   },
   witch: {
     name: '이졸데', role: '마녀',
-    look: H(C('#c8b0a0', '#3a2a4a', '#2a1a3a', '#1a1018', { robe: '#2e2040', hair: '#1a1a1a' }), { robe: true, helm: { type: 'hood', color: '#2a1e3a' }, waist: 0.85, bulk: 0.88, wtype: 'staff', wlen: 50, gem: '#c060ff' }),
+    look: H(C('#c8b0a0', '#3a2a4a', '#2a1a3a', '#1a1018', { robe: '#2e2040', hair: '#1a1a1a' }), { robe: true, helm: { type: 'hood', color: '#2a1e3a' }, waist: 0.85, bulk: 0.88, wtype: 'staff', wlen: 50, gem: '#c060ff', female: true }),
     greet: ['어서 와. 무엇이 필요하지?', '공허의 냄새가 네게 묻어 있구나.', '마나가 모자라 보이는군.'],
     gossip: [
       '세라핀이 찾던 왕관… 그건 왕관이 아니야. 감옥이지.',
@@ -70,7 +70,7 @@ export const NPCS = {
   },
   maid: {
     name: '테사', role: '여급',
-    look: H(C('#e8c0a8', '#7a2a2a', '#5a4a3a', '#3a2a1a', { robe: '#6a2424', hair: '#c08040' }), { robe: true, ponytail: true, waist: 0.8, bulk: 0.85, h: 0.95 }),
+    look: H(C('#e8c0a8', '#7a2a2a', '#5a4a3a', '#3a2a1a', { robe: '#6a2424', hair: '#c08040' }), { robe: true, ponytail: true, waist: 0.8, bulk: 0.85, h: 0.95, female: true, calm: true }),
     greet: ['안녕하세요! 오늘도 무사하셨네요.', '할머니가 그러셨어요. 지하의 문은 열면 안 된다고.', '조심하세요, 정말로요.'],
     gossip: [
       '우리 할머니는 역병 때 세라핀 성녀님을 직접 봤대요. 정말 아름다우셨대요.',

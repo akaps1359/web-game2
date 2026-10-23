@@ -98,7 +98,7 @@ export const FAMILIES = {
   },
   goatman: {
     name: '산양족', cls: 'demon', ai: 'goat', walk: 0.4, atk: 0.6, hit: 0.4, rec: 0.3, sfx: 'mon_goat', die: 'mon_die_big', doors: true,
-    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.1, hornCol: '#d8ccb0', legs: 0.95, wtype: 'mace', wlen: 24, wcol: '#8a8a90', h: 1.05, bulk: 1.1, tail: true }),
+    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.1, hornCol: '#d8ccb0', legs: 0.95, wtype: 'mace', wlen: 24, wcol: '#8a8a90', h: 1.05, bulk: 1.1, tail: true, hooves: true }),
     v: [
       ['flesh_clan', '살점 부족', [4, 6], 8, [30, 45], 40, 50, [4, 10], '----', 460, 0, ['#8a6a54', '#6a4a34', '#4a3424']],
       ['stone_clan', '바위 부족', [5, 7], 10, [40, 55], 40, 60, [6, 12], 'R---', 685, 1, ['#7a7a76', '#5a5a56', '#3a3a38']],
@@ -108,7 +108,7 @@ export const FAMILIES = {
   },
   goat_archer: {
     name: '산양족 궁수', cls: 'demon', ai: 'archer', walk: 0.4, atk: 0.8, hit: 0.65, rec: 0.3, sfx: 'mon_goat', die: 'mon_die_big', missile: 'arrow', doors: true,
-    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.0, hornCol: '#d8ccb0', wtype: 'bow', wcol: '#5a4028', h: 1.0, tail: true }),
+    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.0, hornCol: '#d8ccb0', wtype: 'bow', wcol: '#5a4028', h: 1.0, tail: true, hooves: true }),
     v: [
       ['flesh_archer', '살점 부족 궁수', [4, 6], 8, [20, 35], 35, 35, [1, 7], '----', 448, 0, ['#8a6a54', '#6a4a34', '#4a3424']],
       ['stone_archer', '바위 부족 궁수', [5, 7], 10, [30, 40], 35, 40, [2, 9], 'R---', 645, 1, ['#7a7a76', '#5a5a56', '#3a3a38']],
@@ -148,7 +148,7 @@ export const FAMILIES = {
   },
   magma: {
     name: '마그마 악마', cls: 'demon', ai: 'caster_melee', walk: 0.5, atk: 0.7, hit: 0.35, rec: 0.35, sfx: 'mon_demon', die: 'mon_die_demon', missile: 'fireball', doors: true, dtype: 'fire',
-    look: (c) => human(C(c[0], c[1], c[1], c[0]), { h: 1.15, bulk: 1.3, shoulders: 1.2, horns: 0.6, glowEyes: '#ffe040', wtype: 'claw', wlen: 10, wcol: '#ffa040' }),
+    look: (c) => human(C(c[0], c[1], c[1], c[0]), { h: 1.15, bulk: 1.3, shoulders: 1.2, horns: 0.6, glowEyes: '#ffe040', wtype: 'claw', wlen: 10, wcol: '#ffa040', cracks: '#ff7a20', rock: true }),
     v: [
       ['magma', '마그마 악마', [8, 9], 13, [50, 70], 45, 45, [2, 10], 'IR--', 1076, 0, ['#4a2a20', '#2a1810'], { glow: [255, 120, 40] }],
       ['bloodstone', '핏빛 돌', [8, 10], 14, [55, 75], 45, 50, [2, 12], 'II--', 1309, 1, ['#5a1a1a', '#3a1010'], { glow: [255, 60, 40] }],
@@ -208,7 +208,7 @@ export const FAMILIES = {
   },
   succubus: {
     name: '서큐버스', cls: 'demon', ai: 'kite', walk: 0.4, atk: 0.8, hit: 0.5, rec: 0.35, sfx: 'mon_cast', die: 'mon_die_demon', missile: 'bloodstar', doors: true, dtype: 'magic',
-    look: (c) => human(C(c[0], c[1], c[0], c[1], { hair: c[2], wing: c[1] }), { wings: true, wingS: 1.0, horns: 0.7, hornCol: '#2a1a1a', ponytail: true, waist: 0.8, bulk: 0.85, glowEyes: '#ff4060' }),
+    look: (c) => human(C(c[0], c[1], c[0], c[1], { hair: c[2], wing: c[1] }), { wings: true, wingS: 1.0, horns: 0.7, hornCol: '#2a1a1a', ponytail: true, waist: 0.8, bulk: 0.85, glowEyes: '#ff4060', female: true }),
     v: [
       ['succubus', '서큐버스', [12, 14], 24, [120, 150], 60, 100, [1, 20], 'R---', 3696, 0, ['#c07a7a', '#5a1a2a', '#2a0a10']],
       ['snow_witch', '눈의 마녀', [13, 15], 26, [135, 175], 65, 110, [1, 24], '--RR', 4084, 1, ['#b0c0d8', '#3a4a6a', '#e0e8ff']],
@@ -252,7 +252,7 @@ export const BOSSES = {
   },
   seraphine: {
     name: '타락한 성녀 세라핀', fam: 'mage', lvl: 35, ilvl: 30, hp: 600, ac: 0, hit: 120, dmg: [30, 50], res: 'IRR-', xp: 9000, ai: 'mage', spell: 'bloodstar', walk: 0.35, atk: 0.9, hit2: 0.5, rec: 0.3,
-    look: human(C('#d8c0b0', '#e8e0d0', '#e8e0d0', '#e8e0d0', { robe: '#d8d0c0', hair: '#f0e8d0' }), { robe: true, robeFlare: 1.4, helm: { type: 'hood', color: '#c8c0b0' }, wings: true, wingS: 1.3, glowEyes: '#ff2040', wtype: 'staff', wlen: 56, gem: '#ff2040', fly: true, h: 1.1, scale: 1.05, barZ: 90 }),
+    look: human(C('#d8c0b0', '#e8e0d0', '#e8e0d0', '#e8e0d0', { robe: '#d8d0c0', hair: '#f0e8d0' }), { robe: true, robeFlare: 1.4, helm: { type: 'hood', color: '#c8c0b0' }, wings: true, wingS: 1.3, glowEyes: '#ff2040', wtype: 'staff', wlen: 56, gem: '#ff2040', fly: true, h: 1.1, scale: 1.05, barZ: 90, female: true }),
     sfx: 'boss_laugh', die: 'mon_die_demon', quest: 'seraphine', dtype: 'magic',
   },
   velgath: {

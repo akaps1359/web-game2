@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#000"><canvas id="c" width="800" height="800"></canvas>
+<script type="module">
+// 그리기 비용 재기: ?set=… 의 괴물을 30마리씩 그려 평균 시간을 잰다
+import { drawActor } from '../../js/render/figures.js';
+import { MONSTERS, monsterLook } from '../../js/data/monsters.js';
+import { Hero, newHeroData } from '../../js/game/hero.js';
+import { makeItem } from '../../js/game/items.js';
+const Q = new URLSearchParams(location.search);
+const cv = document.getElementById('c'), g = cv.getContext('2d', { willReadFrequently: true });
+const hero = (cls, gear) => { const h = new Hero(newHeroData(cls, 'x'), null); for (const b of gear) { const it = makeItem(b); h.data.inv.push(it); h.equip(it); } h.recalc(); return h.buildLook(); };
+const sets = {
+  skeleton: monsterLook(MONSTERS.skeleton), zombie: monsterLook(MONSTERS.zombie), knight: monsterLook(MONSTERS.black_knight), goat: monsterLook(MONSTERS.flesh_clan),
+  quad: monsterLook(MONSTERS.scavenger), bat: monsterLook(MONSTERS.fiend), snake: monsterLook(MONSTERS.cave_viper), mage: monsterLook(MONSTERS.counselor),
+  warrior: hero('warrior', ['full_plate_mail', 'great_helm', 'bastard_sword', 'gothic_shield']),
+};
+const out = {};
+for (const [name, look] of Object.entries(sets)) {
+  const actors = [];
+  for (let i = 0; i < 30; i++) actors.push({ id: i + 1, look, face: i * 0.7, anim: { name: i % 3 === 0 ? 'attack' : 'idle', t: (i % 10) / 10, dur: 1 }, moving: i % 3 === 1, walkPh: i, speed: 2, flash: 0, team: 1 });
+  let js = 0;
+  const run = () => { g.fillStyle = '#222'; g.fillRect(0, 0, 800, 800); const t = performance.now(); actors.forEach((a, i) => drawActor(g, a, 60 + (i % 6) * 130, 140 + Math.floor(i / 6) * 150, 1.5, 1 + i * 0.1)); js += performance.now() - t; g.getImageData(0, 0, 1, 1); };
+  for (let k = 0; k < 3; k++) run();
+  js = 0;
+  const t0 = performance.now();
+  for (let k = 0; k < 10; k++) run();
+  out[name] = ((performance.now() - t0) / 10 / 30 * 1000).toFixed(0) + '/' + (js / 10 / 30 * 1000).toFixed(0);
+}
+document.title = 'done';
+window.__bench = out;
+</script></body></html>
