@@ -1,5 +1,5 @@
 // 제목 화면: 캐릭터 고르기·만들기(가로 화면: 두 단)
-import { $, el, btn, onTap, canvasFor, uiDpr } from './dom.js';
+import { $, el, btn, onTap, canvasFor, UI_DPR } from './dom.js';
 import { drawPortrait } from '../render/figures.js';
 import { CLASSES } from '../data/classes.js';
 import { listChars, deleteChar } from '../core/save.js';
@@ -139,7 +139,7 @@ export class Title {
     this.t += dt;
     const g = this.bg.g, W = window.innerWidth, H = window.innerHeight, t = this.t;
     // 화면을 돌리면 배경 캔버스도 새 크기로
-    const c = this.bg.c, dpr = uiDpr();
+    const c = this.bg.c, dpr = UI_DPR;
     if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) {
       c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
       c.style.width = W + 'px'; c.style.height = H + 'px';

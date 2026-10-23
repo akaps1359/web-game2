@@ -6,7 +6,7 @@ import { J, WD, DIM, newPose, computePose, solveHuman, setDims, gaitCycle, attac
 import { drawHuman } from './fig/human.js';
 import { drawSmear } from './fig/gear.js';
 import { drawBeast, beastCycle } from './fig/beasts.js';
-import { pixEllipse, SpritePass } from './pixel.js';
+import { ART, pixEllipse, SpritePass } from './pixel.js';
 import { makeCanvas } from './noise.js';
 
 const P = newPose();
@@ -61,8 +61,8 @@ export function actorAlpha(a) {
   if (a.fade != null) alpha *= a.fade;
   return alpha;
 }
-// part: 0 전부, 1 바닥에 깔리는 것(그림자·대상 고리·기운)만, 2 몸만(투명도 없이 — 도트 그래픽은 다듬은 뒤 통째로 흐리게),
-// 3 바닥에 깔리는 것을 도트로(대상 고리를 각진 점으로)
+// part: 0 전부(모델 전시·성능 재기 도구), 2 몸만(투명도 없이 — 다듬은 뒤 통째로 흐리게),
+// 3 바닥에 깔리는 것(그림자·각진 점 대상 고리·기운)만
 export function drawActor(g, a, px, py, s, time, part = 0) {
   const look = a.look;
   if (!look) return;
@@ -89,7 +89,7 @@ export function drawActor(g, a, px, py, s, time, part = 0) {
       g.beginPath(); g.ellipse(px, py, 20 * sc, 10 * sc, 0, 0, TAU); g.fill();
       g.globalAlpha = alpha;
     }
-    if (part === 1 || part === 3) { g.globalAlpha = 1; return; }
+    if (part === 3) { g.globalAlpha = 1; return; }
   }
   if (alpha <= 0.02) return;
   g.globalAlpha = part === 2 ? 1 : alpha;
@@ -163,13 +163,11 @@ export function drawCorpse(g, c, px, py, s) {
   g.globalAlpha = 1;
 }
 
-// 미리보기(초상화·캐릭터 선택 화면). 도트 그래픽이면 도트 한 칸 PART px로 작게 그려 다듬은 뒤 각진 그대로 키운다
-let PART = 0, PSP = null;
-export function setPortraitPixel(art) { PART = art; }
+// 초상화(캐릭터 선택·가방·대화): 도트 한 칸 ART px로 작게 그려 다듬은 뒤 각진 그대로 키운다
+let PSP = null;
 export function drawPortrait(g, look, x, y, s, time, anim = 'idle', face = Math.PI / 4) {
   const a = { id: 1, look, face, anim: { name: anim, t: (time % 1.2), dur: 1.2 }, flash: 0, portrait: true };
-  if (!PART) { drawActor(g, a, x, y, s, time); return; }
-  const sl = s / PART, { hw, up, dn } = figBox(look, sl * (look.scale || 1));
+  const sl = s / ART, { hw, up, dn } = figBox(look, sl * (look.scale || 1));
   if (!PSP) PSP = { sp: new SpritePass(), cv: makeCanvas(8, 8) };
   const cv = PSP.cv;
   cv.width = hw * 2; cv.height = up + dn;
@@ -178,6 +176,6 @@ export function drawPortrait(g, look, x, y, s, time, anim = 'idle', face = Math.
   PSP.sp.run(cg, 0, 0, hw * 2, up + dn, (sg) => drawActor(sg, a, hw, up, sl, time, 2));
   const sm = g.imageSmoothingEnabled;
   g.imageSmoothingEnabled = false;
-  g.drawImage(cv, x - hw * PART, y - up * PART, cv.width * PART, cv.height * PART);
+  g.drawImage(cv, x - hw * ART, y - up * ART, cv.width * ART, cv.height * ART);
   g.imageSmoothingEnabled = sm;
 }

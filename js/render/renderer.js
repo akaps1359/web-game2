@@ -1,15 +1,15 @@
-// 아이소메트릭 렌더러: 바닥 → (깊이순) 벽·물체·액터 → 어둠 → 빛 번짐 → 글자.
-// 도트 그래픽: 세상은 작은 판(기기 픽셀 P개 = 도트 한 칸)에 그려 각진 그대로 키우고, 글자만 원래 해상도로 그린다
+// 아이소메트릭 렌더러(도트 그래픽): 세상은 작은 판(기기 픽셀 P개 = 도트 한 칸)에 바닥 → (깊이순) 벽·물체·액터 →
+// 어둠 → 빛 번짐 순으로 그려 각진 그대로 키우고, 글자·체력 막대·이름표만 원래 해상도로 또렷하게 그린다
 import { TW, TH, isoX, isoY, clamp } from '../core/util.js';
 import { F_SEEN, F_VIS, F_LAVA } from '../game/level.js';
-import { buildTileset, WALL_H, glowSprite, setBandedGlow } from './tiles.js';
+import { buildTileset, WALL_H, glowSprite } from './tiles.js';
 import { makeCanvas } from './noise.js';
-import { drawActor, drawCorpse, actorAlpha, setPortraitPixel, figBox } from './figures.js';
+import { drawActor, drawCorpse, actorAlpha, figBox } from './figures.js';
 import { drawObject, drawDecal, drawGroundItem, objectLight, drawTorch } from './props.js';
-import { SpriteAtlas, SpritePass, pixEllipse, pixText } from './pixel.js';
+import { ART, SpriteAtlas, SpritePass, pixEllipse, pixText } from './pixel.js';
 import { FX } from './fx.js';
 
-// 도트 그래픽의 빛: 계단진 동심원 [시작, 끝, 세기]
+// 빛: 계단진 동심원 [시작, 끝, 세기]
 const LIGHT_BANDS = [[0, 0.3, 1], [0.3, 0.45, 0.86], [0.45, 0.56, 0.74], [0.56, 0.66, 0.6], [0.66, 0.75, 0.46], [0.75, 0.83, 0.33], [0.83, 0.9, 0.21], [0.9, 0.96, 0.11], [0.96, 1, 0.03]];
 
 export class Renderer {
@@ -25,22 +25,11 @@ export class Renderer {
     this.light = makeCanvas(8, 8); this.lg = this.light.getContext('2d');
     this.time = 0;
     this.labels = []; // 화면에 찍힌 바닥 아이템 이름표(터치 판정용)
-    this.pixel = false;
-    this.pixSize = 1.5; // 도트 한 칸 = CSS 1.5px
-    this.lo = null; this.lc = null; this.atlas = null; this.sp = null; this.corpseSpr = new WeakMap();
+    this.lo = makeCanvas(8, 8); this.lc = this.lo.getContext('2d', { alpha: false }); // 세상을 그리는 작은 판
+    this.atlas = new SpriteAtlas(); this.sp = new SpritePass(); this.corpseSpr = new WeakMap();
     this.resize();
   }
   setQuality(hi) { this.dpr = Math.min(window.devicePixelRatio || 1, hi ? 3 : 2); this.resize(); }
-  setPixel(on) {
-    on = !!on;
-    if (on === this.pixel) return;
-    this.pixel = on;
-    setBandedGlow(on);
-    setPortraitPixel(on ? this.pixSize : 0);
-    this.tilesets.clear(); this.RS = 0;
-    if (on && !this.sp) { this.atlas = new SpriteAtlas(); this.sp = new SpritePass(); }
-    this.resize();
-  }
   resize() {
     const r = this.cv.getBoundingClientRect();
     this.W = Math.max(1, r.width); this.H = Math.max(1, r.height);
@@ -48,33 +37,24 @@ export class Renderer {
     // 가로 화면: 높이(세로로 보이는 거리)에 맞춘다
     this.baseZoom = clamp(Math.min(this.W / 860, this.H / 440), 0.55, 1.4);
     this.applyZoom();
-    if (this.pixel) {
-      const lw = Math.ceil(this.cv.width / this.P), lh = Math.ceil(this.cv.height / this.P);
-      if (!this.lo) { this.lo = makeCanvas(lw, lh); this.lc = this.lo.getContext('2d', { alpha: false }); }
-      if (this.lo.width !== lw || this.lo.height !== lh) { this.lo.width = lw; this.lo.height = lh; }
-      this.light.width = lw; this.light.height = lh;
-    } else {
-      this.light.width = Math.ceil(this.W / 4); this.light.height = Math.ceil(this.H / 4);
-      // 타일 해상도: 화면 배율에 맞춘다
-      const RS = Math.max(1, Math.round(this.zoom * this.dpr * 1.15 * 2) / 2);
-      if (RS !== this.RS) { this.RS = RS; this.tilesets.clear(); }
-    }
+    const lw = Math.ceil(this.cv.width / this.P), lh = Math.ceil(this.cv.height / this.P);
+    if (this.lo.width !== lw || this.lo.height !== lh) { this.lo.width = lw; this.lo.height = lh; }
+    this.light.width = lw; this.light.height = lh;
     this.anchorY = 0.5;
   }
-  // 도트 그래픽: 기기 픽셀 P개가 도트 한 칸. 타일 반폭이 짝수 도트가 되게 배율을 고른다(타일 이음매·흔들림 없이)
+  // 기기 픽셀 P개가 도트 한 칸(CSS 1.5px). 타일 반폭이 짝수 도트가 되게 배율을 고른다(타일 이음매·흔들림 없이)
   applyZoom() {
     const z = this.baseZoom * (this.userZoom || 1);
-    if (!this.pixel) { this.zoom = z; return; }
-    this.P = Math.max(1, Math.round(this.pixSize * this.dpr));
+    this.P = Math.max(1, Math.round(ART * this.dpr));
     this.sl = clamp(Math.round(16 * z * this.dpr / this.P), 3, 40) / 16;
     this.zoom = this.sl * this.P / this.dpr;
-    this.RS = this.sl;
   }
   setUserZoom(z) { this.userZoom = clamp(z, 0.7, 1.7); this.applyZoom(); }
+  // 타일 묶음은 배율(도트 단위)마다 따로 굽는다
   tileset(theme) {
-    const key = this.pixel ? theme + ':' + this.RS : theme;
+    const key = theme + ':' + this.sl;
     let t = this.tilesets.get(key);
-    if (!t) { t = buildTileset(theme, this.RS, this.pixel ? 3 : 0); this.tilesets.set(key, t); }
+    if (!t) { t = buildTileset(theme, this.sl); this.tilesets.set(key, t); }
     return t;
   }
   get scale() { return this.zoom * this.dpr; }
@@ -98,15 +78,14 @@ export class Renderer {
 
   draw(game, dt) {
     this.time += dt;
-    // 도트 그래픽이면 세상은 작은 판(lc)에, 배율 s는 도트 단위
-    const pix = this.pixel, K = pix ? this.P : 1;
-    const g = pix ? this.lc : this.g, L = game.level, P = game.player, s = pix ? this.sl : this.scale;
-    const cw = pix ? this.lo.width : this.cv.width, ch = pix ? this.lo.height : this.cv.height;
+    // 세상은 작은 판(lc)에, 배율 s는 도트 단위. K: 도트 한 칸의 기기 픽셀
+    const K = this.P, g = this.lc, L = game.level, P = game.player, s = this.sl;
+    const cw = this.lo.width, ch = this.lo.height;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     g.fillStyle = '#000'; g.fillRect(0, 0, cw, ch);
-    if (pix) g.imageSmoothingEnabled = false;
-    if (!L) { if (pix) this.present(); return; }
+    g.imageSmoothingEnabled = false;
+    if (!L) { this.present(); return; }
     const town = L.theme === 'town';
     const T = this.tileset(L.theme);
     // 보이는 타일 범위
@@ -115,14 +94,13 @@ export class Renderer {
     let x0 = Math.floor(Math.min(...corners.map((c) => c.x))) - pad, x1 = Math.ceil(Math.max(...corners.map((c) => c.x))) + pad;
     let y0 = Math.floor(Math.min(...corners.map((c) => c.y))) - pad, y1 = Math.ceil(Math.max(...corners.map((c) => c.y))) + pad + 4;
     x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(L.w - 1, x1); y1 = Math.min(L.h - 1, y1);
-    const fw = TW * s, fh = TH * s, wh = (WALL_H + TH) * s, sh = (14 + TH) * s;
-    // 벽 그림의 위쪽 끝(타일 중심에서)과 높이. 도트는 그림 크기 그대로, 정수 도트 자리에
-    const wTop = pix ? Math.round((WALL_H + TH / 2) * s) : wh - fh / 2, sTop = pix ? Math.round((14 + TH / 2) * s) : sh - fh / 2;
+    const fw = TW * s, fh = TH * s, wh = (WALL_H + TH) * s;
+    // 벽 그림의 위쪽 끝(타일 중심에서). 그림은 제 크기 그대로 정수 도트 자리에
+    const wTop = Math.round((WALL_H + TH / 2) * s), sTop = Math.round((14 + TH / 2) * s);
     const camIX = isoX(this.cam.x, this.cam.y), camIY = isoY(this.cam.x, this.cam.y);
     const [shx, shy] = this.fx.shakeOffset();
-    let ox = this.cv.width / 2 / K - camIX * s + shx * this.dpr / K, oy = this.cv.height * this.anchorY / K - camIY * s + shy * this.dpr / K;
-    // 도트: 카메라를 도트 단위로 맞춰 타일 무늬가 움직일 때 일렁이지 않게
-    if (pix) { ox = Math.round(ox); oy = Math.round(oy); }
+    // 카메라를 도트 단위로 맞춰 타일 무늬가 움직일 때 일렁이지 않게
+    const ox = Math.round(this.cv.width / 2 / K - camIX * s + shx * this.dpr / K), oy = Math.round(this.cv.height * this.anchorY / K - camIY * s + shy * this.dpr / K);
     const W = L.w, flags = L.flags, floor = L.floor, wall = L.wall;
     const t = this.time;
     // 빛이 닿는 칸만 그린다(던전의 나머지는 어차피 거의 검다)
@@ -162,7 +140,7 @@ export class Renderer {
       if (c.x < x0 - 1 || c.x > x1 + 1 || c.y < y0 - 1 || c.y > y1 + 1) continue;
       const k = Math.round(c.y) * W + Math.round(c.x);
       if (!(flags[k] & F_VIS) && !town) continue;
-      (pix ? this.pixCorpse : drawCorpse).call(this, g, c, ox + (c.x - c.y) * (TW / 2) * s, oy + (c.x + c.y) * (TH / 2) * s, s);
+      this.pixCorpse(g, c, ox + (c.x - c.y) * (TW / 2) * s, oy + (c.x + c.y) * (TH / 2) * s, s);
     }
     this.fx.drawGround(g, ox, oy, s);
     mark('decals');
@@ -203,12 +181,10 @@ export class Renderer {
     }
     this.fx.collect(this, x0, y0, x1, y1);
     this.list.sort((a, b) => a.d - b.d);
-    // 도트 그래픽: 보이는 인물·괴물의 몸을 먼저 한 판에 모아 그려 한꺼번에 다듬는다
-    if (pix) {
-      this.atlas.begin();
-      for (const e of this.list) if (e.k === 3) e.b = this.pixPrep(e.a, s, t);
-      this.atlas.render();
-    }
+    // 보이는 인물·괴물의 몸을 먼저 한 판에 모아 그려 한꺼번에 다듬는다
+    this.atlas.begin();
+    for (const e of this.list) if (e.k === 3) e.b = this.pixPrep(e.a, s, t);
+    this.atlas.render();
     mark('collect');
     for (const e of this.list) {
       switch (e.k) {
@@ -223,14 +199,13 @@ export class Renderer {
             const dd = x + y - pd, dx = Math.abs(x - y - pxy);
             cut = dd > 0.5 && dd < 6.5 && dx < 2.6 + dd * 0.15;
           }
-          const wi = vis ? T.walls[wall[k]] : T.wallsDim[wall[k]], wdh = pix ? wi.height : wh;
+          const wi = vis ? T.walls[wall[k]] : T.wallsDim[wall[k]];
           if (cut) {
-            const si = vis ? T.short[wall[k]] : T.shortDim[wall[k]];
-            g.drawImage(si, px - fw / 2, py - sTop, fw, pix ? si.height : sh);
+            g.drawImage(vis ? T.short[wall[k]] : T.shortDim[wall[k]], px - fw / 2, py - sTop);
             g.globalAlpha = 0.16;
-            g.drawImage(wi, px - fw / 2, py - wTop, fw, wdh);
+            g.drawImage(wi, px - fw / 2, py - wTop);
             g.globalAlpha = 1;
-          } else g.drawImage(wi, px - fw / 2, py - wTop, fw, wdh);
+          } else g.drawImage(wi, px - fw / 2, py - wTop);
           break;
         }
         case 2: {
@@ -244,8 +219,7 @@ export class Renderer {
         case 3: {
           const a = e.a, px = ox + (a.x - a.y) * (TW / 2) * s, py = oy + (a.x + a.y) * (TH / 2) * s;
           if (a.z) { g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(px, py, 14 * s, 7 * s, 0, 0, Math.PI * 2); g.fill(); }
-          if (pix) this.pixActor(g, a, px, py - (a.z || 0) * s, s, t, e.b);
-          else drawActor(g, a, px, py - (a.z || 0) * s, s, t);
+          this.pixActor(g, a, px, py - (a.z || 0) * s, s, t, e.b);
           break;
         }
         case 4: {
@@ -278,8 +252,8 @@ export class Renderer {
     mark('glow');
     // 상호작용 대상의 금빛 고리
     this.drawFocus(g, game, ox, oy, s);
-    // 5) 글자·체력 막대·이름표(도트 그래픽이어도 원래 해상도로 또렷하게)
-    if (pix) this.present();
+    // 5) 판을 키워 화면에, 글자·체력 막대·이름표는 원래 해상도로 또렷하게
+    this.present();
     this.fx.drawTop(this.g, ox * K, oy * K, s * K);
     this.drawLabels(game, L, ox * K, oy * K, s * K, x0, y0, x1, y1, town);
     mark('top');
@@ -292,7 +266,7 @@ export class Renderer {
     G.drawImage(this.lo, 0, 0, lw, lh, 0, 0, lw * this.P, lh * this.P);
     G.imageSmoothingEnabled = true;
   }
-  // 도트 그래픽의 인물·괴물: 몸은 판에 칸을 잡아 그린다(발이 칸의 (hw, up))
+  // 인물·괴물: 몸은 판에 칸을 잡아 그린다(발이 칸의 (hw, up))
   pixPrep(a, s, t) {
     const look = a.look;
     if (!look || actorAlpha(a) <= 0.02) return null;
@@ -326,10 +300,7 @@ export class Renderer {
     if (!f || f.kind === 'item') return;
     const fx = ox + (f.x - f.y) * (TW / 2) * s, fy = oy + (f.x + f.y) * (TH / 2) * s;
     const k = 0.5 + 0.5 * Math.sin(performance.now() / 160);
-    const col = `rgba(240,216,152,${0.55 + 0.35 * k})`;
-    if (this.pixel) { pixEllipse(g, Math.round(fx), Math.round(fy), Math.round((18 + 3 * k) * s), Math.round((9 + 1.5 * k) * s), col); return; }
-    g.strokeStyle = col; g.lineWidth = 2 * this.dpr;
-    g.beginPath(); g.ellipse(fx, fy, (18 + 3 * k) * s, (9 + 1.5 * k) * s, 0, 0, Math.PI * 2); g.stroke();
+    pixEllipse(g, Math.round(fx), Math.round(fy), Math.round((18 + 3 * k) * s), Math.round((9 + 1.5 * k) * s), `rgba(240,216,152,${0.55 + 0.35 * k})`);
   }
 
   litMask(game, L, x0, y0, x1, y1, town) {
@@ -363,9 +334,9 @@ export class Renderer {
     return true;
   }
 
-  // 어둠 위에 광원 구멍을 뚫는다(1/4 해상도에서 그리고 부드럽게 늘린다. 도트 그래픽은 같은 해상도에서 계단진 동심원으로)
+  // 어둠 위에 광원 구멍을 뚫는다(세상 판과 같은 해상도에서 계단진 동심원으로)
   drawLighting(g, game, L, ox, oy, s, x0, y0, x1, y1, town) {
-    const pix = this.pixel, lg = this.lg, lw = this.light.width, lh = this.light.height, q = pix ? 1 : 1 / (4 * this.dpr);
+    const lg = this.lg, lw = this.light.width, lh = this.light.height;
     const amb = town ? (game.townDark ?? 0.32) : 0.965;
     lg.globalCompositeOperation = 'source-over';
     lg.clearRect(0, 0, lw, lh);
@@ -374,20 +345,12 @@ export class Renderer {
     lg.globalCompositeOperation = 'destination-out';
     const t = this.time;
     const hole = (x, y, r, power = 1, z = 18) => {
-      const px = (ox + (x - y) * (TW / 2) * s) * q, py = (oy + (x + y) * (TH / 2) * s - z * s) * q;
-      const R = r * (TW / 2) * s * q * 1.05;
+      const px = ox + (x - y) * (TW / 2) * s, py = oy + (x + y) * (TH / 2) * s - z * s;
+      const R = r * (TW / 2) * s * 1.05;
       if (px < -R || py < -R || px > lw + R || py > lh + R) return;
       const gr = lg.createRadialGradient(px, py, 0, px, py, R);
-      if (pix) {
-        for (const [a, b, k] of LIGHT_BANDS) { gr.addColorStop(a, `rgba(0,0,0,${power * k})`); gr.addColorStop(b, `rgba(0,0,0,${power * k})`); }
-        gr.addColorStop(1, 'rgba(0,0,0,0)');
-      }
-      else {
-        gr.addColorStop(0, `rgba(0,0,0,${power})`);
-        gr.addColorStop(0.45, `rgba(0,0,0,${power * 0.82})`);
-        gr.addColorStop(0.78, `rgba(0,0,0,${power * 0.35})`);
-        gr.addColorStop(1, 'rgba(0,0,0,0)');
-      }
+      for (const [a, b, k] of LIGHT_BANDS) { gr.addColorStop(a, `rgba(0,0,0,${power * k})`); gr.addColorStop(b, `rgba(0,0,0,${power * k})`); }
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
       lg.fillStyle = gr;
       lg.save(); lg.translate(px, py); lg.scale(1, 0.72); lg.translate(-px, -py);
       lg.fillRect(px - R, py - R, R * 2, R * 2);
@@ -419,9 +382,7 @@ export class Renderer {
     for (const a of L.actors) if (a.glow && !a.dead) hole(a.x, a.y, a.glow, 0.7, 25);
     this.fx.lights(hole);
     lg.globalCompositeOperation = 'source-over';
-    if (pix) { g.drawImage(this.light, 0, 0); return; }
-    g.imageSmoothingEnabled = true;
-    g.drawImage(this.light, 0, 0, lw, lh, 0, 0, lw * 4 * this.dpr, lh * 4 * this.dpr);
+    g.drawImage(this.light, 0, 0);
   }
 
   drawGlows(g, game, L, ox, oy, s, x0, y0, x1, y1, town) {
@@ -464,14 +425,8 @@ export class Renderer {
     // 마을 사람 이름, 가까운 출구·퀘스트 물체 이름
     const P = game.player, f = game.focus;
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    const pix = this.pixel;
-    g.font = pix ? `${12 * d}px Galmuri11, sans-serif` : `700 ${Math.round(10.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
-    const tag = (txt, x, y, z, col) => {
-      const px = ox + (x - y) * (TW / 2) * s, py = oy + (x + y) * (TH / 2) * s - z * s;
-      if (pix) { pixText(g, txt, px, py, col, d); return; }
-      g.lineWidth = 3 * d; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.strokeText(txt, px, py);
-      g.fillStyle = col; g.fillText(txt, px, py);
-    };
+    g.font = `${12 * d}px Galmuri11, sans-serif`;
+    const tag = (txt, x, y, z, col) => pixText(g, txt, ox + (x - y) * (TW / 2) * s, oy + (x + y) * (TH / 2) * s - z * s, col, d);
     for (const a of L.actors) if (a.kind === 'npc' && a.name && a.anim.name !== 'dead' && Math.hypot(a.x - P.x, a.y - P.y) < 11) tag(a.name, a.x, a.y, 76 * (a.look?.h || 1), '#f0d898');
     for (const o of L.objects) {
       const nm = EXIT_NAME[o.type];
@@ -484,7 +439,7 @@ export class Renderer {
     // 이름표를 끈 설정이어도 상호작용 대상 아이템의 이름표는 보인다
     const only = game.showLabels ? null : f?.kind === 'item' ? f.ref : undefined;
     if (only === undefined) return;
-    g.font = pix ? `${12 * d}px Galmuri11, sans-serif` : `600 ${Math.round(11.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
+    g.font = `${12 * d}px Galmuri11, sans-serif`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     const placed = [];
     const items = L.items.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));

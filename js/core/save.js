@@ -25,6 +25,6 @@ export function loadStash() {
 }
 export function saveStash(s) { setItem(KEY + '.stash', JSON.stringify(s, (k, v) => (k === '_m' ? undefined : v))); }
 export function loadSettings() {
-  try { return { master: 0.9, sfx: 0.9, music: 0.6, silentMode: true, labels: true, bars: true, dmg: false, autoGold: true, hiq: false, pixel: true, ...JSON.parse(getItem(KEY + '.settings') || '{}') }; } catch { return { master: 0.9, sfx: 0.9, music: 0.6, silentMode: true, labels: true, bars: true, dmg: false, autoGold: true, hiq: false, pixel: true }; }
+  try { return { master: 0.9, sfx: 0.9, music: 0.6, silentMode: true, labels: true, bars: true, dmg: false, autoGold: true, hiq: false, ...JSON.parse(getItem(KEY + '.settings') || '{}') }; } catch { return { master: 0.9, sfx: 0.9, music: 0.6, silentMode: true, labels: true, bars: true, dmg: false, autoGold: true, hiq: false }; }
 }
 export function saveSettings(s) { setItem(KEY + '.settings', JSON.stringify(s)); }

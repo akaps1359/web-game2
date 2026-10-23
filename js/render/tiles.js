@@ -272,34 +272,26 @@ export function dimmed(src, a = 0.62) {
   return c;
 }
 
-// 빛 번짐 스프라이트(가산 합성용). 도트 그래픽에서는 계단진 동심원
+// 빛 번짐 스프라이트(가산 합성용): 계단진 동심원
 const glowCache = new Map();
-let BANDED = false;
-export function setBandedGlow(on) { BANDED = !!on; }
 const GLOW_BANDS = [[0, 1], [0.14, 0.6], [0.3, 0.3], [0.5, 0.13], [0.72, 0.04], [0.92, 0]];
 export function glowSprite(r, g, b, size = 64) {
-  const key = `${r},${g},${b},${size},${BANDED}`;
+  const key = `${r},${g},${b},${size}`;
   let c = glowCache.get(key);
   if (c) return c;
   c = makeCanvas(size, size);
   const x = c.getContext('2d'), gr = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  if (BANDED) {
-    GLOW_BANDS.forEach(([o, a], i) => { gr.addColorStop(o, `rgba(${r},${g},${b},${a})`); gr.addColorStop(GLOW_BANDS[i + 1]?.[0] ?? 1, `rgba(${r},${g},${b},${a})`); });
-  } else {
-    gr.addColorStop(0, `rgba(${r},${g},${b},1)`);
-    gr.addColorStop(0.25, `rgba(${r},${g},${b},0.55)`);
-    gr.addColorStop(0.6, `rgba(${r},${g},${b},0.15)`);
-    gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
-  }
+  GLOW_BANDS.forEach(([o, a], i) => { gr.addColorStop(o, `rgba(${r},${g},${b},${a})`); gr.addColorStop(GLOW_BANDS[i + 1]?.[0] ?? 1, `rgba(${r},${g},${b},${a})`); });
   x.fillStyle = gr; x.fillRect(0, 0, size, size);
   glowCache.set(key, c);
   return c;
 }
 
-// 테마 한 벌을 만든다. ss: 도트 그래픽(ss배로 크게 그려 줄인다 — 가장자리가 딱 끊기고 색이 줄어든다)
-export function buildTileset(theme, RS, ss = 0) {
+// 테마 한 벌을 만든다: 도트 배율 RS의 3배로 크게 그려 줄인다(가장자리가 딱 끊기고 색이 줄어든다)
+const SS = 3;
+export function buildTileset(theme, RS) {
   const T = { theme, RS, floors: [null], walls: [null], wallsDim: [null], short: [null], shortDim: [null], floorsDim: [null], lava: [] };
-  const R = ss ? RS * ss : RS, fin = ss ? (c) => shrink(c, ss) : (c) => c;
+  const R = RS * SS, fin = (c) => shrink(c, SS);
   if (theme === 'town') {
     for (let k = 1; k <= 6; k++) { const f = fin(makeTownFloor(k, R, 0)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.5)); }
     for (let v = 1; v <= 2; v++) { const w = fin(makeWall('crypt', v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w)); const s = fin(makeWall('crypt', v, R, 14)); T.short.push(s); T.shortDim.push(dimmed(s)); }

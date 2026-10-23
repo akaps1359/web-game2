@@ -1,6 +1,6 @@
 // 앱: 부팅·제목 화면·게임 루프·훅(소리·알림·저장)·화면 전환
 import { Renderer } from '../render/renderer.js';
-import { UI, setPixelUI, refreshPixelUI } from './pixui.js';
+import { initPixelUI } from './pixui.js';
 import { Game } from '../game/game.js';
 import { newHeroData } from '../game/hero.js';
 import { listChars, loadChar, saveChar, loadStash, saveStash, loadSettings, saveSettings } from '../core/save.js';
@@ -20,10 +20,9 @@ export class App {
   constructor() {
     this.cv = $('#view');
     this.settings = loadSettings();
-    setPixelUI(this.settings.pixel);
+    initPixelUI();
     this.renderer = new Renderer(this.cv);
     if (this.settings.hiq) this.renderer.setQuality(true);
-    this.renderer.setPixel(this.settings.pixel);
     this.game = null;
     this.audio = null;
     this.stash = loadStash();
@@ -66,15 +65,8 @@ export class App {
     const g = this.game;
     if (g) { g.showLabels = this.settings.labels; g.showBars = this.settings.bars; g.showDmg = this.settings.dmg; g.autoGold = this.settings.autoGold; }
     this.renderer.setQuality(this.settings.hiq);
-    this.renderer.setPixel(this.settings.pixel);
-    // 도트 UI를 켜고 끄면 단추·창·캔버스를 새로 만든다
-    if (UI.pix !== !!this.settings.pixel) {
-      setPixelUI(this.settings.pixel);
-      this.hud.layout?.(); this.panels.refresh();
-      if (this.title.root.classList.contains('on')) this.title.render();
-    }
   }
-  onResize() { refreshPixelUI(); this.renderer.resize(); this.hud.layout?.(); this.panels.refresh(); }
+  onResize() { initPixelUI(); this.renderer.resize(); this.hud.layout?.(); this.panels.refresh(); }
 
   // ───────── 게임 시작 ─────────
   newGame(cls, name, hc) {

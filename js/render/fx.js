@@ -270,17 +270,16 @@ export class FX {
   }
   // 어둠 전에 그리는 입자(피·파편·연기)
   drawWorld(g, ox, oy, s) {
-    const pix = this.r.pixel; // 도트 그래픽: 파편은 정수 도트 자리에 적어도 한 도트로
+    // 파편은 정수 도트 자리에 적어도 한 도트로
     for (const q of this.ps) {
       if (q.glow) continue;
       const px = ox + (q.x - q.y) * (TW / 2) * s, py = oy + (q.x + q.y) * (TH / 2) * s - q.z * s;
       const a = Math.min(1, q.life / q.max * 2) * q.fade;
       g.globalAlpha = q.kind === 'smoke' ? a * 0.45 : a;
       g.fillStyle = `rgb(${q.col[0]},${q.col[1]},${q.col[2]})`;
-      const sz = pix ? Math.max(1, Math.round(q.size * s)) : q.size * s;
+      const sz = Math.max(1, Math.round(q.size * s));
       if (q.kind === 'smoke') { g.beginPath(); g.arc(px, py, sz, 0, PI * 2); g.fill(); }
-      else if (pix) g.fillRect(Math.round(px - sz / 2), Math.round(py - sz / 2), sz, sz);
-      else g.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+      else g.fillRect(Math.round(px - sz / 2), Math.round(py - sz / 2), sz, sz);
     }
     g.globalAlpha = 1;
   }
@@ -339,18 +338,15 @@ export class FX {
   }
   // 떠오르는 글자
   drawTop(g, ox, oy, s) {
-    const d = this.r.dpr, pix = this.r.pixel;
+    const d = this.r.dpr;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const t of this.texts) {
       const k = t.t / t.dur;
       const px = ox + (t.x - t.y) * (TW / 2) * s, py = oy + (t.x + t.y) * (TH / 2) * s - (t.z + k * 30) * s;
       g.globalAlpha = k < 0.7 ? 1 : (1 - k) / 0.3;
       // 도트 글꼴은 12px의 정수배·1.5배일 때만 또렷하다(커지며 나타나기 없이)
-      if (pix) { g.font = `${(t.size >= 20 ? 24 : t.size >= 15 ? 18 : 12) * d}px Galmuri11, sans-serif`; pixText(g, t.txt, px, py, t.col, d); continue; }
-      const sz = t.size * d * (k < 0.1 ? 0.7 + k * 3 : 1);
-      g.font = `800 ${sz}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
-      g.lineWidth = 3 * d; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(t.txt, px, py);
-      g.fillStyle = t.col; g.fillText(t.txt, px, py);
+      g.font = `${(t.size >= 20 ? 24 : t.size >= 15 ? 18 : 12) * d}px Galmuri11, sans-serif`;
+      pixText(g, t.txt, px, py, t.col, d);
     }
     g.globalAlpha = 1;
     // 괴물 머리 위 체력 막대(최근에 맞은 괴물만)

@@ -2,7 +2,7 @@
 import { $, el, btn, onTap, canvasFor } from './dom.js';
 import { drawItemIcon } from '../render/icons.js';
 import { drawSkillIcon } from '../render/skillicons.js';
-import { UI, pixIcon } from './pixui.js';
+import { pixIcon } from './pixui.js';
 import { drawPortrait } from '../render/figures.js';
 import { BASE } from '../data/items.js';
 import { itemName, itemColor, itemLines, qualityClass, meetsReq, isEquip, itemDmg, itemAC, sellPrice, repairCost, isBeltable, itemMods } from '../game/items.js';
@@ -117,8 +117,8 @@ export class Panels {
       b.style.cssText = `left:${x * C}px;top:${y * C}px;width:${w * C}px;height:${hh * C}px`;
       b.dataset.slot = s;
       const it = d.equip[s];
-      // 도트 UI는 칸 테두리가 두꺼우니 그림을 그만큼 작게
-      const bw = UI.pix ? 6 : 0;
+      // 칸 테두리(양쪽 3px)만큼 그림을 작게
+      const bw = 6;
       if (it) {
         const cv = canvasFor(b, w * C - bw, hh * C - bw);
         pixIcon(cv, (g) => drawItemIcon(g, it, 2, 2, w * C - 4 - bw, hh * C - 4 - bw));
@@ -154,7 +154,7 @@ export class Panels {
       if (!it.id && (it.q === 'magic' || it.q === 'rare' || it.q === 'unique')) n.classList.add('unid');
       if (isEquip(it) && !meetsReq(it, this.hero.st)) n.classList.add('bad');
       if (this.sel?.it === it) n.classList.add('sel');
-      if (extra.price) { const q = el('span', 'qty', extra.price(it)); q.style.cssText += ';font-size:9px;color:#ffe080'; n.appendChild(q); }
+      if (extra.price) { const q = el('span', 'qty', extra.price(it)); q.style.color = '#ffe080'; n.appendChild(q); }
       onTap(n, () => this.select(it, where));
       if (where !== 'shop') this.dragSource(n, it, where);
       g.appendChild(n);
@@ -422,7 +422,7 @@ export class Panels {
     const A = [['str', '힘', '근접 피해(전사·소서러)와 장비 요구치'], ['mag', '마력', '마나와 주문 위력'], ['dex', '민첩', '명중·방어도·막기·활 피해(로그)'], ['vit', '활력', '생명력']];
     for (const [k, n, tip] of A) {
       const row = el('div', 'attr');
-      const nm = el('div', 'an'); nm.innerHTML = `${n} <span style="font-size:10.5px;color:var(--dim)">${tip}</span>`;
+      const nm = el('div', 'an'); nm.innerHTML = `${n} <span style="color:var(--dim)">${tip}</span>`;
       const base = st['base' + k[0].toUpperCase() + k.slice(1)], tot = st[k];
       const v = el('div', 'av'); v.innerHTML = tot !== base ? `<span style="color:${tot > base ? '#8aa0ff' : '#ff6a5a'}">${tot}</span>` : `${tot}`;
       const plus = btn('plus', '+', () => { if (h.addStat(k)) { this.game.sfx('stat_up'); this.render(); this.app.hud.badges(); } });
@@ -489,7 +489,7 @@ export class Panels {
       svg.appendChild(ln);
     }
     tree.appendChild(svg);
-    for (let c = 0; c < 6; c++) { const lb = el('div'); lb.style.cssText = `position:absolute;left:${c * colW}px;width:${colW}px;top:0;text-align:center;font-size:9.5px;color:var(--dim)`; lb.textContent = `Lv${[1, 6, 12, 18, 24, 30][c]}`; tree.appendChild(lb); }
+    for (let c = 0; c < 6; c++) { const lb = el('div'); lb.style.cssText = `position:absolute;left:${c * colW}px;width:${colW}px;top:0;text-align:center;color:var(--dim)`; lb.textContent = `Lv${[1, 6, 12, 18, 24, 30][c]}`; tree.appendChild(lb); }
     for (const s of list) {
       const q = pos(s);
       const n = el('button', 'snode');
@@ -583,7 +583,7 @@ export class Panels {
       r.appendChild(i); body.appendChild(r);
     };
     const toggle = (label, key, sub) => {
-      const r = el('div', 'set-row'); const n = el('span', 'sn'); n.innerHTML = label + (sub ? `<br><span style="font-size:11px;color:var(--dim)">${sub}</span>` : ''); r.appendChild(n);
+      const r = el('div', 'set-row'); const n = el('span', 'sn'); n.innerHTML = label + (sub ? `<br><span style="color:var(--dim)">${sub}</span>` : ''); r.appendChild(n);
       const t = el('button', 'tog' + (S[key] ? ' on' : ''));
       onTap(t, () => { S[key] = !S[key]; t.classList.toggle('on', S[key]); this.app.applySettings(); });
       r.appendChild(t); body.appendChild(r);
@@ -594,7 +594,6 @@ export class Panels {
     toggle('괴물 체력 막대', 'bars');
     toggle('피해 숫자 표시', 'dmg', '디아블로 1·2에는 없던 기능');
     toggle('골드 자동 줍기', 'autoGold');
-    toggle('도트 그래픽', 'pixel', '세상과 단추·창·글꼴을 각진 도트로 그립니다(더 가볍습니다)');
     toggle('고화질', 'hiq', '배터리를 더 씁니다');
     const row = el('div', 'tbtns'); row.style.marginTop = '14px'; row.style.display = 'flex'; row.style.flexDirection = 'column'; row.style.gap = '8px';
     row.appendChild(btn('btn', '도움말', () => this.open('help')));
@@ -607,7 +606,7 @@ export class Panels {
     const p = this.frame('도움말');
     const body = el('div', 'pnl-body'); p.appendChild(body);
     const t = el('div', 'story help');
-    t.style.fontSize = '13.5px'; t.style.lineHeight = '1.7';
+    t.style.lineHeight = '1.7';
     t.textContent = `플레이스테이션으로 디아블로를 하듯 조이스틱과 단추로만 합니다. 게임 화면을 눌러서는 아무 일도 일어나지 않습니다.
 
 ■ 움직이기
@@ -642,9 +641,6 @@ export class Panels {
 ■ 성장
 레벨이 오르면 능력치 점수 5와 기술 점수 1을 얻습니다. 생명력과 마나도 모두 찹니다.
 칼은 짐승에게 강하고 해골에게 약합니다. 둔기는 그 반대입니다(디아블로 1 규칙).
-
-■ 그래픽
-처음에는 세상과 단추·창·글꼴을 각진 도트로 그립니다. 메뉴의 '도트 그래픽'을 끄면 부드러운 그림으로 돌아갑니다.
 
 두 손가락으로 오므리고 벌리면 화면을 확대·축소합니다.`;
     body.appendChild(t);
