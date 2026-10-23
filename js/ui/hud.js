@@ -52,7 +52,7 @@ export class HUD {
     center.appendChild(this.tbox);
     top.appendChild(center);
     const right = el('div');
-    right.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:6px';
+    right.style.cssText = 'display:flex;flex-direction:row-reverse;align-items:flex-start;gap:6px';
     this.mm = el('div', 'minimap');
     const mmc = canvasFor(this.mm, 96, 96);
     this.mmc = mmc;
@@ -98,7 +98,7 @@ export class HUD {
       this.sbtns.push(S);
     });
     r.appendChild(this.pad);
-    // 이동 조이스틱: 쉬는 자리는 생명력 구슬 위, 왼쪽 아래를 누르면 그 자리로 옮겨 간다(입력은 input.js)
+    // 이동 조이스틱: 쉬는 자리는 왼쪽 아래, 왼쪽 아래를 누르면 그 자리로 옮겨 간다(입력은 input.js)
     this.stickEl = el('div', 'stick');
     this.stickKnob = el('div', 'knob');
     this.stickEl.appendChild(this.stickKnob);

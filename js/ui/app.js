@@ -64,7 +64,7 @@ export class App {
     if (g) { g.showLabels = this.settings.labels; g.showBars = this.settings.bars; g.showDmg = this.settings.dmg; g.autoGold = this.settings.autoGold; }
     this.renderer.setQuality(this.settings.hiq);
   }
-  onResize() { this.renderer.resize(); this.hud.layout?.(); }
+  onResize() { this.renderer.resize(); this.hud.layout?.(); this.panels.refresh(); }
 
   // ───────── 게임 시작 ─────────
   newGame(cls, name, hc) {
@@ -234,7 +234,9 @@ export class App {
     this.last = t;
     if (!this.running || !this.game) { this.title.frame?.(dt); return; }
     const g = this.game;
-    const pause = this.panels.isOpen() && this.panels.pauses() || this.dialog.isOpen();
+    // 세로로 들고 있으면(가로로 돌려 달라는 안내가 덮고 있다) 멈춘다
+    this.portraitQ = this.portraitQ || window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+    const pause = this.panels.isOpen() && this.panels.pauses() || this.dialog.isOpen() || this.portraitQ.matches;
     g.paused = pause;
     if (!pause) {
       this.acc += dt;

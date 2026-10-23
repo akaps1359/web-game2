@@ -1,4 +1,4 @@
-// 미리보기 페이지들을 아이폰 화면 크기로 찍는다: node tools/preview/shot.mjs '[{"url":"tools/preview/scene.html","out":"x.png"}]'
+// 미리보기 페이지들을 아이폰 가로 화면 크기로 찍는다: node tools/preview/shot.mjs '[{"url":"tools/preview/scene.html","out":"x.png"}]'
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/opt/node22/lib/node_modules/playwright');
@@ -20,7 +20,7 @@ const port = server.address().port;
 const jobs = JSON.parse(process.argv[2]);
 const browser = await chromium.launch();
 for (const j of jobs) {
-  const page = await browser.newPage({ viewport: { width: j.w || 402, height: j.h || 874 }, deviceScaleFactor: j.dpr || 2 });
+  const page = await browser.newPage({ viewport: { width: j.w || 874, height: j.h || 402 }, deviceScaleFactor: j.dpr || 2 });
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log('[console]', m.text()); });
   page.on('pageerror', (e) => console.log('[pageerror]', e.message, e.stack?.split('\n').slice(0, 4).join(' | ')));
   const t0 = Date.now();

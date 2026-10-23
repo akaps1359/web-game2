@@ -1,4 +1,4 @@
-// 제목 화면: 캐릭터 고르기·만들기
+// 제목 화면: 캐릭터 고르기·만들기(가로 화면: 두 단)
 import { $, el, btn, onTap, canvasFor } from './dom.js';
 import { drawPortrait } from '../render/figures.js';
 import { CLASSES } from '../data/classes.js';
@@ -50,13 +50,15 @@ export class Title {
     }
     m.appendChild(btn('t-btn', '새 캐릭터', () => { this.mode = 'new'; this.cls = this.cls || 'warrior'; this.render(); }));
     w.appendChild(m);
-    w.appendChild(el('div', 't-foot', '디아블로풍 액션 RPG · 세로 화면 전용 · 소리는 화면을 처음 누른 뒤부터 납니다'));
+    w.appendChild(el('div', 't-foot', '디아블로풍 액션 RPG · 가로 화면 전용 · 소리는 화면을 처음 누른 뒤부터 납니다'));
   }
 
   load(w) {
+    const L = el('div', 't-col scroll'), R = el('div', 't-col');
+    w.append(L, R);
     const h = el('div', 'pnl-title', '캐릭터');
-    h.style.marginBottom = '12px';
-    w.appendChild(h);
+    h.style.marginBottom = '10px';
+    L.appendChild(h);
     const box = el('div', 'chars');
     for (const c of listChars()) {
       const card = el('button', 'char-card');
@@ -76,17 +78,19 @@ export class Title {
       onTap(card, (e) => { if (e.target === del) return; if (c.dead) { this.app.toast('죽은 하드코어 캐릭터입니다'); return; } this.app.audio?.unlock?.(); this.app.continueGame(c.id); });
       box.appendChild(card);
     }
-    w.appendChild(box);
+    L.appendChild(box);
     const m = el('div', 't-menu');
     m.appendChild(btn('t-btn', '새 캐릭터', () => { this.mode = 'new'; this.cls = this.cls || 'warrior'; this.render(); }));
     m.appendChild(btn('t-btn dim', '뒤로', () => { this.mode = 'main'; this.render(); }));
-    w.appendChild(m);
+    R.appendChild(m);
   }
 
   create(w) {
+    const L = el('div', 't-col'), R = el('div', 't-col');
+    w.append(L, R);
     const h = el('div', 'pnl-title', '직업을 고르세요');
-    h.style.marginBottom = '10px';
-    w.appendChild(h);
+    h.style.marginBottom = '8px';
+    L.appendChild(h);
     const pick = el('div', 'cls-pick');
     this.cards = [];
     for (const id of ['warrior', 'rogue', 'sorcerer']) {
@@ -98,35 +102,35 @@ export class Title {
       pick.appendChild(b);
       this.cards.push({ id, cv });
     }
-    w.appendChild(pick);
+    L.appendChild(pick);
     const C = CLASSES[this.cls];
-    w.appendChild(el('div', 'cls-desc', C.desc));
+    L.appendChild(el('div', 'cls-desc', C.desc));
     const sts = el('div', 'cls-stats');
     const tmp = new Hero({ cls: this.cls, lvl: 1, base: { ...C.base }, equip: {}, inv: [], belt: [], skills: {}, bar: [] }, null);
     for (const [k, n] of [['str', '힘'], ['mag', '마력'], ['dex', '민첩'], ['vit', '활력']]) { const d = el('div'); d.innerHTML = `${n}<b>${C.base[k]}</b>`; sts.appendChild(d); }
-    w.appendChild(sts);
+    R.appendChild(sts);
     const sts2 = el('div', 'cls-stats');
     sts2.style.gridTemplateColumns = 'repeat(2,1fr)';
     for (const [n, v] of [['생명력', tmp.st.hpMax], ['마나', tmp.st.mpMax]]) { const d = el('div'); d.innerHTML = `${n}<b>${v}</b>`; sts2.appendChild(d); }
-    w.appendChild(sts2);
+    R.appendChild(sts2);
     const name = el('input', 'name-in');
     name.placeholder = '이름'; name.maxLength = 12; name.value = this.name || '';
     name.addEventListener('input', () => { this.name = name.value; });
-    w.appendChild(name);
+    R.appendChild(name);
     const hc = el('label', 'hc-row');
     const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!this.hc;
     cb.addEventListener('change', () => { this.hc = cb.checked; });
     hc.append(cb, el('span', '', '하드코어 (죽으면 영원히 끝)'));
-    w.appendChild(hc);
+    R.appendChild(hc);
     const m = el('div', 't-menu');
-    m.style.marginTop = '8px';
+    m.style.marginTop = '4px';
     m.appendChild(btn('t-btn', '모험 시작', () => {
       const nm = (this.name || '').trim() || { warrior: '아이단', rogue: '리아', sorcerer: '에른' }[this.cls];
       this.app.audio?.unlock?.();
       this.app.newGame(this.cls, nm, !!this.hc);
     }));
     m.appendChild(btn('t-btn dim', '뒤로', () => { this.mode = listChars().length ? 'load' : 'main'; this.render(); }));
-    w.appendChild(m);
+    R.appendChild(m);
   }
 
   // 배경 그림과 직업 그림 움직이기
@@ -134,6 +138,13 @@ export class Title {
     if (!this.root.classList.contains('on') || !this.bg) return;
     this.t += dt;
     const g = this.bg.g, W = window.innerWidth, H = window.innerHeight, t = this.t;
+    // 화면을 돌리면 배경 캔버스도 새 크기로
+    const c = this.bg.c, dpr = Math.min(3, window.devicePixelRatio || 1);
+    if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) {
+      c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+      c.style.width = W + 'px'; c.style.height = H + 'px';
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     g.clearRect(0, 0, W, H);
     const sky = g.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, '#050203'); sky.addColorStop(0.55, '#1a0806'); sky.addColorStop(1, '#000');

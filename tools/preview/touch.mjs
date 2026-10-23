@@ -1,4 +1,4 @@
-// 실제 터치만으로 확인: 제목 → 새 캐릭터 → 모험 시작 → 이야기 닫기 → 바닥 탭(움직이지 않음) → 조이스틱 이동 →
+// 실제 터치만으로 확인(가로 화면): 제목 → 새 캐릭터 → 모험 시작 → 이야기 닫기 → 바닥 탭(움직이지 않음) → 조이스틱 이동 →
 // 놓으면 멈춤 → 가까운 마을 사람 탭(대화) → 가방 단추 → 물약 띠
 // 사용: node tools/preview/play.mjs tools/preview/touch.mjs [출력 폴더]
 export default async function (page, { wait, log, shot, tap }) {
@@ -22,13 +22,14 @@ export default async function (page, { wait, log, shot, tap }) {
   }
   check('게임 시작', await page.evaluate(() => !!window.__app.running && !window.__app.dialog.isOpen()));
   check('게임 화면 위를 가리는 것 없음', await page.evaluate(() => document.elementFromPoint(innerWidth / 2, innerHeight * 0.65) === document.querySelector('#view')));
-  // 바닥 탭·길게 누르기로는 움직이지 않는다
+  // 바닥 탭·길게 누르기로는 움직이지 않는다(조이스틱 자리가 아닌 오른쪽 위)
+  const VW = await page.evaluate(() => innerWidth);
   let p0 = await pos();
-  await tap(300, 330);
+  await tap(VW * 0.68, 150);
   await wait(1200);
   let p1 = await pos();
   check('바닥 탭으로는 움직이지 않음', !moved(p0, p1));
-  await touch('touchStart', 320, 360); await wait(800); await touch('touchEnd'); await wait(400);
+  await touch('touchStart', VW * 0.7, 170); await wait(800); await touch('touchEnd'); await wait(400);
   p1 = await pos();
   check('바닥 길게 누르기로도 움직이지 않음', !moved(p0, p1));
   // 조이스틱: 왼쪽 아래를 누르고 오른쪽으로 끈다 → 화면 오른쪽으로 걷는다(사방이 트인 곳에서)
@@ -40,7 +41,7 @@ export default async function (page, { wait, log, shot, tap }) {
   await wait(600);
   p1 = await pos();
   const H = await page.evaluate(() => innerHeight);
-  const sx = 90, sy = H - 200;
+  const sx = 110, sy = H - 110;
   const s0 = await page.evaluate(() => { const g = window.__game, r = window.__app.renderer; return r.toScreen(g.player.x, g.player.y); });
   await touch('touchStart', sx, sy);
   for (let k = 1; k <= 5; k++) { await touch('touchMove', sx + k * 9, sy); await wait(30); }

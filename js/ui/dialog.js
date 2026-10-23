@@ -95,8 +95,7 @@ export class Dialog {
   // 이야기 글(처음 이야기·일지·결말)
   story(text, title = '', onClose = null) {
     this.root.innerHTML = '';
-    const d = el('div', 'dlg');
-    d.style.maxHeight = '86%';
+    const d = el('div', 'dlg tale');
     if (title) { const h = el('div', 'dlg-head'); h.appendChild(el('div', 'dlg-name', title)); d.appendChild(h); }
     const t = el('div', 'dlg-text story', text);
     d.appendChild(t);

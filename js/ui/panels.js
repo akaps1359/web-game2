@@ -60,6 +60,17 @@ export class Panels {
     return p;
   }
   goldHTML() { return `<span class="coin"></span>${this.hero.data.gold.toLocaleString('ko-KR')}`; }
+  // 패널 몸통의 안쪽 크기(여백 뺀 너비·높이)
+  space(body) {
+    const cs = window.getComputedStyle(body);
+    return { w: body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h: body.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) };
+  }
+  // 두 단(왼쪽·오른쪽)
+  cols(body, cls = '') {
+    const c = el('div', 'cols ' + cls), L = el('div', 'col'), R = el('div', 'col');
+    c.append(L, R); body.appendChild(c);
+    return [L, R];
+  }
 
   render() {
     const fn = this['r_' + this.cur];
@@ -73,19 +84,20 @@ export class Panels {
     const p = this.frame(idm ? '감정할 아이템을 고르세요' : this.opts.sage ? '현자 알데릭 · 감정' : '가방', this.goldHTML());
     const body = el('div', 'pnl-body');
     p.appendChild(body);
-    const W = Math.min(window.innerWidth, 440) - 20;
-    const C = Math.floor(Math.min(40, W / 10));
-    body.appendChild(this.doll(C));
-    body.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
-    body.appendChild(this.beltView(C));
+    const sp = this.space(body), rows = h.beltRows();
+    const C = Math.max(22, Math.floor(Math.min(40, (sp.w - 24) / 20, sp.h / 6.7, (sp.h - 64) / (INV_H + rows))));
+    const [L, R] = this.cols(body);
+    L.appendChild(this.doll(C));
+    R.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
+    R.appendChild(this.beltView(C));
     if (this.opts.sage) {
       const n = h.data.inv.filter((i) => !i.id).length + Object.values(h.data.equip).filter((i) => !i.id).length;
       const row = el('div'); row.style.cssText = 'display:flex;gap:6px;margin-top:10px';
       row.appendChild(btn('btn' + (n ? '' : ' dim'), `모두 감정 (${n * 100}골드)`, () => { for (const it of [...h.data.inv, ...Object.values(h.data.equip)]) if (!it.id) { if (!identify(this.game, it)) break; } h.recalc(); this.render(); }));
-      body.appendChild(row);
+      R.appendChild(row);
     }
     const hint = el('div', 'shop-hint', idm ? '감정되지 않은 아이템(?)을 누르세요.' : '아이템을 누르면 자세히 보이고, 끌어서 옮기거나 장착할 수 있습니다.');
-    body.appendChild(hint);
+    R.appendChild(hint);
   }
 
   doll(C) {
@@ -327,7 +339,7 @@ export class Panels {
   }
   tooltip(it, where, slot) {
     const h = this.hero, g = this.game;
-    const tip = el('div', 'tip');
+    const tip = el('div', 'tip' + (where === 'inv' || where === 'belt' ? ' left' : ''));
     const nm = el('div', 'tname ' + 'q-' + qualityClass(it), itemName(it));
     tip.appendChild(nm);
     if ((it.q === 'magic' || it.q === 'rare' || it.q === 'unique') && it.id) tip.appendChild(el('div', 'tbase', BASE[it.b].name));
@@ -397,11 +409,12 @@ export class Panels {
     const h = this.hero, d = h.data, st = h.st, P = this.game.player;
     const p = this.frame(`${d.name}`, `${h.C.name} · 레벨 ${d.lvl}${d.hc ? ' · <span style="color:#ff6a5a">하드코어</span>' : ''}`);
     const body = el('div', 'pnl-body'); p.appendChild(body);
+    const [CL, CR] = this.cols(body, 'wide');
     const next = d.lvl >= 50 ? '최대' : EXP_TABLE[d.lvl].toLocaleString('ko-KR');
     const top = el('div', 'cbox');
     top.innerHTML = `<div class="crow"><span>경험치</span><span class="v">${d.exp.toLocaleString('ko-KR')}</span></div><div class="crow"><span>다음 레벨</span><span class="v">${next}</span></div><div class="crow"><span>골드</span><span class="v">${d.gold.toLocaleString('ko-KR')}</span></div>`;
-    body.appendChild(top);
-    body.appendChild(el('div', 'pts', d.statPts ? `남은 능력치 점수: ${d.statPts}` : ''));
+    CL.appendChild(top);
+    CL.appendChild(el('div', 'pts', d.statPts ? `남은 능력치 점수: ${d.statPts}` : ''));
     const attrs = el('div', 'cbox');
     const A = [['str', '힘', '근접 피해(전사·소서러)와 장비 요구치'], ['mag', '마력', '마나와 주문 위력'], ['dex', '민첩', '명중·방어도·막기·활 피해(로그)'], ['vit', '활력', '생명력']];
     for (const [k, n, tip] of A) {
@@ -415,7 +428,7 @@ export class Panels {
       attrs.appendChild(row);
     }
     attrs.appendChild(el('div', 'shop-hint', `직업 한계: 힘 ${h.C.max.str} · 마력 ${h.C.max.mag} · 민첩 ${h.C.max.dex} · 활력 ${h.C.max.vit}`));
-    body.appendChild(attrs);
+    CL.appendChild(attrs);
     const g2 = el('div', 'cstats');
     const box = (title, rows) => { const b = el('div', 'cbox'); b.appendChild(el('h4', '', title)); for (const [a, v, c] of rows) { const r = el('div', 'crow'); r.innerHTML = `<span>${a}</span><span class="v ${c || ''}">${v}</span>`; b.appendChild(r); } return b; };
     g2.appendChild(box('전투', [
@@ -440,7 +453,7 @@ export class Panels {
     extra.push(['플레이 시간', `${Math.floor((d.played || 0) / 3600)}시간 ${Math.floor(((d.played || 0) % 3600) / 60)}분`]);
     const eb = box('기타', extra); eb.style.gridColumn = '1 / span 2';
     g2.appendChild(eb);
-    body.appendChild(g2);
+    CR.appendChild(g2);
   }
 
   // ═════════ 기술 ═════════
@@ -452,27 +465,32 @@ export class Panels {
     p.appendChild(tabs);
     const body = el('div', 'pnl-body'); p.appendChild(body);
     const list = skillsOf(d.cls).filter((s) => s.tab === this.tab);
-    const W = Math.min(window.innerWidth - 20, 380), colW = W / 3, rowH = 76, N = 58;
-    const tree = el('div', 'stree'); tree.style.width = W + 'px'; tree.style.height = rowH * 6 + 'px';
-    const pos = (s) => ({ x: s.pos[0] * colW + (colW - N) / 2, y: s.pos[1] * rowH + 6 });
+    const sp = this.space(body);
+    const N = Math.max(38, Math.min(56, Math.floor((sp.h - 20) / 3) - 14, Math.floor((sp.w - 260) / 6) - 20));
+    const rowH = N + 14, colW = N + 20, W = colW * 6, TH = rowH * 3 + 16;
+    const [TL, TR] = this.cols(body);
+    TR.style.flex = '1 1 240px';
+    const tree = el('div', 'stree'); tree.style.width = W + 'px'; tree.style.height = TH + 'px';
+    // 열 = 단계(필요 레벨), 행 = 갈래 안의 자리
+    const pos = (s) => ({ x: s.pos[1] * colW + (colW - N) / 2, y: 16 + s.pos[0] * rowH + (rowH - N) / 2 });
     // 선행 기술 선
     const svgNS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('width', W); svg.setAttribute('height', rowH * 6); svg.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none';
+    svg.setAttribute('width', W); svg.setAttribute('height', TH); svg.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none';
     for (const s of list) for (const pr of s.pre || []) {
       const a = SKILLS[pr]; if (!a || a.tab !== s.tab) continue;
       const p1 = pos(a), p2 = pos(s);
       const ln = document.createElementNS(svgNS, 'line');
-      ln.setAttribute('x1', p1.x + N / 2); ln.setAttribute('y1', p1.y + N); ln.setAttribute('x2', p2.x + N / 2); ln.setAttribute('y2', p2.y);
+      ln.setAttribute('x1', p1.x + N); ln.setAttribute('y1', p1.y + N / 2); ln.setAttribute('x2', p2.x); ln.setAttribute('y2', p2.y + N / 2);
       ln.setAttribute('stroke', d.skills[pr] ? 'rgba(240,216,152,0.8)' : 'rgba(199,164,92,0.3)'); ln.setAttribute('stroke-width', '2');
       svg.appendChild(ln);
     }
     tree.appendChild(svg);
-    for (let r = 0; r < 6; r++) { const lb = el('div'); lb.style.cssText = `position:absolute;left:-2px;top:${r * rowH + 2}px;font-size:9.5px;color:var(--dim)`; lb.textContent = `Lv${[1, 6, 12, 18, 24, 30][r]}`; tree.appendChild(lb); }
+    for (let c = 0; c < 6; c++) { const lb = el('div'); lb.style.cssText = `position:absolute;left:${c * colW}px;width:${colW}px;top:0;text-align:center;font-size:9.5px;color:var(--dim)`; lb.textContent = `Lv${[1, 6, 12, 18, 24, 30][c]}`; tree.appendChild(lb); }
     for (const s of list) {
       const q = pos(s);
       const n = el('button', 'snode');
-      n.style.left = q.x + 'px'; n.style.top = q.y + 'px';
+      n.style.left = q.x + 'px'; n.style.top = q.y + 'px'; n.style.width = n.style.height = N + 'px';
       const cv = canvasFor(n, N - 4, N - 4); drawSkillIcon(cv.g, s, 0, 0, N - 4);
       const lv = h.skillPoints(s.id), bonus = lv ? h.skillLevel(s.id) - lv : 0;
       const sl = el('span', 'sl', lv ? (bonus ? `${lv}+${bonus}` : `${lv}`) : '');
@@ -484,10 +502,10 @@ export class Panels {
       onTap(n, () => { this.selSkill = s.id; this.render(); });
       tree.appendChild(n);
     }
-    body.appendChild(tree);
+    TL.appendChild(tree);
     const s = this.selSkill ? SKILLS[this.selSkill] : null;
     const info = el('div', 'sinfo');
-    if (!s) { info.innerHTML = '<div class="sd">기술을 눌러 설명을 보세요. 배운 능동 기술은 오른쪽 아래 단추에 넣어 쓸 수 있습니다.<br>단추를 누르면 가까운 적을 자동으로 겨누고, 단추에서 손가락을 끌어 원하는 곳을 겨눌 수도 있습니다.</div>'; body.appendChild(info); return; }
+    if (!s) { info.innerHTML = '<div class="sd">기술을 눌러 설명을 보세요. 배운 능동 기술은 오른쪽 아래 단추에 넣어 쓸 수 있습니다.<br>단추를 누르면 가까운 적을 자동으로 겨누고, 단추에서 손가락을 끌어 원하는 곳을 겨눌 수도 있습니다.</div>'; TR.appendChild(info); return; }
     const pts = h.skillPoints(s.id), lv = h.skillLevel(s.id);
     info.appendChild(el('h4', '', `${s.name} ${pts ? `(레벨 ${lv})` : ''}`));
     info.appendChild(el('div', 'sd', `${s.passive ? '패시브' : '능동'} · 필요 레벨 ${s.req}${s.pre?.length ? ' · 선행: ' + s.pre.map((x) => SKILLS[x].name).join(', ') : ''}`));
@@ -515,7 +533,7 @@ export class Panels {
       row3.appendChild(btn('btn small dim', '주 단추를 기본 공격으로', () => { d.bar[0] = 'attack'; this.app.hud.refreshSkills(); this.render(); }));
       info.appendChild(row3);
     }
-    body.appendChild(info);
+    TR.appendChild(info);
   }
 
   // ═════════ 퀘스트 ═════════
@@ -584,8 +602,8 @@ export class Panels {
   r_help() {
     const p = this.frame('도움말');
     const body = el('div', 'pnl-body'); p.appendChild(body);
-    const t = el('div', 'story');
-    t.style.fontSize = '13.5px'; t.style.lineHeight = '1.75';
+    const t = el('div', 'story help');
+    t.style.fontSize = '13.5px'; t.style.lineHeight = '1.7';
     t.textContent = `■ 움직이기
 화면 왼쪽 아래를 누르고 끌면 그 자리에 조이스틱이 생기고, 민 방향으로 걷습니다. 손을 떼면 멈춥니다. 바닥을 탭해서는 움직이지 않습니다.
 닫힌 문은 조이스틱으로 밀면 열립니다.
@@ -598,7 +616,7 @@ export class Panels {
 작은 단추 네 개에 기술을 넣어 씁니다(기술 창에서 넣기). 탭하면 가까운 적을 자동으로 겨누고, 단추에서 손가락을 화면 쪽으로 끌면 원하는 곳을 겨눕니다.
 
 ■ 물약
-가운데 아래의 물약 띠를 탭하면 마십니다. 왼쪽 빨간 구슬(생명력)이나 오른쪽 파란 구슬(마나)을 탭하면 알맞은 물약을 자동으로 마십니다. 허리띠를 차면 띠의 줄이 늘어납니다.
+가운데 아래의 물약 띠를 탭하면 마십니다. 띠 왼쪽의 빨간 구슬(생명력)이나 오른쪽의 파란 구슬(마나)을 탭하면 알맞은 물약을 자동으로 마십니다. 허리띠를 차면 띠의 줄이 늘어납니다.
 
 ■ 아이템
 가까이 가서 바닥 아이템의 이름표를 탭하면 줍습니다(문·상자·계단·마을 사람도 손 닿는 거리에서 탭). 색은 등급입니다: 흰색 일반, 파란색 마법, 노란색 희귀, 금색 고유.
@@ -634,8 +652,9 @@ export class Panels {
       body.appendChild(r);
       return;
     }
-    const W = Math.min(window.innerWidth, 440) - 20, C = Math.floor(Math.min(40, W / 10));
-    const items = [];
+    const sp = this.space(body);
+    const C = Math.max(22, Math.floor(Math.min(38, (sp.w - 24) / 20)));
+    const [SL, SR] = this.cols(body, 'fill');
     const always = (ALWAYS[which] || []).map((id) => makeItem(id));
     this.opts.always = always;
     const list = [...always, ...stock(g, which === 'premium' ? 'premium' : which)];
@@ -644,22 +663,23 @@ export class Panels {
     const rows = 12;
     for (const it of list) { if (!h.invAdd(it, placed, 10, rows)) break; }
     let maxY = 0; for (const it of placed) maxY = Math.max(maxY, it.y + BASE[it.b].h);
-    body.appendChild(el('div', 'shop-hint', '파는 물건 — 눌러서 사기'));
-    body.appendChild(this.grid(placed, 10, Math.max(2, maxY), C, 'shop', { price: (it) => buyPrice(it, which) >= 1000 ? Math.round(buyPrice(it, which) / 100) / 10 + 'k' : buyPrice(it, which) }));
+    SL.appendChild(el('div', 'shop-hint', '파는 물건 — 눌러서 사기'));
+    SL.appendChild(this.grid(placed, 10, Math.max(2, maxY), C, 'shop', { price: (it) => buyPrice(it, which) >= 1000 ? Math.round(buyPrice(it, which) / 100) / 10 + 'k' : buyPrice(it, which) }));
     if (which === 'smith' || which === 'premium') {
       let tot = 0; for (const it of [...Object.values(h.data.equip), ...h.data.inv]) tot += repairCost(it);
       const r = el('div', 'tbtns');
       r.appendChild(btn('btn' + (tot ? '' : ' dim'), tot ? `모두 수리 (${tot}골드)` : '고칠 것 없음', () => { const c = repairAll(g); if (c) g.toast(`${c}골드로 수리했습니다`); this.render(); }));
-      body.appendChild(r);
+      r.style.width = 10 * C + 'px';
+      SR.appendChild(r);
     }
     if (which !== 'healer' && which !== 'boy') {
-      body.appendChild(el('div', 'shop-hint', '내 가방 — 눌러서 팔기'));
+      SR.appendChild(el('div', 'shop-hint', '내 가방 — 눌러서 팔기'));
       this.opts.shop = which === 'premium' ? 'smith' : which;
-      body.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
+      SR.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
       this.opts.shop = which;
     } else {
-      body.appendChild(el('div', 'shop-hint', '내 가방'));
-      body.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
+      SR.appendChild(el('div', 'shop-hint', '내 가방'));
+      SR.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
     }
   }
 
@@ -668,10 +688,12 @@ export class Panels {
     const h = this.hero;
     const p = this.frame('보관함', '모든 캐릭터가 함께 씁니다');
     const body = el('div', 'pnl-body'); p.appendChild(body);
-    const W = Math.min(window.innerWidth, 440) - 20, C = Math.floor(Math.min(36, W / 10));
-    body.appendChild(this.grid(this.app.stash.items, STASH_W, STASH_H, C, 'stash'));
-    body.appendChild(el('div', 'shop-hint', '가방'));
-    body.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
+    const sp = this.space(body);
+    const C = Math.max(20, Math.floor(Math.min(36, (sp.w - 24) / 20, (sp.h - 6) / STASH_H)));
+    const [L, R] = this.cols(body);
+    L.appendChild(this.grid(this.app.stash.items, STASH_W, STASH_H, C, 'stash'));
+    R.appendChild(el('div', 'shop-hint', '가방'));
+    R.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
   }
 
   // ═════════ 순간 이동 ═════════

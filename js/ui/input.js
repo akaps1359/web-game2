@@ -1,4 +1,4 @@
-// 터치 입력: 화면 왼쪽 아래를 누르고 끌면 조이스틱(이동은 조이스틱으로만), 탭 = 공격·줍기·대화·물체 쓰기,
+// 터치 입력: 화면 왼쪽 아래(가로 화면의 왼쪽 엄지 자리)를 누르고 끌면 조이스틱(이동은 조이스틱으로만), 탭 = 공격·줍기·대화·물체 쓰기,
 // 괴물을 누르고 있기 = 계속 공격, 두 손가락 = 확대
 import { isZoomed } from '../core/viewport.js';
 import { isInteractive } from '../game/objects.js';
@@ -32,7 +32,7 @@ export class TouchInput {
     if (!this.game) return;
     this.app.cv.setPointerCapture?.(e.pointerId);
     // 왼쪽 아래를 누르면 그 자리에 조이스틱이 생긴다
-    if (!this.stick && e.clientX < window.innerWidth * 0.5 && e.clientY > window.innerHeight * 0.42) {
+    if (!this.stick && e.clientX < window.innerWidth * 0.4 && e.clientY > window.innerHeight * 0.3) {
       const x = e.clientX, y = e.clientY;
       this.stick = { id: e.pointerId, bx: x, by: y, x0: x, y0: y, t0: performance.now(), moved: 0, pick: this.pick(x, y) };
       this.app.hud.stickShow?.(x, y, 0, 0);

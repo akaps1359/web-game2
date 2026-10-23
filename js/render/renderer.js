@@ -27,13 +27,14 @@ export class Renderer {
     const r = this.cv.getBoundingClientRect();
     this.W = Math.max(1, r.width); this.H = Math.max(1, r.height);
     this.cv.width = Math.round(this.W * this.dpr); this.cv.height = Math.round(this.H * this.dpr);
-    this.baseZoom = clamp(this.W / 540, 0.6, 1.4);
+    // 가로 화면: 높이(세로로 보이는 거리)에 맞춘다
+    this.baseZoom = clamp(Math.min(this.W / 860, this.H / 440), 0.55, 1.4);
     this.zoom = this.baseZoom * (this.userZoom || 1);
     this.light.width = Math.ceil(this.W / 4); this.light.height = Math.ceil(this.H / 4);
     // 타일 해상도: 화면 배율에 맞춘다
     const RS = Math.max(1, Math.round(this.zoom * this.dpr * 1.15 * 2) / 2);
     if (RS !== this.RS) { this.RS = RS; this.tilesets.clear(); }
-    this.anchorY = 0.44;
+    this.anchorY = 0.5;
   }
   setUserZoom(z) { this.userZoom = clamp(z, 0.7, 1.7); this.zoom = this.baseZoom * this.userZoom; }
   tileset(theme) {

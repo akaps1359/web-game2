@@ -1,4 +1,4 @@
-// 아이폰 세로 화면으로 게임을 띄우고 시나리오 스크립트를 실행한다.
+// 아이폰 가로 화면으로 게임을 띄우고 시나리오 스크립트를 실행한다(DEVW·DEVH로 크기를 바꿀 수 있다).
 // 사용: node tools/preview/play.mjs <시나리오.mjs> [출력 폴더]
 // 시나리오: export default async function (page, { shot, wait, log, tap }) { ... }
 import { createRequire } from 'module';
@@ -25,7 +25,7 @@ const outDir = path.resolve(process.argv[3] || '.');
 fs.mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 const dev = devices['iPhone 13'];
-const ctx = await browser.newContext({ ...dev, deviceScaleFactor: +(process.env.DPR || 2), viewport: { width: +(process.env.DEVW || 402), height: +(process.env.DEVH || 874) }, screen: { width: +(process.env.DEVW || 402), height: +(process.env.DEVH || 874) } });
+const ctx = await browser.newContext({ ...dev, deviceScaleFactor: +(process.env.DPR || 2), viewport: { width: +(process.env.DEVW || 874), height: +(process.env.DEVH || 402) }, screen: { width: +(process.env.DEVW || 874), height: +(process.env.DEVH || 402) } });
 const page = await ctx.newPage();
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') { errors.push(m.text()); console.log('[console]', m.type(), m.text()); } });
