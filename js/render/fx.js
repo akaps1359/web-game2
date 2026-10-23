@@ -1,6 +1,7 @@
 // 시각 효과: 입자(피·불꽃·얼음·연기), 떠오르는 글자, 번개, 고리, 투사체·장판 그리기
 import { TW, TH } from '../core/util.js';
 import { glowSprite } from './tiles.js';
+import { pixText } from './pixel.js';
 
 const PI = Math.PI;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -338,12 +339,14 @@ export class FX {
   }
   // 떠오르는 글자
   drawTop(g, ox, oy, s) {
-    const d = this.r.dpr;
+    const d = this.r.dpr, pix = this.r.pixel;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const t of this.texts) {
       const k = t.t / t.dur;
       const px = ox + (t.x - t.y) * (TW / 2) * s, py = oy + (t.x + t.y) * (TH / 2) * s - (t.z + k * 30) * s;
       g.globalAlpha = k < 0.7 ? 1 : (1 - k) / 0.3;
+      // 도트 글꼴은 12px의 정수배·1.5배일 때만 또렷하다(커지며 나타나기 없이)
+      if (pix) { g.font = `${(t.size >= 20 ? 24 : t.size >= 15 ? 18 : 12) * d}px Galmuri11, sans-serif`; pixText(g, t.txt, px, py, t.col, d); continue; }
       const sz = t.size * d * (k < 0.1 ? 0.7 + k * 3 : 1);
       g.font = `800 ${sz}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
       g.lineWidth = 3 * d; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(t.txt, px, py);

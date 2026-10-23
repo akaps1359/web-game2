@@ -6,7 +6,7 @@ import { buildTileset, WALL_H, glowSprite, setBandedGlow } from './tiles.js';
 import { makeCanvas } from './noise.js';
 import { drawActor, drawCorpse, actorAlpha, setPortraitPixel, figBox } from './figures.js';
 import { drawObject, drawDecal, drawGroundItem, objectLight, drawTorch } from './props.js';
-import { SpriteAtlas, SpritePass, pixEllipse } from './pixel.js';
+import { SpriteAtlas, SpritePass, pixEllipse, pixText } from './pixel.js';
 import { FX } from './fx.js';
 
 // 도트 그래픽의 빛: 계단진 동심원 [시작, 끝, 세기]
@@ -464,9 +464,11 @@ export class Renderer {
     // 마을 사람 이름, 가까운 출구·퀘스트 물체 이름
     const P = game.player, f = game.focus;
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = `700 ${Math.round(10.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
+    const pix = this.pixel;
+    g.font = pix ? `${12 * d}px Galmuri11, sans-serif` : `700 ${Math.round(10.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
     const tag = (txt, x, y, z, col) => {
       const px = ox + (x - y) * (TW / 2) * s, py = oy + (x + y) * (TH / 2) * s - z * s;
+      if (pix) { pixText(g, txt, px, py, col, d); return; }
       g.lineWidth = 3 * d; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.strokeText(txt, px, py);
       g.fillStyle = col; g.fillText(txt, px, py);
     };
@@ -482,7 +484,7 @@ export class Renderer {
     // 이름표를 끈 설정이어도 상호작용 대상 아이템의 이름표는 보인다
     const only = game.showLabels ? null : f?.kind === 'item' ? f.ref : undefined;
     if (only === undefined) return;
-    g.font = `600 ${Math.round(11.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
+    g.font = pix ? `${12 * d}px Galmuri11, sans-serif` : `600 ${Math.round(11.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     const placed = [];
     const items = L.items.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));

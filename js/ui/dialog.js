@@ -1,5 +1,6 @@
 // 대화창: 마을 사람과의 대화, 이야기 글(일지·장면)
 import { $, el, btn, canvasFor } from './dom.js';
+import { UI } from './pixui.js';
 import { drawPortrait } from '../render/figures.js';
 import { NPCS, talkTo, questTalk, loreTalk } from '../game/npcs.js';
 import { setQuest } from '../game/quests.js';
@@ -34,8 +35,9 @@ export class Dialog {
     const d = el('div', 'dlg');
     const head = el('div', 'dlg-head');
     const por = el('div', 'dlg-por');
-    const cv = canvasFor(por, 54, 54);
-    if (view.look) { cv.g.fillStyle = '#1a1410'; cv.g.fillRect(0, 0, 54, 54); drawPortrait(cv.g, view.look, 27, 104, 1.45, 0.3, 'idle', Math.PI / 4); }
+    // 도트 UI는 칸 테두리가 두꺼우니 그림 판을 그만큼 작게
+    const pw = UI.pix ? 48 : 54, cv = canvasFor(por, pw, pw);
+    if (view.look) { cv.g.fillStyle = '#1a1410'; cv.g.fillRect(0, 0, pw, pw); drawPortrait(cv.g, view.look, pw / 2, 104 - (54 - pw), 1.45, 0.3, 'idle', Math.PI / 4); }
     head.appendChild(por);
     const nm = el('div'); nm.appendChild(el('div', 'dlg-name', view.name)); nm.appendChild(el('div', 'dlg-role', view.role || ''));
     head.appendChild(nm);

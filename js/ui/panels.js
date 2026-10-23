@@ -2,6 +2,7 @@
 import { $, el, btn, onTap, canvasFor } from './dom.js';
 import { drawItemIcon } from '../render/icons.js';
 import { drawSkillIcon } from '../render/skillicons.js';
+import { UI, pixIcon } from './pixui.js';
 import { drawPortrait } from '../render/figures.js';
 import { BASE } from '../data/items.js';
 import { itemName, itemColor, itemLines, qualityClass, meetsReq, isEquip, itemDmg, itemAC, sellPrice, repairCost, isBeltable, itemMods } from '../game/items.js';
@@ -116,16 +117,18 @@ export class Panels {
       b.style.cssText = `left:${x * C}px;top:${y * C}px;width:${w * C}px;height:${hh * C}px`;
       b.dataset.slot = s;
       const it = d.equip[s];
+      // 도트 UI는 칸 테두리가 두꺼우니 그림을 그만큼 작게
+      const bw = UI.pix ? 6 : 0;
       if (it) {
-        const cv = canvasFor(b, w * C, hh * C);
-        drawItemIcon(cv.g, it, 2, 2, w * C - 4, hh * C - 4);
+        const cv = canvasFor(b, w * C - bw, hh * C - bw);
+        pixIcon(cv, (g) => drawItemIcon(g, it, 2, 2, w * C - 4 - bw, hh * C - 4 - bw));
         b.classList.add(qualityClass(it));
         if (!meetsReq(it, h.st) || (it.durMax && it.dur <= 0 && !it.indestr)) b.classList.add('bad');
         if (this.sel?.it === it) b.classList.add('sel');
         this.dragSource(b, it, 'equip', s);
       } else b.appendChild(el('span', 'lbl', SLOT_LABEL[s]));
       // 두 손 무기면 방패 칸을 흐리게
-      if (s === 'shield' && !it && d.equip.weapon && BASE[d.equip.weapon.b].hands === 2 && !itemMods(d.equip.weapon).oneHand) { const cv = canvasFor(b, w * C, hh * C); cv.g.globalAlpha = 0.25; drawItemIcon(cv.g, d.equip.weapon, 2, 2, w * C - 4, hh * C - 4); }
+      if (s === 'shield' && !it && d.equip.weapon && BASE[d.equip.weapon.b].hands === 2 && !itemMods(d.equip.weapon).oneHand) { const cv = canvasFor(b, w * C - bw, hh * C - bw); cv.g.globalAlpha = 0.25; pixIcon(cv, (g) => drawItemIcon(g, d.equip.weapon, 2, 2, w * C - 4 - bw, hh * C - 4 - bw)); }
       onTap(b, () => { if (it) this.select(it, 'equip', s); });
       wrap.appendChild(b);
     }
@@ -147,7 +150,7 @@ export class Panels {
       const n = el('div', 'gi ' + qualityClass(it));
       n.style.cssText = `left:${it.x * C + 1}px;top:${it.y * C + 1}px;width:${b.w * C}px;height:${b.h * C}px`;
       const cv = canvasFor(n, b.w * C, b.h * C);
-      drawItemIcon(cv.g, it, 2, 2, b.w * C - 4, b.h * C - 4);
+      pixIcon(cv, (g) => drawItemIcon(g, it, 2, 2, b.w * C - 4, b.h * C - 4));
       if (!it.id && (it.q === 'magic' || it.q === 'rare' || it.q === 'unique')) n.classList.add('unid');
       if (isEquip(it) && !meetsReq(it, this.hero.st)) n.classList.add('bad');
       if (this.sel?.it === it) n.classList.add('sel');
@@ -173,7 +176,7 @@ export class Panels {
       const it = h.data.belt[r * 4 + c];
       if (!it) continue;
       const n = el('div', 'gi'); n.style.cssText = `left:${c * C + 1}px;top:${yy * C + 1}px;width:${C}px;height:${C}px`;
-      const cv = canvasFor(n, C, C); drawItemIcon(cv.g, it, 2, 2, C - 4, C - 4);
+      const cv = canvasFor(n, C, C); pixIcon(cv, (g) => drawItemIcon(g, it, 2, 2, C - 4, C - 4));
       if (this.sel?.it === it) n.classList.add('sel');
       onTap(n, () => this.select(it, 'belt'));
       g.appendChild(n);
@@ -196,7 +199,7 @@ export class Panels {
         const b = BASE[it.b], C = this.C || 38;
         const gh = el('div', 'drag-ghost');
         const cv = canvasFor(gh, b.w * C, b.h * C);
-        drawItemIcon(cv.g, it, 0, 0, b.w * C, b.h * C);
+        pixIcon(cv, (g) => drawItemIcon(g, it, 0, 0, b.w * C, b.h * C));
         $('#app').appendChild(gh);
         st.ghost = gh; st.w = b.w * C; st.h = b.h * C;
         this.game.sfx('item_pickup', null, null, { vol: 0.5 });
@@ -591,7 +594,7 @@ export class Panels {
     toggle('괴물 체력 막대', 'bars');
     toggle('피해 숫자 표시', 'dmg', '디아블로 1·2에는 없던 기능');
     toggle('골드 자동 줍기', 'autoGold');
-    toggle('도트 그래픽', 'pixel', '세상을 각진 도트로 그립니다(더 가볍습니다)');
+    toggle('도트 그래픽', 'pixel', '세상과 단추·창·글꼴을 각진 도트로 그립니다(더 가볍습니다)');
     toggle('고화질', 'hiq', '배터리를 더 씁니다');
     const row = el('div', 'tbtns'); row.style.marginTop = '14px'; row.style.display = 'flex'; row.style.flexDirection = 'column'; row.style.gap = '8px';
     row.appendChild(btn('btn', '도움말', () => this.open('help')));
@@ -641,7 +644,7 @@ export class Panels {
 칼은 짐승에게 강하고 해골에게 약합니다. 둔기는 그 반대입니다(디아블로 1 규칙).
 
 ■ 그래픽
-처음에는 세상을 각진 도트로 그립니다. 메뉴의 '도트 그래픽'을 끄면 부드러운 그림으로 돌아갑니다.
+처음에는 세상과 단추·창·글꼴을 각진 도트로 그립니다. 메뉴의 '도트 그래픽'을 끄면 부드러운 그림으로 돌아갑니다.
 
 두 손가락으로 오므리고 벌리면 화면을 확대·축소합니다.`;
     body.appendChild(t);

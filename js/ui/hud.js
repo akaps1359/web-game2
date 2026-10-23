@@ -8,6 +8,7 @@ import { levelName } from '../game/world.js';
 import { EXP_TABLE } from '../data/classes.js';
 import { F_SEEN, F_VIS, F_LAVA } from '../game/level.js';
 import { TW, TH } from '../core/util.js';
+import { UI, PIX_ICONS, pixIcon, pixRingCanvas, pixDiscCanvas, RING_BTN, stamp, uiFont } from './pixui.js';
 
 const ICONS = {
   bag: '<svg viewBox="0 0 24 24"><path d="M7 8V6a5 5 0 0 1 10 0v2" fill="none" stroke="#e0c890" stroke-width="1.8"/><path d="M4 8h16l-1.5 13h-13z" fill="#5a3a1e" stroke="#e0c890" stroke-width="1.5"/><path d="M9 12h6" stroke="#e0c890" stroke-width="1.5"/></svg>',
@@ -17,6 +18,9 @@ const ICONS = {
   menu: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="#e0c890" stroke-width="2.2" stroke-linecap="round"/></svg>',
   portal: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="6" ry="9" fill="#1a3a8a" stroke="#9ec0ff" stroke-width="1.6"/><path d="M12 5c-2 3-2 11 0 14" stroke="#cfe0ff" stroke-width="1.2" fill="none"/></svg>',
 };
+
+// 메뉴 단추 아이콘: 도트 UI면 도트 그림
+const iconHTML = (k) => (UI.pix && PIX_ICONS[k] ? `<i class="pico" style="background-image:url(${PIX_ICONS[k]})"></i>` : ICONS[k]);
 
 export class HUD {
   constructor(app) {
@@ -36,12 +40,12 @@ export class HUD {
     // ── 위쪽 ──
     const top = el('div', 'hud-top');
     const menu = el('div', 'menu-btns');
-    const mk = (key, svg, fn) => { const b = el('button', 'mbtn'); b.innerHTML = svg; const d = el('span', 'dot'); b.appendChild(d); onTap(b, fn); menu.appendChild(b); this['btn_' + key] = b; return b; };
-    mk('bag', ICONS.bag, () => this.app.panels.toggle('inventory'));
-    mk('char', ICONS.char, () => this.app.panels.toggle('character'));
-    mk('skill', ICONS.skill, () => this.app.panels.toggle('skills'));
-    mk('quest', ICONS.quest, () => this.app.panels.toggle('quests'));
-    mk('menu', ICONS.menu, () => this.app.panels.toggle('menu'));
+    const mk = (key, fn) => { const b = el('button', 'mbtn'); b.innerHTML = iconHTML(key); const d = el('span', 'dot'); b.appendChild(d); onTap(b, fn); menu.appendChild(b); this['btn_' + key] = b; return b; };
+    mk('bag', () => this.app.panels.toggle('inventory'));
+    mk('char', () => this.app.panels.toggle('character'));
+    mk('skill', () => this.app.panels.toggle('skills'));
+    mk('quest', () => this.app.panels.toggle('quests'));
+    mk('menu', () => this.app.panels.toggle('menu'));
     top.appendChild(menu);
     const center = el('div', 'hud-center');
     this.areaName = el('div', 'area-name', '');
@@ -58,7 +62,7 @@ export class HUD {
     this.mmc = mmc;
     onTap(this.mm, () => this.toggleMap());
     right.appendChild(this.mm);
-    this.portalBtn = el('button', 'mbtn'); this.portalBtn.innerHTML = ICONS.portal;
+    this.portalBtn = el('button', 'mbtn'); this.portalBtn.innerHTML = iconHTML('portal');
     onTap(this.portalBtn, () => this.townPortal());
     right.appendChild(this.portalBtn);
     top.appendChild(right);
@@ -74,9 +78,10 @@ export class HUD {
     this.lvl = el('div', 'lvl-badge'); bot.appendChild(this.lvl);
     this.belt = el('div', 'belt'); bot.appendChild(this.belt);
     this.beltSlots = [];
+    this.beltPx = UI.pix ? 36 : 42; // 도트 UI는 칸 테두리가 두꺼우니 그림 판을 그만큼 작게
     for (let i = 0; i < 4; i++) {
       const s = el('button', 'bslot');
-      const cv = canvasFor(s, 42, 42);
+      const cv = canvasFor(s, this.beltPx, this.beltPx);
       const k = el('span', 'k', ''); s.appendChild(k);
       onTap(s, () => { this.game?.useBelt(i); this.refreshBelt(); });
       this.belt.appendChild(s);
@@ -135,7 +140,38 @@ export class HUD {
     parent.appendChild(node);
     return { node, cv, v, kind, last: -1 };
   }
+  // 도트 UI의 구슬: 칸마다 직접 칠한다(물결진 수면 한 줄은 밝게, 아래쪽은 어둡게, 가장자리 그늘, 왼쪽 위에 딱 끊긴 반사) + 도트 테두리
+  drawOrbPix(o, frac, t) {
+    const cv = o.cv, N = cv.c.width, g = cv.g;
+    if (!o.img || o.img.width !== N) o.img = g.createImageData(N, N);
+    const d = o.img.data;
+    d.fill(0);
+    const C = N / 2, r = C - 4, red = o.kind === 'life', poison = red && this.game?.player?.buffs?.poison;
+    const base = red ? (poison ? [58, 154, 32] : [184, 24, 22]) : [30, 62, 206];
+    const dark = red ? (poison ? [18, 60, 10] : [86, 6, 6]) : [10, 18, 92];
+    const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+    const light = mix(base, [255, 255, 255], 0.35), glass = [10, 6, 6];
+    const lv = C + r - frac * r * 2;
+    for (let x = 0; x < N; x++) {
+      const surf = lv + Math.round(Math.sin(x * 0.4 + t * 2.4) * 0.7 + Math.sin(x * 0.17 - t * 1.3) * 0.6);
+      for (let y = 0; y < N; y++) {
+        const dx = x + 0.5 - C, dy = y + 0.5 - C, dist = Math.hypot(dx, dy);
+        if (dist > r + 0.5) continue;
+        let col;
+        const empty = y + 0.5 < surf;
+        if (empty) col = glass;
+        else col = y < surf + 1 ? light : (y - surf) / (r * 2) > 0.5 ? dark : base;
+        if (dist > r - 2) col = mix(col, [0, 0, 0], 0.4);
+        if ((dx + r * 0.32) ** 2 / (r * r * 0.03) + (dy + r * 0.42) ** 2 / (r * r * 0.06) < 1) col = mix(col, [255, 255, 255], empty ? 0.12 : 0.5);
+        const i = (y * N + x) * 4;
+        d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+      }
+    }
+    g.putImageData(o.img, 0, 0);
+    stamp(cv, pixRingCanvas(N, ORB_RING));
+  }
   drawOrb(o, frac, t) {
+    if (UI.pix) { this.drawOrbPix(o, frac, t); return; }
     const g = o.cv.g, S = 88, r = 38, cx = 44, cy = 44;
     g.clearRect(0, 0, S, S);
     // 돌 테두리
@@ -224,15 +260,19 @@ export class HUD {
     const g = this.game;
     if (!g || !this.sbtns) return;
     const bar = g.hero.data.bar;
+    // 도트 UI: 그림을 테두리 두께만큼 안쪽에 그리고 도트 테두리를 덧그린다
+    const ins = UI.pix ? 3 * UI.ART : 0;
     for (const S of this.sbtns) {
       S.id = bar[S.idx] || (S.idx === 0 ? 'attack' : null);
       const cg = S.cv.g;
       cg.clearRect(0, 0, S.size, S.size);
-      if (!S.id) { S.node.classList.add('empty'); S.mp.textContent = ''; cg.strokeStyle = 'rgba(199,164,92,0.5)'; cg.lineWidth = 2; cg.beginPath(); cg.moveTo(S.size / 2 - 7, S.size / 2); cg.lineTo(S.size / 2 + 7, S.size / 2); cg.moveTo(S.size / 2, S.size / 2 - 7); cg.lineTo(S.size / 2, S.size / 2 + 7); cg.stroke(); continue; }
+      const ring = () => { if (UI.pix) stamp(S.cv, pixRingCanvas(S.cv.c.width, RING_BTN)); };
+      if (!S.id) { S.node.classList.add('empty'); S.mp.textContent = ''; cg.strokeStyle = 'rgba(199,164,92,0.5)'; cg.lineWidth = 2; cg.beginPath(); cg.moveTo(S.size / 2 - 7, S.size / 2); cg.lineTo(S.size / 2 + 7, S.size / 2); cg.moveTo(S.size / 2, S.size / 2 - 7); cg.lineTo(S.size / 2, S.size / 2 + 7); cg.stroke(); ring(); continue; }
       S.node.classList.remove('empty');
       const def = S.id === 'attack' ? null : skillDef(S.id);
-      if (!def) drawAttackIcon(cg, S.size, g.hero);
-      else drawSkillIcon(cg, def, 0, 0, S.size);
+      if (!def) drawAttackIcon(cg, S.size, g.hero, ins);
+      else drawSkillIcon(cg, def, ins, ins, S.size - ins * 2);
+      ring();
       const cost = S.id === 'attack' ? 0 : skillManaCost(g.hero, S.id);
       S.cost = cost;
       S.mp.textContent = cost ? Math.round(cost) : '';
@@ -244,10 +284,10 @@ export class HUD {
     if (!g || !this.beltSlots) return;
     const B = g.hero.data.belt, rows = g.hero.beltRows();
     for (let c = 0; c < 4; c++) {
-      const S = this.beltSlots[c], cg = S.cv.g;
-      cg.clearRect(0, 0, 42, 42);
+      const S = this.beltSlots[c], cg = S.cv.g, bp = this.beltPx, m = bp === 42 ? 3 : 1;
+      cg.clearRect(0, 0, bp, bp);
       const it = B[c];
-      if (it) drawItemIcon(cg, it, 3, 3, 36, 36);
+      if (it) pixIcon(S.cv, (ig) => drawItemIcon(ig, it, m, m, bp - m * 2, bp - m * 2));
       let n = 0; for (let r = 0; r < rows; r++) if (B[r * 4 + c]) n++;
       S.k.textContent = n > 1 ? n : (it ? '' : '');
     }
@@ -411,6 +451,8 @@ export class HUD {
       else if (a.team === 1 && game.canSee(a) && !a.untargetable) { const sx = 48 + (a.x - P.x - (a.y - P.y)) * sc, sy = 48 + (a.x - P.x + (a.y - P.y)) * sc * 0.5; g.fillStyle = a.rank === 'unique' ? '#e0b040' : '#e03020'; g.fillRect(sx - 1.2, sy - 1.2, 2.4, 2.4); }
     }
     g.fillStyle = '#fff'; g.beginPath(); g.arc(48, 48, 2.6, 0, Math.PI * 2); g.fill();
+    // 도트 UI: 각진 원으로 오려 내고 도트 테두리
+    if (UI.pix) { const n = this.mmc.c.width; stamp(this.mmc, pixDiscCanvas(n), 'destination-in'); stamp(this.mmc, pixRingCanvas(n, RING_BTN)); }
   }
   // 겹쳐 보는 큰 지도
   drawAutomap() {
@@ -419,7 +461,7 @@ export class HUD {
     g.clearRect(0, 0, W, H);
     const sc = 7, cx = W / 2, cy = H * 0.44;
     const town = L.theme === 'town';
-    g.lineWidth = 1.6;
+    g.lineWidth = UI.pix ? 2.4 : 1.6;
     g.strokeStyle = 'rgba(220,190,130,0.75)';
     g.beginPath();
     for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
@@ -443,15 +485,16 @@ export class HUD {
       g.fillStyle = col; g.beginPath(); g.arc(sx, sy, o.type === 'door' ? 2 : 4, 0, Math.PI * 2); g.fill();
     }
     g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 4, 0, Math.PI * 2); g.fill();
-    g.fillStyle = 'rgba(255,240,200,0.9)'; g.font = '12px -apple-system, sans-serif'; g.textAlign = 'center';
+    g.fillStyle = 'rgba(255,240,200,0.9)'; g.font = uiFont(12); g.textAlign = 'center';
     g.fillText(levelName(game.depth) + ' · 지도', W / 2, 108 + (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0));
   }
 }
 
+const ORB_RING = ['#000', ['#c9a35a', '#6e5428'], '#4a3820', '#000'];
 const UMOD_NAME = { strong: '매우 강함', fast: '매우 빠름', cursed: '저주', magicres: '마법 저항', fire: '화염 강화', light: '번개 강화', cold: '냉기 강화', manaburn: '마나 연소', spectral: '유령 공격', stone: '돌 피부', multi: '다중 사격', teleport: '순간 이동' };
 const RES_IMM = { fire: '화염 면역', cold: '냉기 면역', light: '번개 면역', poison: '독 면역' };
 
-function drawAttackIcon(g, size, hero) {
+function drawAttackIcon(g, size, hero, ins = 0) {
   const ranged = hero.ranged();
-  drawSkillIcon(g, { icon: { g: ranged ? 'arrow' : 'sword', c: '#e0d0b0' } }, 0, 0, size);
+  drawSkillIcon(g, { icon: { g: ranged ? 'arrow' : 'sword', c: '#e0d0b0' } }, ins, ins, size - ins * 2);
 }

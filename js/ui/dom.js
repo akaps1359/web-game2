@@ -1,4 +1,6 @@
 // DOM 도구
+import { UI } from './pixui.js';
+
 export const $ = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 export function el(tag, cls = '', text = null) {
@@ -22,7 +24,9 @@ export function onTap(node, fn) {
   });
   node.addEventListener('pointercancel', () => { down = false; });
 }
-export function canvasFor(node, w, h, dpr = Math.min(3, window.devicePixelRatio || 1)) {
+// UI 캔버스 해상도: 도트 UI면 도트 한 칸(CSS 1.5px)이 판의 한 픽셀(각진 그대로 키운다)
+export const uiDpr = () => (UI.pix ? 1 / UI.ART : Math.min(3, window.devicePixelRatio || 1));
+export function canvasFor(node, w, h, dpr = uiDpr()) {
   const c = document.createElement('canvas');
   c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
   c.style.width = w + 'px'; c.style.height = h + 'px';

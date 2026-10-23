@@ -141,3 +141,11 @@ export function pixEllipse(g, cx, cy, rx, ry, col) {
     lx = x; ly = y;
   }
 }
+
+// 도트 글꼴 글자: 한 도트(d) 어긋난 검은 글자를 깔아 또렷한 외곽선을 만든다(외곽선 그리기는 모서리가 뭉개진다)
+export function pixText(g, txt, x, y, col, d) {
+  x = Math.round(x / d) * d; y = Math.round(y / d) * d;
+  g.fillStyle = '#000';
+  g.fillText(txt, x - d, y); g.fillText(txt, x + d, y); g.fillText(txt, x, y - d); g.fillText(txt, x, y + d); g.fillText(txt, x + d, y + d);
+  g.fillStyle = col; g.fillText(txt, x, y);
+}
