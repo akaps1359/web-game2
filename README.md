@@ -72,7 +72,7 @@ python3 -m http.server 8000   # http://localhost:8000
 node tools/preview/play.mjs <시나리오.mjs> [출력 폴더]   # Playwright로 아이폰 세로 화면을 띄우고 시나리오 실행·캡처
 ```
 
-`tools/preview/scene.html`은 타일·캐릭터 렌더링을 따로 보는 미리보기, `tools/preview/models.html`은 직업·괴물·보스·마을 사람 모델을 여러 방향과 동작 순간으로 늘어놓아 보는 전시 페이지(예: `?set=classes&faces=4`, `?set=beasts&anim=walk&ts=0,0.25,0.5,0.75`), `tools/preview/bench.html`은 모델 그리기 비용을 재는 페이지입니다. `tools/audio-test.html`은 모든 효과음·음악·환경음을 하나씩 들어 보는 소리 시험대입니다. 휴대폰에서도 열립니다.
+`tools/preview/scene.html`은 타일·캐릭터 렌더링을 따로 보는 미리보기, `tools/preview/models.html`은 직업·괴물·보스·마을 사람 모델을 여러 방향과 동작 순간으로 늘어놓아 보는 전시 페이지(예: `?set=classes&faces=4`, `?set=beasts&anim=walk&ts=0,0.25,0.5,0.75`), `tools/preview/bench.html`은 모델 그리기 비용을 재는 페이지입니다. `tools/preview/touch.mjs`는 실제 터치만으로 게임을 시작해 이동·단추·물약이 되는지 확인하는 시나리오입니다(`node tools/preview/play.mjs tools/preview/touch.mjs`). `tools/audio-test.html`은 모든 효과음·음악·환경음을 하나씩 들어 보는 소리 시험대입니다. 휴대폰에서도 열립니다.
 
 ### 파일 구성
 

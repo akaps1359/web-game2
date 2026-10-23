@@ -54,7 +54,8 @@ button { font-family: inherit; color: inherit; }
 /* ───────── HUD ───────── */
 #hud { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
 #hud.hidden { display: none; }
-#hud > * { pointer-events: auto; }
+/* 기본값만 정한다(:where로 구체성 0): .aimline·.hud-top처럼 클래스에서 none을 준 겹침은 터치를 게임 화면으로 흘려보낸다 */
+:where(#hud) > * { pointer-events: auto; }
 .hud-top { position: absolute; left: 0; right: 0; top: 0; padding: calc(var(--sat) + 4px) calc(var(--sar) + 8px) 0 calc(var(--sal) + 8px); display: flex; align-items: flex-start; gap: 6px; pointer-events: none; }
 .hud-top > * { pointer-events: auto; }
 .menu-btns { display: flex; flex-direction: column; gap: 6px; }
