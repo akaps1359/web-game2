@@ -1,4 +1,5 @@
 // 인물 그리기 공용 도구: 아이소메트릭 투영, 빛(왼쪽 위 주광 + 오른쪽 뒤 테두리광), 색 단계, 음영을 입힌 기본 도형
+import { grade, cylTile, ballTile, TS, BS } from './tex.js';
 export const PI = Math.PI, TAU = PI * 2;
 
 // ───────── 투영 ─────────
@@ -30,11 +31,13 @@ export function camNormal(nf, nr, nz) {
 export const LX = -0.42, LY = -0.62, LZ = 0.66; // 빛이 오는 쪽(화면 공간)
 const HL = Math.hypot(LX, LY, LZ + 1); const HX = LX / HL, HY = LY / HL, HZ = (LZ + 1) / HL; // 반사광 중간 벡터
 const RX = 0.78, RY = -0.36; // 테두리광(오른쪽 위 뒤)
-export const AMB = 0.4, DIF = 0.8, RIM = 0.32;
-// 재질: 반사 세기·날카로움
+export const AMB = 0.3, DIF = 0.95, RIM = 0.1;
+// 재질: 반사 세기·날카로움, 질감 종류와 세기(tex), 질감이 반사를 흔드는 정도(stex)
 export const MAT = {
-  skin: { ks: 0.1, sh: 10 }, cloth: { ks: 0, sh: 1 }, leather: { ks: 0.16, sh: 9 }, metal: { ks: 0.95, sh: 26 }, bone: { ks: 0.12, sh: 8 },
-  wood: { ks: 0.08, sh: 6 }, gem: { ks: 1.0, sh: 30 }, scale: { ks: 0.4, sh: 14 }, chitin: { ks: 0.55, sh: 18 }, fur: { ks: 0, sh: 1 }, gold: { ks: 0.9, sh: 20 },
+  skin: { ks: 0.05, sh: 10, kind: 'skin', tex: 0.24 }, cloth: { ks: 0, sh: 1, kind: 'cloth', tex: 0.34 }, leather: { ks: 0.08, sh: 9, kind: 'leather', tex: 0.4 },
+  metal: { ks: 0.55, sh: 20, kind: 'metal', tex: 0.24, stex: 0.35, dk: 0.72 }, bone: { ks: 0.05, sh: 8, kind: 'bone', tex: 0.42 }, wood: { ks: 0.03, sh: 6, kind: 'wood', tex: 0.42 },
+  gem: { ks: 1.0, sh: 30, kind: 'gem', tex: 0 }, scale: { ks: 0.32, sh: 14, kind: 'scale', tex: 0.45, stex: 0.6, dk: 0.8 }, chitin: { ks: 0.4, sh: 18, kind: 'chitin', tex: 0.3 },
+  fur: { ks: 0, sh: 1, kind: 'fur', tex: 0.5 }, gold: { ks: 0.6, sh: 18, kind: 'gold', tex: 0.22, dk: 0.8 }, hide: { ks: 0.07, sh: 9, kind: 'hide', tex: 0.36 },
 };
 let FL = 1; // 맞았을 때 번쩍임 배율
 export function setFlash(on) { FL = on ? 1.9 : 1; }
@@ -65,7 +68,7 @@ function parse(c) {
 // 밝기 k(0~4)와 반사 sp(0~1.5)를 입힌 색(문자열, 캐시)
 export function tone(c, k, sp = 0) {
   let e = CC.get(c);
-  if (!e) { e = { v: parse(c), m: new Map() }; CC.set(c, e); if (CC.size > 600) CC.clear(); }
+  if (!e) { e = { v: grade(parse(c)), m: new Map() }; CC.set(c, e); if (CC.size > 600) CC.clear(); }
   const kq = Math.max(0, Math.min(160, Math.round(k * 40))), sq = Math.max(0, Math.min(15, Math.round(sp * 10)));
   const key = kq * 16 + sq;
   let s = e.m.get(key);
@@ -83,50 +86,25 @@ export function mixHex(a, b, t) {
   return '#' + h(A[0] + (B[0] - A[0]) * t) + h(A[1] + (B[1] - A[1]) * t) + h(A[2] + (B[2] - A[2]) * t);
 }
 
-// ───────── 음영 그라데이션 ─────────
-// 그라데이션은 색·재질·방향별로 한 번만 만들어 두고(단위 공간), 칠할 때 좌표 변환으로 제자리에 놓는다.
-// 경로는 화면 좌표로 먼저 만들고, 채우기 직전에만 변환을 바꾼다(캔버스는 채울 때의 변환으로 그라데이션을 읽는다)
-const TS6 = [-1, -0.62, -0.22, 0.2, 0.6, 1];
-const TS9 = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];
-const GC = new Map();
-let GCN = 0;
+// ───────── 음영 타일 ─────────
+// 음영과 재질 질감을 굳힌 작은 타일(색·재질·방향별)을 무늬로 깔아 칠한다. 경로는 화면 좌표로 만들고,
+// 채우기 직전에만 좌표 변환을 바꿔 타일을 그 부위에 맞춘다(캔버스는 채울 때의 변환으로 무늬를 읽는다)
 const MATS = Object.values(MAT);
-function gEntry(c) {
-  let e = GC.get(c);
-  if (!e) { e = new Map(); GC.set(c, e); if (++GCN > 400) { GC.clear(); GCN = 0; GC.set(c, e); } }
-  return e;
-}
-const AQ = 48; // 방향 나눔
-// 단위 원기둥 그라데이션: x = -1 ~ 1 이 축에 수직인 방향(ai: 그 방향의 각도 번호)
-function cylUnit(g, c, m, ai) {
-  const e = gEntry(c), key = (MATS.indexOf(m) + 1) * 1000 + ai + (FL > 1 ? 500 : 0);
-  let gr = e.get(key);
-  if (gr) return gr;
-  const an = (ai / AQ) * TAU, px = Math.cos(an), py = Math.sin(an);
-  gr = g.createLinearGradient(-1, 0, 1, 0);
-  const T = m && m.ks > 0.3 ? TS9 : TS6;
-  for (let i = 0; i < T.length; i++) {
-    const t = T[i], nz = Math.sqrt(1 - t * t);
-    const L = lit(t * px, t * py, nz, m);
-    gr.addColorStop((t + 1) / 2, tone(c, L.k, L.s));
+// 맨살 재질: 괴물은 주름진 가죽, 바위 몸은 껍질
+export function skinMat(look) { return look.rock ? MAT.chitin : look.hide ? MAT.hide : MAT.skin; }
+const TC = new Map(); // 열쇠 → { cv, pat, ctx }
+const TMAX = 2400;
+const AQ = 24; // 방향 나눔
+function tileFor(g, key, make, rep) {
+  let e = TC.get(key);
+  if (e) { TC.delete(key); TC.set(key, e); }
+  else {
+    e = { cv: make(), pat: null, ctx: null };
+    TC.set(key, e);
+    if (TC.size > TMAX) { let n = TMAX >> 3; for (const k of TC.keys()) { TC.delete(k); if (--n <= 0) break; } }
   }
-  e.set(key, gr);
-  return gr;
-}
-// 단위 공 그라데이션(반지름 1, 빛 쪽으로 치우친 방사형)
-function ballUnit(g, c, m, k0) {
-  const e = gEntry(c), key = -((MATS.indexOf(m) + 1) * 1000 + Math.round(k0 * 100) + (FL > 1 ? 500 : 0)) - 1;
-  let gr = e.get(key);
-  if (gr) return gr;
-  gr = g.createRadialGradient(LX * 0.5, LY * 0.5, 0.04, LX * 0.12, LY * 0.12, 1.08);
-  const sp = m && m.ks ? m.ks : 0;
-  gr.addColorStop(0, tone(c, (AMB + DIF) * FL * k0, sp * 0.9));
-  gr.addColorStop(0.3, tone(c, (AMB + DIF * 0.86) * FL * k0, sp * 0.25));
-  gr.addColorStop(0.62, tone(c, (AMB + DIF * 0.5) * FL * k0));
-  gr.addColorStop(0.86, tone(c, (AMB + DIF * 0.16) * FL * k0));
-  gr.addColorStop(1, tone(c, AMB * 0.85 * FL * k0));
-  e.set(key, gr);
-  return gr;
+  if (e.ctx !== g) { e.pat = g.createPattern(e.cv, rep); e.ctx = g; }
+  return e.pat;
 }
 // 액터를 그리기 전에 캔버스의 지금 변환을 기억해 둔다
 const T0 = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
@@ -140,47 +118,75 @@ function withLocal(g, a, b, c, d, e, f) {
 function resetT(g) { g.setTransform(T0.a, T0.b, T0.c, T0.d, T0.e, T0.f); }
 // 지금 경로를 원기둥 음영으로 채운다: (mx,my) 중심, (px,py) 축에 수직인 단위 벡터, R 반지름
 export function fillCyl(g, mx, my, px, py, R, c, m) {
+  m = m || MAT.cloth;
   let an = Math.atan2(py, px); if (an < 0) an += TAU;
-  const ai = Math.round((an / TAU) * AQ) % AQ;
-  const gr = cylUnit(g, c, m, ai);
-  // 단위 공간의 x축 → (px,py)·R, y축 → 축 방향
-  withLocal(g, px * R, py * R, -py * R, px * R, mx, my);
-  g.fillStyle = gr; g.fill();
+  const ai = Math.round((an / TAU) * AQ) % AQ, fl = FL > 1 ? 1 : 0;
+  const pat = tileFor(g, c + '|' + MATS.indexOf(m) + '|' + ai + '|' + fl, () => cylTile(rgbOf(c), m, (ai / AQ) * TAU, FL), 'repeat');
+  // 타일 가로(0~TS) → 수직 방향 -1.1R ~ +1.1R, 세로 → 축 방향(한 칸 0.5u)
+  const k = (R * 2.2) / TS, vs = 0.5 * PR.s;
+  withLocal(g, px * k, py * k, py * vs, -px * vs, mx - px * R * 1.1, my - py * R * 1.1);
+  g.fillStyle = pat; g.fill();
   resetT(g);
 }
 export function fillBall(g, cx, cy, R, c, m, k0 = 1) {
-  const gr = ballUnit(g, c, m, k0);
-  withLocal(g, R, 0, 0, R, cx, cy);
-  g.fillStyle = gr; g.fill();
+  m = m || MAT.skin;
+  const kq = Math.round(k0 * 20), fl = FL > 1 ? 1 : 0;
+  const pat = tileFor(g, c + '|' + MATS.indexOf(m) + '|b' + kq + '|' + fl, () => ballTile(rgbOf(c), m, FL, kq / 20), 'no-repeat');
+  const k = (R * 2.04) / BS;
+  withLocal(g, k, 0, 0, k, cx - R * 1.02, cy - R * 1.02);
+  g.fillStyle = pat; g.fill();
   resetT(g);
 }
 
 // ───────── 기본 도형 ─────────
 // 굵기가 변하는 원기둥(팔다리·뼈·꼬리 마디). bulge: 가운데가 불룩한 정도(근육)
-export function seg(g, x1, y1, r1, x2, y2, r2, c, m, bulge = 0, bt = 0.42) {
+export function seg(g, x1, y1, r1, x2, y2, r2, c, m, bulge = 0, bt = 0.42, bulgeB = bulge) {
   let dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
   if (L < 0.02) { dx = 0; dy = 0.02; L = 0.02; }
   const ux = dx / L, uy = dy / L, px = -uy, py = ux;
   const a0 = Math.atan2(py, px);
   g.beginPath();
   g.arc(x1, y1, r1, a0, a0 + PI);
-  if (bulge) {
-    const rb = (r1 + (r2 - r1) * bt) * (1 + bulge), mx = x1 + dx * bt, my = y1 + dy * bt;
+  if (bulge || bulgeB) {
+    // 양쪽 옆선의 불룩함을 따로(종아리·이두근처럼 한쪽만 부푼 근육)
+    const r0 = r1 + (r2 - r1) * bt, mx = x1 + dx * bt, my = y1 + dy * bt;
+    const ra = r0 * (1 + bulge), rb = r0 * (1 + bulgeB);
     const ax = x1 - px * r1, ay = y1 - py * r1, bx = x2 - px * r2, by = y2 - py * r2;
-    g.quadraticCurveTo(2 * (mx - px * rb) - (ax + bx) / 2, 2 * (my - py * rb) - (ay + by) / 2, bx, by);
+    g.quadraticCurveTo(2 * (mx - px * ra) - (ax + bx) / 2, 2 * (my - py * ra) - (ay + by) / 2, bx, by);
     g.arc(x2, y2, r2, a0 + PI, a0 + TAU);
     const ax2 = x1 + px * r1, ay2 = y1 + py * r1, bx2 = x2 + px * r2, by2 = y2 + py * r2;
     g.quadraticCurveTo(2 * (mx + px * rb) - (ax2 + bx2) / 2, 2 * (my + py * rb) - (ay2 + by2) / 2, ax2, ay2);
   } else g.arc(x2, y2, r2, a0 + PI, a0 + TAU);
   g.closePath();
-  fillCyl(g, x1 + dx * 0.45, y1 + dy * 0.45, px, py, Math.max(r1, r2) * (1 + bulge), c, m);
+  fillCyl(g, x1 + dx * 0.45, y1 + dy * 0.45, px, py, Math.max(r1, r2) * (1 + Math.max(bulge, bulgeB)), c, m);
 }
-// 관절 두 개 사이의 원기둥(몸 좌표 반지름 → 화면)
-export function segJ(g, A, B, ra, rb, c, m, bulge = 0, bt = 0.42) {
-  const s = PR.s;
-  seg(g, XJ(A), YJ(A), ra * s, XJ(B), YJ(B), rb * s, c, m, bulge, bt);
+// 관절 두 개 사이의 원기둥(몸 좌표 반지름 → 화면). dir(몸 좌표 방향)으로 damt만큼 한쪽을 더 불룩하게
+export function segJ(g, A, B, ra, rb, c, m, bulge = 0, bt = 0.42, dir = null, damt = 0) {
+  const s = PR.s, x1 = XJ(A), y1 = YJ(A), x2 = XJ(B), y2 = YJ(B);
+  let bA = bulge, bB = bulge;
+  if (dir && damt) {
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, px = -dy / L, py = dx / L;
+    const sx = dir.f * PR.kfx + dir.r * PR.krx, sy = dir.f * PR.kfy + dir.r * PR.kry - dir.z * PR.kz;
+    const d = Math.max(-1, Math.min(1, (sx * px + sy * py) / s));
+    if (d > 0) bB += damt * d; else bA -= damt * d;
+  }
+  seg(g, x1, y1, ra * s, x2, y2, rb * s, c, m, bA, bt, bB);
 }
 // 공(타원)
+// 털·머리카락: 투영 타원 둘레를 들쭉날쭉하게(끝이 삐죽한 덩어리). amp 털끝 길이(반지름 비), down 아래로 처지는 정도
+export function shaggy(g, E, n, amp, c, m, down = 0, k0 = 1) {
+  const cr = Math.cos(E.rot), sr = Math.sin(E.rot), ex = E.x, ey = E.y, rx = E.rx, ry = E.ry;
+  g.beginPath();
+  for (let k = 0; k < n; k++) {
+    const an = (k / n) * TAU, tip = k % 2 ? 1 : 1 + amp * (0.7 + 0.3 * ((k * 5) % 3));
+    const x = Math.cos(an) * rx * tip, y = Math.sin(an) * ry * tip;
+    const px = ex + x * cr - y * sr, py0 = ey + x * sr + y * cr;
+    const py = py0 + (k % 2 ? 0 : Math.max(0, py0 - ey) * down);
+    if (k) g.lineTo(px, py); else g.moveTo(px, py);
+  }
+  g.closePath();
+  fillBall(g, ex, ey, Math.max(rx, ry) * (1 + amp), c, m, k0);
+}
 export function ball(g, cx, cy, rx, ry, c, m, rot = 0, k0 = 1) {
   g.beginPath(); g.ellipse(cx, cy, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU);
   fillBall(g, cx, cy, Math.max(rx, ry), c, m, k0);
@@ -248,7 +254,7 @@ export function ringFront(g, rg, lw, col, alpha = 1) {
 }
 // 고리 여럿(아래→위)을 이어 붙인 몸통 윤곽 경로. 아래는 아래쪽 반원, 위는 위쪽 반원으로 닫는다
 const LIX = new Int32Array(16), RIX = new Int32Array(16);
-export function loftPath(g, rings, n, topOpen = false) {
+export function loftPath(g, rings, n, topOpen = false, jag = 0) {
   const b = rings[0], t = rings[n - 1];
   let sx = t.cx - b.cx, sy = t.cy - b.cy;
   const sl = Math.hypot(sx, sy) || 1; sx /= sl; sy /= sl;
@@ -260,8 +266,8 @@ export function loftPath(g, rings, n, topOpen = false) {
     LIX[k] = il; RIX[k] = ir;
   }
   g.beginPath();
-  // 첫 고리: 왼쪽 끝 → (등줄기 반대쪽 반원) → 오른쪽 끝
-  arcBetween(g, b, LIX[0], RIX[0], -1, true, sx, sy);
+  // 첫 고리: 왼쪽 끝 → (등줄기 반대쪽 반원) → 오른쪽 끝(jag면 해진 옷단처럼 들쭉날쭉)
+  arcBetween(g, b, LIX[0], RIX[0], -1, true, sx, sy, jag);
   // 오른쪽 옆선(위로)
   for (let k = 1; k < n; k++) {
     const rg = rings[k], p = rings[k - 1], i = RIX[k], j = RIX[k - 1];
@@ -281,7 +287,7 @@ export function loftPath(g, rings, n, topOpen = false) {
   return { qx, qy };
 }
 // 고리 위 두 점 사이를 잇는 두 반원 중, 등줄기 방향(sx,sy)으로 바깥(dir=+1 앞쪽, -1 뒤쪽)에 있는 쪽으로
-function arcBetween(g, rg, i0, i1, dir, move, sx, sy) {
+function arcBetween(g, rg, i0, i1, dir, move, sx, sy, jag = 0) {
   let pa = 0, na = 0, pb = 0, nb = 0;
   for (let i = i0; i !== i1; i = (i + 1) % RING_N) { pa += rg.x[i] * sx + rg.y[i] * sy; na++; }
   for (let i = i0; i !== i1; i = (i - 1 + RING_N) % RING_N) { pb += rg.x[i] * sx + rg.y[i] * sy; nb++; }
@@ -289,8 +295,16 @@ function arcBetween(g, rg, i0, i1, dir, move, sx, sy) {
   const useA = dir > 0 ? A >= B : A <= B;
   const step = useA ? 1 : -1;
   if (move) g.moveTo(rg.x[i0], rg.y[i0]); else g.lineTo(rg.x[i0], rg.y[i0]);
+  let px = rg.x[i0], py = rg.y[i0], k = 0;
   for (let i = (i0 + step + RING_N) % RING_N, guard = 0; guard < RING_N; i = (i + step + RING_N) % RING_N, guard++) {
+    if (jag) {
+      // 두 점 사이에 뾰족한 자락 하나씩
+      const mx = (px + rg.x[i]) / 2, my = (py + rg.y[i]) / 2, a = jag * (0.6 + ((k * 7) % 5) * 0.2);
+      g.lineTo(mx - sx * a, my - sy * a);
+      k++;
+    }
     g.lineTo(rg.x[i], rg.y[i]);
+    px = rg.x[i]; py = rg.y[i];
     if (i === i1) break;
   }
 }

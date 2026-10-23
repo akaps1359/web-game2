@@ -10,7 +10,7 @@ export const CLASSES = {
     block: 30, meleeHit: 20, rangedHit: 10, spellHit: 0,
     // 공격 동작 시간(초): 디아블로 1의 프레임 수를 줄여서
     swing: 0.55, cast: 0.6, bowSwing: 0.62,
-    look: { plan: 'human', h: 1.05, bulk: 1.12, shoulders: 1.1, cols: { skin: '#c89a78', hair: '#3a2614', torso: '#6a5a48', arms: '#c89a78', fore: '#c89a78', hands: '#c89a78', legs: '#4a3c30', boots: '#3a2a1c', belt: '#2a1a10' }, beard: '#3a2614' },
+    look: { plan: 'human', h: 1.05, bulk: 1.12, shoulders: 1.1, cols: { skin: '#c89a78', hair: '#3a2614', torso: '#6a5a48', arms: '#c89a78', fore: '#c89a78', hands: '#c89a78', legs: '#4a3c30', boots: '#3a2a1c', belt: '#2a1a10' }, beard: '#3a2614', bracers: '#3a2a1c', furCollar: '#5e4a34', pouches: true, baldric: '#3a2616' },
     start: ['short_sword', 'buckler', 'club', 'hp_minor', 'hp_minor', 'tp_scroll'],
     voice: 'male',
   },
@@ -22,7 +22,7 @@ export const CLASSES = {
     life: { vit: 1, lvl: 2, k: 23, itemVit: 1.5 }, mana: { mag: 1, lvl: 2, k: 5, itemMag: 1.5 },
     block: 20, meleeHit: 0, rangedHit: 20, spellHit: 0,
     swing: 0.55, cast: 0.55, bowSwing: 0.48,
-    look: { plan: 'human', h: 0.97, bulk: 0.9, shoulders: 0.92, waist: 0.85, ponytail: true, cols: { skin: '#d8ae90', hair: '#7a3a1a', torso: '#4a5a3a', arms: '#d8ae90', fore: '#4a3a2a', hands: '#5a4030', legs: '#3a3a2c', boots: '#3a2a1c', belt: '#2a1a10' } },
+    look: { plan: 'human', h: 0.97, bulk: 0.9, shoulders: 0.92, waist: 0.85, ponytail: true, cols: { skin: '#d8ae90', hair: '#7a3a1a', torso: '#4a5a3a', arms: '#d8ae90', fore: '#4a3a2a', hands: '#5a4030', legs: '#3a3a2c', boots: '#3a2a1c', belt: '#2a1a10' }, bracers: '#2e2218', pouches: true, baldric: '#2e2016', quiver: true },
     start: ['short_bow', 'dagger', 'hp_minor', 'hp_minor', 'tp_scroll'],
     voice: 'female',
   },

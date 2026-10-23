@@ -339,7 +339,7 @@ export function setDims(look) {
   DIM.upper = 12.3 * H * (look.arms || 1); DIM.fore = 11.3 * H * (look.arms || 1); DIM.hand = 4 * H;
   DIM.foot = 7 * H;
   DIM.hs = (look.headS || 1) * (fem ? 0.96 : 1);
-  DIM.headA = 4.9 * H * DIM.hs; DIM.headB = 4.35 * H * DIM.hs; DIM.headC = 5.4 * H * DIM.hs;
+  DIM.headA = 4.6 * H * DIM.hs; DIM.headB = 4.15 * H * DIM.hs; DIM.headC = 5.05 * H * DIM.hs;
   DIM.torsoL = look.torsoL || 1;
 }
 

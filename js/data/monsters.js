@@ -2,13 +2,13 @@
 // 저항 문자열: 독(디아블로 1의 마법 저항 자리)·화염·번개, 넷째 글자는 냉기. I 면역, R 저항(75%)
 // 걷기 = 한 칸에 걸리는 초, atk = 공격 동작 초, hit = 타격 시점(초), rec = 피격 경직(초)
 
-const human = (cols, extra = {}) => ({ plan: 'human', cols, ...extra });
+const human = (cols, extra = {}) => ({ plan: 'human', cols, hide: true, ...extra });
 const C = (skin, torso, legs, boots, extra = {}) => ({ skin, torso, arms: extra.arms || skin, fore: extra.fore || skin, hands: extra.hands || skin, legs, boots, hair: extra.hair || null, belt: extra.belt || null, wing: extra.wing, robe: extra.robe, pad: extra.pad, cape: extra.cape });
 
 export const FAMILIES = {
   zombie: {
     name: '좀비', cls: 'undead', ai: 'zombie', walk: 1.2, atk: 0.6, hit: 0.4, rec: 0.3, sfx: 'mon_zombie', die: 'mon_die_small',
-    look: (c) => human(C(c[0], c[1], c[2], c[0]), { hunch: 0.3, reach: 1.0, stride: 0.6, bloodCol: 'rgba(60,70,20,0.7)' }),
+    look: (c) => human(C(c[0], c[1], c[2], c[0]), { hunch: 0.3, reach: 1.0, stride: 0.6, rags: true, bloodCol: 'rgba(60,70,20,0.7)' }),
     v: [
       ['zombie', '좀비', [1, 2], 1, [4, 7], 5, 10, [2, 5], 'I---', 54, 0, ['#7a8a5a', '#4a4030', '#3a3428']],
       ['ghoul', '구울', [2, 3], 2, [7, 11], 10, 10, [3, 10], 'I---', 58, 1, ['#8a9aa8', '#3a3a40', '#2a2a30']],
@@ -18,7 +18,7 @@ export const FAMILIES = {
   },
   fallen: {
     name: '타락귀', cls: 'animal', ai: 'fallen', walk: 0.55, atk: 0.65, hit: 0.35, rec: 0.55, sfx: 'mon_imp', die: 'mon_die_small',
-    look: (c, v) => human(C(c[0], c[0], c[1], c[1]), { h: 0.6, headS: 1.35, horns: 0.6, tail: true, wtype: v.sword ? 'sword' : 'spear', wlen: v.sword ? 16 : 30, wcol: '#a8a8b0', glowEyes: '#ffd040', barZ: 50 }),
+    look: (c, v) => human(C(c[0], c[0], c[1], c[1]), { h: 0.6, headS: 1.35, horns: 0.6, tail: true, legMat: 'hide', wtype: v.sword ? 'sword' : 'spear', wlen: v.sword ? 16 : 30, wcol: '#a8a8b0', glowEyes: '#ffd040', barZ: 50 }),
     v: [
       ['fallen', '타락귀', [1, 3], 1, [1, 4], 0, 15, [1, 3], '----', 46, 0, ['#b0402a', '#7a2a1a']],
       ['carver', '살점 타락귀', [2, 3], 3, [4, 8], 5, 20, [2, 5], '----', 80, 2, ['#c06030', '#7a3a1a']],
@@ -28,7 +28,7 @@ export const FAMILIES = {
   },
   fallen_s: {
     name: '타락귀 검사', cls: 'animal', ai: 'fallen', walk: 0.6, atk: 0.65, hit: 0.4, rec: 0.55, sfx: 'mon_imp', die: 'mon_die_small', sword: true,
-    look: (c) => human(C(c[0], c[0], c[1], c[1]), { h: 0.62, headS: 1.3, horns: 0.6, tail: true, wtype: 'cleaver', wlen: 16, wcol: '#a8a8b0', glowEyes: '#ffd040', barZ: 50 }),
+    look: (c) => human(C(c[0], c[0], c[1], c[1]), { h: 0.62, headS: 1.3, horns: 0.6, tail: true, legMat: 'hide', wtype: 'cleaver', wlen: 16, wcol: '#a8a8b0', glowEyes: '#ffd040', barZ: 50 }),
     v: [
       ['fallen_s', '타락귀 검사', [1, 3], 1, [2, 5], 10, 15, [1, 4], '----', 52, 0, ['#b0402a', '#7a2a1a']],
       ['carver_s', '살점 검사', [2, 3], 3, [5, 9], 15, 20, [2, 7], '----', 90, 1, ['#c06030', '#7a3a1a']],
@@ -98,7 +98,7 @@ export const FAMILIES = {
   },
   goatman: {
     name: '산양족', cls: 'demon', ai: 'goat', walk: 0.4, atk: 0.6, hit: 0.4, rec: 0.3, sfx: 'mon_goat', die: 'mon_die_big', doors: true,
-    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.1, hornCol: '#d8ccb0', legs: 0.95, wtype: 'mace', wlen: 24, wcol: '#8a8a90', h: 1.05, bulk: 1.1, tail: true, hooves: true }),
+    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.1, hornCol: '#d8ccb0', torsoMat: 'fur', furCollar: c[2], legs: 0.95, wtype: 'mace', wlen: 24, wcol: '#8a8a90', h: 1.05, bulk: 1.1, tail: true, hooves: true }),
     v: [
       ['flesh_clan', '살점 부족', [4, 6], 8, [30, 45], 40, 50, [4, 10], '----', 460, 0, ['#8a6a54', '#6a4a34', '#4a3424']],
       ['stone_clan', '바위 부족', [5, 7], 10, [40, 55], 40, 60, [6, 12], 'R---', 685, 1, ['#7a7a76', '#5a5a56', '#3a3a38']],
@@ -108,7 +108,7 @@ export const FAMILIES = {
   },
   goat_archer: {
     name: '산양족 궁수', cls: 'demon', ai: 'archer', walk: 0.4, atk: 0.8, hit: 0.65, rec: 0.3, sfx: 'mon_goat', die: 'mon_die_big', missile: 'arrow', doors: true,
-    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.0, hornCol: '#d8ccb0', wtype: 'bow', wcol: '#5a4028', h: 1.0, tail: true, hooves: true }),
+    look: (c) => human(C(c[0], c[1], c[2], '#2a1a10', { hands: c[2] }), { head: 'goat', horns: 1.0, hornCol: '#d8ccb0', torsoMat: 'fur', furCollar: c[2], wtype: 'bow', wcol: '#5a4028', h: 1.0, tail: true, hooves: true }),
     v: [
       ['flesh_archer', '살점 부족 궁수', [4, 6], 8, [20, 35], 35, 35, [1, 7], '----', 448, 0, ['#8a6a54', '#6a4a34', '#4a3424']],
       ['stone_archer', '바위 부족 궁수', [5, 7], 10, [30, 40], 35, 40, [2, 9], 'R---', 645, 1, ['#7a7a76', '#5a5a56', '#3a3a38']],
@@ -118,7 +118,7 @@ export const FAMILIES = {
   },
   overlord: {
     name: '비대한 군주', cls: 'demon', ai: 'melee', walk: 0.5, atk: 0.75, hit: 0.4, rec: 0.3, sfx: 'mon_demon', die: 'mon_die_big',
-    look: (c) => human(C(c[0], c[1], c[2], c[2]), { h: 1.25, bulk: 1.6, belly: 1.7, shoulders: 1.2, horns: 0.5, wtype: 'cleaver', wlen: 22, wcol: '#9a9aa0', wwide: 1.5, astyle: 'overhead', scale: 1.1, shadow: 1.4, barZ: 90 }),
+    look: (c) => human(C(c[0], c[1], c[2], c[2]), { torsoMat: 'hide', legMat: 'hide', h: 1.25, bulk: 1.6, belly: 1.7, shoulders: 1.2, horns: 0.5, wtype: 'cleaver', wlen: 22, wcol: '#9a9aa0', wwide: 1.5, astyle: 'overhead', scale: 1.1, shadow: 1.4, barZ: 90 }),
     v: [
       ['overlord', '군주', [5, 7], 10, [60, 80], 55, 55, [6, 12], '----', 635, 0, ['#a05a40', '#7a4030', '#4a2418']],
       ['mudman', '진흙 인간', [7, 9], 14, [100, 125], 60, 60, [8, 16], '----', 1165, 1, ['#6a5034', '#4a3824', '#2a2014']],
@@ -128,7 +128,7 @@ export const FAMILIES = {
   },
   gargoyle: {
     name: '가고일', cls: 'demon', ai: 'garg', walk: 0.7, atk: 0.7, hit: 0.35, rec: 0.5, sfx: 'mon_demon', die: 'mon_die_demon', doors: true,
-    look: (c) => human(C(c[0], c[0], c[1], c[1], { wing: c[1] }), { wings: true, wingS: 1.1, horns: 0.9, hornCol: '#3a3a3a', hunch: 0.25, wtype: 'claw', wlen: 10, wcol: '#d8d0c0', glowEyes: c[2], head: 'beast', h: 1.0 }),
+    look: (c) => human(C(c[0], c[0], c[1], c[1], { wing: c[1] }), { legMat: 'hide', wings: true, wingS: 1.1, horns: 0.9, hornCol: '#3a3a3a', hunch: 0.25, wtype: 'claw', wlen: 10, wcol: '#d8d0c0', glowEyes: c[2], head: 'beast', h: 1.0 }),
     v: [
       ['winged_demon', '날개 악마', [5, 7], 9, [45, 60], 45, 50, [10, 16], 'IR--', 662, 0, ['#6a3a30', '#4a2a20', '#ff6020']],
       ['gargoyle', '가고일', [7, 9], 13, [60, 90], 45, 65, [10, 16], 'I-R-', 1205, 1, ['#7a7a7a', '#5a5a5a', '#ffd040']],
@@ -148,7 +148,7 @@ export const FAMILIES = {
   },
   magma: {
     name: '마그마 악마', cls: 'demon', ai: 'caster_melee', walk: 0.5, atk: 0.7, hit: 0.35, rec: 0.35, sfx: 'mon_demon', die: 'mon_die_demon', missile: 'fireball', doors: true, dtype: 'fire',
-    look: (c) => human(C(c[0], c[1], c[1], c[0]), { h: 1.15, bulk: 1.3, shoulders: 1.2, horns: 0.6, glowEyes: '#ffe040', wtype: 'claw', wlen: 10, wcol: '#ffa040', cracks: '#ff7a20', rock: true }),
+    look: (c) => human(C(c[0], c[1], c[1], c[0]), { legMat: 'chitin', h: 1.15, bulk: 1.3, shoulders: 1.2, horns: 0.6, glowEyes: '#ffe040', wtype: 'claw', wlen: 10, wcol: '#ffa040', cracks: '#ff7a20', rock: true }),
     v: [
       ['magma', '마그마 악마', [8, 9], 13, [50, 70], 45, 45, [2, 10], 'IR--', 1076, 0, ['#4a2a20', '#2a1810'], { glow: [255, 120, 40] }],
       ['bloodstone', '핏빛 돌', [8, 10], 14, [55, 75], 45, 50, [2, 12], 'II--', 1309, 1, ['#5a1a1a', '#3a1010'], { glow: [255, 60, 40] }],
@@ -168,7 +168,7 @@ export const FAMILIES = {
   },
   storm: {
     name: '폭풍 악마', cls: 'demon', ai: 'caster_melee', walk: 0.4, atk: 0.9, hit: 0.45, rec: 0.2, sfx: 'mon_demon', die: 'mon_die_demon', missile: 'lightning', doors: true, dtype: 'light',
-    look: (c) => human(C(c[0], c[1], c[1], c[1]), { h: 1.2, bulk: 1.0, horns: 0.8, hornCol: '#d0d8ff', glowEyes: '#c0e0ff', wtype: 'claw', wlen: 10, wcol: '#c0e0ff', tail: true }),
+    look: (c) => human(C(c[0], c[1], c[1], c[1]), { torsoMat: 'hide', legMat: 'hide', h: 1.2, bulk: 1.0, horns: 0.8, hornCol: '#d0d8ff', glowEyes: '#c0e0ff', wtype: 'claw', wlen: 10, wcol: '#c0e0ff', tail: true }),
     v: [
       ['red_storm', '붉은 폭풍', [9, 11], 18, [55, 110], 30, 80, [8, 18], 'I-R-', 2160, 0, ['#8a3a3a', '#5a2020'], { glow: [255, 100, 100] }],
       ['storm_rider', '폭풍 기수', [10, 12], 20, [60, 120], 30, 80, [8, 18], 'R-I-', 2391, 1, ['#3a4a8a', '#202a5a'], { glow: [120, 150, 255] }],
@@ -178,7 +178,7 @@ export const FAMILIES = {
   },
   mega: {
     name: '대악마', cls: 'demon', ai: 'mega', walk: 0.35, atk: 0.7, hit: 0.4, rec: 0.05, sfx: 'mon_demon', die: 'mon_die_demon', missile: 'inferno', doors: true, dtype: 'fire',
-    look: (c) => human(C(c[0], c[1], c[1], c[0], { wing: c[2] }), { h: 1.35, bulk: 1.35, shoulders: 1.3, wings: true, wingS: 1.4, horns: 1.3, hornCol: '#2a2020', glowEyes: '#ffe040', wtype: 'axe', wlen: 32, wcol: '#5a5a60', wwide: 1.6, scale: 1.15, shadow: 1.5, barZ: 110, tail: true }),
+    look: (c) => human(C(c[0], c[1], c[1], c[0], { wing: c[2] }), { torsoMat: 'hide', legMat: 'hide', h: 1.35, bulk: 1.35, shoulders: 1.3, wings: true, wingS: 1.4, horns: 1.3, hornCol: '#2a2020', glowEyes: '#ffe040', wtype: 'axe', wlen: 32, wcol: '#5a5a60', wwide: 1.6, scale: 1.15, shadow: 1.5, barZ: 110, tail: true }),
     v: [
       ['slayer', '학살자', [10, 12], 20, [120, 140], 60, 100, [12, 20], 'RI--', 2300, 0, ['#8a3a2a', '#5a2018', '#3a1410']],
       ['guardian', '수호 악마', [11, 13], 22, [140, 160], 65, 110, [14, 22], 'RI--', 2714, 1, ['#6a4a3a', '#4a2a20', '#2a1a10']],
@@ -208,7 +208,7 @@ export const FAMILIES = {
   },
   succubus: {
     name: '서큐버스', cls: 'demon', ai: 'kite', walk: 0.4, atk: 0.8, hit: 0.5, rec: 0.35, sfx: 'mon_cast', die: 'mon_die_demon', missile: 'bloodstar', doors: true, dtype: 'magic',
-    look: (c) => human(C(c[0], c[1], c[0], c[1], { hair: c[2], wing: c[1] }), { wings: true, wingS: 1.0, horns: 0.7, hornCol: '#2a1a1a', ponytail: true, waist: 0.8, bulk: 0.85, glowEyes: '#ff4060', female: true }),
+    look: (c) => human(C(c[0], c[1], c[0], c[1], { hair: c[2], wing: c[1] }), { wings: true, wingS: 1.0, horns: 0.7, hornCol: '#2a1a1a', ponytail: true, waist: 0.8, bulk: 0.85, glowEyes: '#ff4060', female: true, hide: false }),
     v: [
       ['succubus', '서큐버스', [12, 14], 24, [120, 150], 60, 100, [1, 20], 'R---', 3696, 0, ['#c07a7a', '#5a1a2a', '#2a0a10']],
       ['snow_witch', '눈의 마녀', [13, 15], 26, [135, 175], 65, 110, [1, 24], '--RR', 4084, 1, ['#b0c0d8', '#3a4a6a', '#e0e8ff']],

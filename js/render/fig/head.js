@@ -1,6 +1,6 @@
 // 머리: 타원체 머리 위에 머리카락(짧은·긴·묶은)·모자·두건·투구를 덮고, 얼굴 부분(표면 조각)을 다시 칠한 뒤 눈·눈썹·코·입·수염을 얹는다.
 // 해골과 짐승(염소·짐승) 머리, 뿔도 여기서
-import { PR, X, Y, D, XJ, YJ, DJ, V3, ellipsoid, surf, ball, seg, glowDot, tone, fillBall, MAT, TAU, camNormal, ringFront, ring, makeRing } from './core.js';
+import { PR, X, Y, D, XJ, YJ, DJ, V3, ellipsoid, projEllipse, shaggy, surf, ball, seg, glowDot, tone, fillBall, MAT, skinMat, TAU, camNormal, ringFront, ring, makeRing } from './core.js';
 import { J, FR, DIM } from './pose.js';
 
 const T = new V3(), T2 = new V3();
@@ -10,15 +10,17 @@ let HE = { x: 0, y: 0, rx: 1, ry: 1, rot: 0 }; // 머리 타원(화면)
 // 얼굴이 보이는 정도(-1 뒤 ~ 1 정면)
 function faceVis() { return camNormal(FR.head.F.f, FR.head.F.r, FR.head.F.z).z; }
 
+let SKM = MAT.skin; // 지금 머리의 맨살 재질
 export function drawHead(g, look, a, time, lod) {
   const hd = look.head || 'human';
+  SKM = skinMat(look);
   if (hd === 'skull') return skullHead(g, look, a, time, lod);
   if (hd === 'goat' || hd === 'beast') return beastHead(g, look, a, time, lod, hd);
   humanHead(g, look, a, time, lod);
 }
 
 // 머리 표면 조각(방위 az0~az1, 고도 elB ~ elT(az))의 화면 경로. 안 보이는 점은 머리 윤곽선으로 밀어낸다
-function patchPath(g, az0, az1, elB, elT, k = 1) {
+function patchPath(g, az0, az1, elB, elT, k = 1, jag = 0) {
   const C = J.head, F = FR.head.F, R = FR.head.R, U = FR.head.U;
   const A = DIM.headA * k, B = DIM.headB * k, Cc = DIM.headC * k;
   const E = HE, c = Math.cos(E.rot), sn = Math.sin(E.rot);
@@ -37,16 +39,17 @@ function patchPath(g, az0, az1, elB, elT, k = 1) {
   const N = 8;
   for (let i = 0; i <= N; i++) add(az0 + (az1 - az0) * i / N, elB);
   for (let i = 1; i <= N; i++) add(az1, elB + (elT(az1) - elB) * i / N);
-  for (let i = 1; i <= N; i++) { const az = az1 + (az0 - az1) * i / N; add(az, elT(az)); }
+  const NT = jag ? 2 * N + 1 : N;
+  for (let i = 1; i <= NT; i++) { const az = az1 + (az0 - az1) * i / NT; add(az, elT(az) - (i % 2 && i < NT ? jag : 0)); }
   for (let i = 1; i < N; i++) add(az0, elT(az0) + (elB - elT(az0)) * i / N);
   g.closePath();
 }
 // 머리 윤곽 안에서 얼굴 조각을 피부 음영으로 다시 칠한다
-function facePatch(g, skin, hairline, width = 1.15, fill = null) {
+function facePatch(g, skin, hairline, width = 1.15, fill = null, jag = 0) {
   g.save();
   g.beginPath(); g.ellipse(HE.x, HE.y, HE.rx, HE.ry, HE.rot, 0, TAU); g.clip();
-  patchPath(g, -width, width, -1.45, (az) => hairline - 0.22 * (az / width) * (az / width));
-  if (fill) { g.fillStyle = fill; g.fill(); } else fillBall(g, HE.x, HE.y, Math.max(HE.rx, HE.ry), skin, MAT.skin);
+  patchPath(g, -width, width, -1.45, jag ? (az) => hairline + 0.08 * (az / width) * (az / width) - 0.25 * Math.max(0, Math.abs(az / width) - 0.75) : (az) => hairline - 0.22 * (az / width) * (az / width), 1, jag);
+  if (fill) { g.fillStyle = fill; g.fill(); } else fillBall(g, HE.x, HE.y, Math.max(HE.rx, HE.ry), skin, SKM);
   g.restore();
 }
 
@@ -64,12 +67,18 @@ function humanHead(g, look, a, time, lod) {
   const tailBehind = look.ponytail && !hm && !bald && ponyFront(time, a) === false;
   if (tailBehind) ponytail(g, look, hair, time, a);
   if (look.horns) horns(g, look, look.horns, false);
+  // 턱: 머리 아래 앞쪽으로 좁게 내려온 턱선(머리가 공처럼 보이지 않게). 얼굴을 가리는 두건·투구 안에서는 생략
+  if (lod > 0 && (!hm || (hm.type !== 'hood' && hm.type !== 'full' && hm.type !== 'great'))) {
+    const jw = look.female ? 0.92 : 1;
+    T.set(C.f + F.f * A * 0.22 - U.f * Cc * 0.42, C.r + F.r * A * 0.22 - U.r * Cc * 0.42, C.z + F.z * A * 0.22 - U.z * Cc * 0.42);
+    ellipsoid(g, T, F, R, U, A * 0.72 * jw, B * 0.74 * jw, Cc * 0.62 * jw, skin, SKM);
+  }
   // 머리
-  HE = { ...ellipsoid(g, C, F, R, U, A, B, Cc, skin, MAT.skin) };
+  HE = { ...ellipsoid(g, C, F, R, U, A, B, Cc, skin, SKM) };
   // 귀
   if (!hm || hm.type === 'crown') for (const sd of [-1, 1]) {
     const p = surf(C, F, R, U, A, B, Cc, sd * 1.6, -0.08);
-    if (p.vis > 0.08 && lod > 0) ball(g, X(p.f, p.r), Y(p.f, p.r, p.z), 0.95 * s * H, 1.45 * s * H, skin, MAT.skin, 0, 0.92);
+    if (p.vis > 0.08 && lod > 0) ball(g, X(p.f, p.r), Y(p.f, p.r, p.z), 0.95 * s * H, 1.45 * s * H, skin, SKM, 0, 0.92);
   }
   // 덮개: 머리카락·모자·두건·투구
   const type = hm ? hm.type : bald ? null : 'hair';
@@ -78,7 +87,7 @@ function humanHead(g, look, a, time, lod) {
     case 'hair': case 'crown': {
       if (!bald) {
         hairVolume(g, look, hair, longHair);
-        if (fv > -0.45) facePatch(g, skin, look.female ? 0.5 : 0.42);
+        if (fv > -0.45) facePatch(g, skin, look.female ? 0.5 : 0.42, 1.15, null, 0.09);
       }
       break;
     }
@@ -123,35 +132,47 @@ function face(g, look, lod) {
   const C = J.head, F = FR.head.F, R = FR.head.R, U = FR.head.U;
   const A = DIM.headA, B = DIM.headB, Cc = DIM.headC, s = PR.s, H = DIM.H * DIM.hs;
   const glow = look.glowEyes, skin = look.cols.skin;
+  // 눈썹 뼈 아래 그늘: 두 눈을 잇는 띠(밑바탕 밝기에 맞게 반투명으로 얹는다)
+  if (!glow) {
+    const a0 = surf(C, F, R, U, A * 0.97, B, Cc, -0.62, 0.06), x0 = X(a0.f, a0.r), y0 = Y(a0.f, a0.r, a0.z), v0 = a0.vis;
+    const a1 = surf(C, F, R, U, A * 0.97, B, Cc, 0.62, 0.06), x1 = X(a1.f, a1.r), y1 = Y(a1.f, a1.r, a1.z), v1 = a1.vis;
+    const m = surf(C, F, R, U, A * 0.99, B, Cc, 0, 0.1), mx = X(m.f, m.r), my = Y(m.f, m.r, m.z);
+    if (m.vis > 0.05) {
+      g.fillStyle = 'rgba(28,14,6,0.36)';
+      g.beginPath();
+      g.moveTo(v0 > 0 ? x0 : mx, v0 > 0 ? y0 : my);
+      g.quadraticCurveTo(mx, my - 1.0 * s * H, v1 > 0 ? x1 : mx, v1 > 0 ? y1 : my);
+      g.quadraticCurveTo(mx, my + 1.3 * s * H, v0 > 0 ? x0 : mx, v0 > 0 ? y0 : my);
+      g.fill();
+    }
+  }
   for (const sd of [-1, 1]) {
     const p = surf(C, F, R, U, A * 0.97, B, Cc, sd * 0.38, 0.04);
     if (p.vis <= 0.1) continue;
     const ex = X(p.f, p.r), ey = Y(p.f, p.r, p.z);
     const fw = 0.4 + 0.6 * p.vis;
     if (glow) { glowDot(g, ex, ey, 0.62 * s * H, glow, 0.6); continue; }
-    // 눈두덩 그늘, 눈, 눈빛
-    g.fillStyle = tone(skin, 0.6); g.beginPath(); g.ellipse(ex, ey - 0.12 * s * H, 1.0 * s * H * fw, 0.62 * s * H, 0, 0, TAU); g.fill();
-    g.fillStyle = '#20160e'; g.beginPath(); g.ellipse(ex, ey, 0.5 * s * H * fw, 0.4 * s * H, 0, 0, TAU); g.fill();
-    if (lod > 1) { g.fillStyle = 'rgba(255,250,240,0.6)'; g.beginPath(); g.arc(ex - 0.15 * s * H, ey - 0.12 * s * H, 0.14 * s * H, 0, TAU); g.fill(); }
+    // 가는 눈
+    g.fillStyle = '#140c08'; g.beginPath(); g.ellipse(ex, ey + 0.02 * s * H, 0.48 * s * H * fw, 0.2 * s * H, 0, 0, TAU); g.fill();
     // 눈썹
     if (lod > 1) {
       const b1 = surf(C, F, R, U, A * 1.0, B, Cc, sd * 0.6, 0.2), b2 = surf(C, F, R, U, A * 1.0, B, Cc, sd * 0.16, 0.17);
-      g.strokeStyle = tone(look.cols.hair || skin, look.cols.hair ? 0.7 : 0.5); g.lineWidth = (look.female ? 0.4 : 0.6) * s * H; g.lineCap = 'round';
+      g.strokeStyle = tone(look.cols.hair || skin, look.cols.hair ? 0.6 : 0.45); g.lineWidth = (look.female ? 0.4 : 0.65) * s * H; g.lineCap = 'round';
       g.beginPath(); g.moveTo(X(b1.f, b1.r), Y(b1.f, b1.r, b1.z)); g.lineTo(X(b2.f, b2.r), Y(b2.f, b2.r, b2.z)); g.stroke();
     }
   }
-  // 코: 빛 받는 콧등과 아래 그늘
+  // 코: 콧등에 옅은 빛, 코 밑 그늘
   const n = surf(C, F, R, U, A * 1.05, B, Cc, 0, -0.22);
   if (n.vis > 0.12) {
     const nx = X(n.f, n.r), ny = Y(n.f, n.r, n.z);
-    g.fillStyle = tone(skin, 0.68); g.beginPath(); g.ellipse(nx + 0.25 * s * H, ny + 0.45 * s * H, 0.7 * s * H, 0.38 * s * H, 0, 0, TAU); g.fill();
-    g.fillStyle = tone(skin, 1.2); g.beginPath(); g.ellipse(nx - 0.15 * s * H, ny - 0.2 * s * H, 0.38 * s * H, 0.62 * s * H, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(28,14,6,0.38)'; g.beginPath(); g.ellipse(nx + 0.25 * s * H, ny + 0.5 * s * H, 0.7 * s * H, 0.32 * s * H, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,226,190,0.13)'; g.beginPath(); g.ellipse(nx - 0.15 * s * H, ny - 0.25 * s * H, 0.34 * s * H, 0.6 * s * H, 0, 0, TAU); g.fill();
   }
   // 입
   const m = surf(C, F, R, U, A * 0.96, B, Cc, 0, -0.52);
   if (m.vis > 0.2 && lod > 1 && !look.beard) {
     const mx = X(m.f, m.r), my = Y(m.f, m.r, m.z), w = 1.0 * s * H * (0.4 + 0.6 * m.vis);
-    g.strokeStyle = tone(skin, 0.5); g.lineWidth = 0.45 * s * H; g.lineCap = 'round';
+    g.strokeStyle = 'rgba(40,16,8,0.55)'; g.lineWidth = 0.45 * s * H; g.lineCap = 'round';
     g.beginPath(); g.moveTo(mx - w, my); g.quadraticCurveTo(mx, my + 0.25 * s * H, mx + w, my); g.stroke();
   }
 }
@@ -186,7 +207,8 @@ function hairVolume(g, look, hair, long) {
   const A = DIM.headA, B = DIM.headB, Cc = DIM.headC;
   const vol = look.hairVol || 1;
   T2.set(C.f - F.f * A * 0.12 + U.f * Cc * 0.1, C.r - F.r * A * 0.12 + U.r * Cc * 0.1, C.z - F.z * A * 0.12 + U.z * Cc * 0.1);
-  ellipsoid(g, T2, F, R, U, A * 1.06 * vol, B * (long ? 1.14 : 1.08) * vol, Cc * 0.97 * vol, hair, MAT.leather, 0.92);
+  // 매끈한 가발처럼 보이지 않게 윤곽을 삐죽하게(긴 머리는 아래로 늘어진다)
+  shaggy(g, projEllipse(T2, F, R, U, A * 1.06 * vol, B * (long ? 1.14 : 1.08) * vol, Cc * 0.97 * vol), 22, 0.07, hair, MAT.fur, long ? 0.3 : 0.12, 0.92);
 }
 function backHair(g, look, hair) {
   const C = J.head, F = FR.head.F, s = PR.s, H = DIM.H;
@@ -411,20 +433,20 @@ function beastHead(g, look, a, time, lod, kind) {
   const front = DJ(T) > DJ(C);
   const snout = () => {
     T2.set((C.f + T.f) / 2, (C.r + T.r) / 2, (C.z + T.z) / 2);
-    ellipsoid(g, T2, F, R, U, A * 0.75, B * 0.58, Cc * 0.45, skin, MAT.skin);
-    ellipsoid(g, T, F, R, U, A * 0.32, B * 0.48, Cc * 0.36, look.cols.nose || skin, MAT.skin, 0.8);
+    ellipsoid(g, T2, F, R, U, A * 0.75, B * 0.58, Cc * 0.45, skin, SKM);
+    ellipsoid(g, T, F, R, U, A * 0.32, B * 0.48, Cc * 0.36, look.cols.nose || skin, SKM, 0.8);
     if (lod > 0) {
       g.fillStyle = '#140a06';
       for (const sd of [-1, 1]) { const p = surf(T, F, R, U, A * 0.32, B * 0.48, Cc * 0.36, sd * 0.45, 0.15); if (p.vis > 0.1) { g.beginPath(); g.arc(X(p.f, p.r), Y(p.f, p.r, p.z), 0.38 * s * H, 0, TAU); g.fill(); } }
     }
   };
   if (!front) snout();
-  HE = { ...ellipsoid(g, C, F, R, U, A * 0.92, B, Cc * 0.95, skin, MAT.skin) };
+  HE = { ...ellipsoid(g, C, F, R, U, A * 0.92, B, Cc * 0.95, skin, SKM) };
   // 귀
   for (const sd of [-1, 1]) {
     const p = surf(C, F, R, U, A, B, Cc, sd * 1.45, 0.25);
     const e = { f: p.f - F.f * 1.5 * H + R.f * sd * 3 * H, r: p.r - F.r * 1.5 * H + R.r * sd * 3 * H, z: p.z - 1.2 * H };
-    if (p.vis > -0.3) seg(g, X(p.f, p.r), Y(p.f, p.r, p.z), 1.15 * s * H, X(e.f, e.r), Y(e.f, e.r, e.z), 0.6 * s * H, skin, MAT.skin);
+    if (p.vis > -0.3) seg(g, X(p.f, p.r), Y(p.f, p.r, p.z), 1.15 * s * H, X(e.f, e.r), Y(e.f, e.r, e.z), 0.6 * s * H, skin, SKM);
   }
   if (front) snout();
   // 눈
