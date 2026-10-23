@@ -1,6 +1,11 @@
-// 터치 입력: 탭 = 이동·공격·줍기·대화(디아블로의 클릭), 누르고 있기 = 계속 이동·공격, 두 손가락 = 확대
+// 터치 입력: 화면 왼쪽 아래를 누르고 끌면 조이스틱(이동은 조이스틱으로만), 탭 = 공격·줍기·대화·물체 쓰기,
+// 괴물을 누르고 있기 = 계속 공격, 두 손가락 = 확대
 import { isZoomed } from '../core/viewport.js';
 import { isInteractive } from '../game/objects.js';
+
+const STICK_R = 46; // 손잡이가 움직이는 반지름(px)
+const STICK_DEAD = 9; // 이만큼은 밀어야 걷기 시작
+const ARROWS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
 export class TouchInput {
   constructor(app) {
@@ -8,6 +13,8 @@ export class TouchInput {
     const el = app.cv;
     this.pts = new Map();
     this.holding = false;
+    this.stick = null; // 조이스틱을 잡은 손가락 { id, bx, by(받침), x0, y0, t0, moved, pick }
+    this.keys = new Set();
     el.addEventListener('pointerdown', (e) => this.down(e));
     el.addEventListener('pointermove', (e) => this.move(e));
     el.addEventListener('pointerup', (e) => this.up(e));
@@ -17,12 +24,20 @@ export class TouchInput {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     // 키보드(데스크톱 시험용)
     window.addEventListener('keydown', (e) => this.key(e));
+    window.addEventListener('keyup', (e) => { if (ARROWS[e.key]) { this.keys.delete(e.key); this.arrowStick(); } });
   }
   get game() { return this.app.game; }
 
   down(e) {
     if (!this.game) return;
     this.app.cv.setPointerCapture?.(e.pointerId);
+    // 왼쪽 아래를 누르면 그 자리에 조이스틱이 생긴다
+    if (!this.stick && e.clientX < window.innerWidth * 0.5 && e.clientY > window.innerHeight * 0.42) {
+      const x = e.clientX, y = e.clientY;
+      this.stick = { id: e.pointerId, bx: x, by: y, x0: x, y0: y, t0: performance.now(), moved: 0, pick: this.pick(x, y) };
+      this.app.hud.stickShow?.(x, y, 0, 0);
+      return;
+    }
     this.pts.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() });
     if (this.pts.size === 2) {
       this.cancelHold();
@@ -38,6 +53,7 @@ export class TouchInput {
     this.holdT = setTimeout(() => this.startHold(e.pointerId), 230);
   }
   move(e) {
+    if (this.stick && e.pointerId === this.stick.id) { this.stickMove(e.clientX, e.clientY); return; }
     const p = this.pts.get(e.pointerId);
     if (!p) return;
     p.x = e.clientX; p.y = e.clientY;
@@ -51,6 +67,7 @@ export class TouchInput {
     if (this.holding) this.updateHold(p);
   }
   up(e, cancel = false) {
+    if (this.stick && e.pointerId === this.stick.id) { this.stickEnd(cancel); return; }
     const p = this.pts.get(e.pointerId);
     this.pts.delete(e.pointerId);
     clearTimeout(this.holdT);
@@ -59,16 +76,49 @@ export class TouchInput {
     const wasHold = this.holding;
     this.cancelHold();
     if (cancel || !this.game) return;
-    const quick = performance.now() - p.t0 < 260 && Math.hypot(p.x - p.x0, p.y - p.y0) < 14;
-    if (quick || !wasHold) this.tap(p.x0, p.y0, p.pick);
+    // 끌지 않고 뗐으면 탭(괴물을 누르고 있다 뗀 경우는 이미 공격 중)
+    if (!wasHold && Math.hypot(p.x - p.x0, p.y - p.y0) < 14) this.tap(p.x0, p.y0, p.pick);
+  }
+  // 조이스틱: 받침에서 손가락까지가 방향. 반지름을 넘어 끌면 받침이 따라온다
+  stickMove(x, y) {
+    const S = this.stick;
+    S.moved = Math.max(S.moved, Math.hypot(x - S.x0, y - S.y0));
+    let dx = x - S.bx, dy = y - S.by;
+    const d = Math.hypot(dx, dy);
+    if (d > STICK_R) { S.bx = x - dx / d * STICK_R; S.by = y - dy / d * STICK_R; dx = x - S.bx; dy = y - S.by; }
+    this.app.hud.stickShow?.(S.bx, S.by, dx, dy);
+    this.steer(d < STICK_DEAD ? 0 : dx, d < STICK_DEAD ? 0 : dy);
+  }
+  stickEnd(cancel) {
+    const S = this.stick;
+    this.stick = null;
+    this.steer(0, 0);
+    this.app.hud.stickHide?.();
+    // 거의 움직이지 않고 짧게 눌렀으면 탭으로(괴물·아이템 등을 누른 경우)
+    if (!cancel && S.moved < 12 && performance.now() - S.t0 < 260 && S.pick) this.tap(S.x0, S.y0, S.pick);
+  }
+  // 화면 방향(dx, dy) → 게임의 월드 방향
+  steer(dx, dy) {
+    const g = this.game;
+    if (!g) return;
+    if (!dx && !dy) { g.setStick(null); return; }
+    const r = this.app.renderer, cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    const a = r.toWorld(cx, cy), b = r.toWorld(cx + dx, cy + dy);
+    g.setStick(b.x - a.x, b.y - a.y);
+  }
+  // 방향 글쇠(데스크톱 시험용)
+  arrowStick() {
+    let dx = 0, dy = 0;
+    for (const k of this.keys) { dx += ARROWS[k][0]; dy += ARROWS[k][1]; }
+    if (!this.stick) this.steer(dx, dy);
   }
   startHold(id) {
     const p = this.pts.get(id);
     if (!p || this.pts.size !== 1 || !this.game) return;
-    // 아이템·물체·NPC를 누른 경우엔 길게 누르기도 탭처럼
-    if (p.pick && (p.pick.item || p.pick.obj || (p.pick.actor && p.pick.actor.kind === 'npc'))) return;
+    // 길게 누르기는 괴물을 계속 공격할 때만(바닥을 눌러서는 움직이지 않는다)
+    if (!(p.pick?.actor && p.pick.actor.team === 1)) return;
     this.holding = true;
-    this.holdActor = p.pick?.actor && p.pick.actor.team === 1 ? p.pick.actor : null;
+    this.holdActor = p.pick.actor;
     this.updateHold(p);
   }
   updateHold(p) {
@@ -87,8 +137,12 @@ export class TouchInput {
     const r = this.app.renderer, g = this.game;
     const w = r.toWorld(x, y);
     pick = pick || this.pick(x, y);
-    g.tapAt(w.x, w.y, pick);
-    this.app.hud.tapMark?.(x, y, pick);
+    if (g.tapAt(w.x, w.y, pick)) { this.app.hud.tapMark?.(x, y, pick); return; }
+    // 바닥 탭: 움직이지 않는다는 것을 처음 몇 번만 알려 준다
+    if (!pick && (this.hintN || 0) < 3 && performance.now() - (this.hintT || -1e9) > 4000) {
+      this.hintN = (this.hintN || 0) + 1; this.hintT = performance.now();
+      this.app.toast?.('이동은 왼쪽 아래 조이스틱으로 합니다');
+    }
   }
 
   // 화면 좌표에서 무엇을 눌렀나: 바닥 아이템 이름표 → 괴물·NPC → 물체
@@ -130,6 +184,7 @@ export class TouchInput {
   key(e) {
     const g = this.game;
     if (!g || e.repeat) return;
+    if (ARROWS[e.key]) { e.preventDefault(); this.keys.add(e.key); this.arrowStick(); return; }
     const hud = this.app.hud;
     switch (e.key) {
       case '1': case '2': case '3': case '4': g.useBelt(+e.key - 1); break;

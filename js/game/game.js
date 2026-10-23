@@ -19,6 +19,9 @@ import { restock } from './shop.js';
 import { clamp } from '../core/util.js';
 
 const NOFX = new Proxy({}, { get: () => () => {} });
+// 터치로 내린 명령의 거리: 근접 공격은 이만큼 안의 적에게만 다가가고(이동은 조이스틱으로),
+// 아이템·물체·마을 사람은 손 닿는 거리에서만 쓴다
+const LEASH = 4.5, REACH = 2.6, TALK = 3.2;
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
 export class Game {
@@ -37,6 +40,8 @@ export class Game {
     this.target = null;
     this.cmd = null;
     this.hold = null;
+    this.stick = null; // 조이스틱 방향 { a: 월드 각도, seq }
+    this.seq = 0; // 입력 순서(나중 입력이 앞선 명령을 이긴다)
     this.stats = { dmgDealt: 0 };
   }
   sfx(name, x, y, opts) { this.hooks.sfx?.(name, x, y, opts); }
@@ -104,7 +109,7 @@ export class Game {
     P.invuln = 0.6; // 층에 들어선 직후 잠깐 무적(디아블로 1)
     L.actors.push(P);
     for (const s of carry) { const p2 = L.nearestFree(pos.x + 1, pos.y + 1, 6); if (p2) { s.place(L, p2.x, p2.y); L.actors.push(s); } }
-    this.cmd = null; this.hold = null; this.setTarget(null);
+    this.cmd = null; this.hold = null; this.stick = null; this.setTarget(null);
     if (L.theme === 'town') revealAll(L); else computeFOV(L, P.tx, P.ty, 13);
     this.dmap.build(L, P.tx, P.ty);
     this.lastTile = -1;
@@ -159,37 +164,51 @@ export class Game {
   }
 
   // ───────── 플레이어 명령(입력에서 부른다) ─────────
+  // 탭: 아이템 줍기·괴물 공격·대화·물체 쓰기. 바닥을 눌러서는 움직이지 않는다(이동은 조이스틱으로)
   tapAt(wx, wy, picked) {
     const P = this.player;
-    if (!P || P.dead || this.paused) return;
-    if (P.whirl) return;
-    if (picked?.item) { this.cmd = { type: 'pickup', item: picked.item }; return; }
+    if (!P || P.dead || this.paused) return false;
+    if (P.whirl) return false;
+    if (picked?.item) return this.issue({ type: 'pickup', item: picked.item, near: true });
     if (picked?.actor) {
       const a = picked.actor;
-      if (a.kind === 'npc') { this.cmd = { type: 'talk', npc: a }; return; }
-      if (a.team === 1) { this.setTarget(a); this.cmd = { type: 'attack', target: a }; return; }
+      if (a.kind === 'npc') return this.issue({ type: 'talk', npc: a, near: true });
+      if (a.team === 1) { this.setTarget(a); return this.issue({ type: 'attack', target: a, leash: LEASH }); }
     }
-    if (picked?.obj) { this.cmd = { type: 'use', obj: picked.obj }; return; }
-    this.cmd = { type: 'move', x: Math.round(wx), y: Math.round(wy) };
+    if (picked?.obj) return this.issue({ type: 'use', obj: picked.obj, near: true });
+    return false;
   }
+  issue(c) { c.seq = ++this.seq; this.cmd = c; return true; }
   setTarget(a) {
     if (this.target && this.target !== a) this.target.targeted = false;
     this.target = a;
     if (a) a.targeted = true;
   }
-  holdAt(wx, wy, actor) { this.hold = { x: wx, y: wy, actor: actor && actor.team === 1 && !actor.dead ? actor : null }; }
+  // 괴물을 누르고 있으면 계속 공격
+  holdAt(wx, wy, actor) {
+    if (!actor || actor.team !== 1 || actor.dead) { this.hold = null; return; }
+    if (this.hold?.actor !== actor) this.hold = { actor, seq: ++this.seq };
+  }
   releaseHold() { this.hold = null; }
-  stopAll() { this.cmd = null; this.hold = null; }
+  stopAll() { this.cmd = null; this.hold = null; this.stick = null; }
+  // 조이스틱: 월드 방향(길이 무관), 놓으면 null. 처음 밀거나 방향을 크게 틀면 새 입력으로 친다
+  setStick(dx, dy) {
+    if (dx == null || (!dx && !dy)) { this.stick = null; return; }
+    const a = Math.atan2(dy, dx), st = this.stick;
+    if (!st || Math.abs(Math.atan2(Math.sin(a - st.a), Math.cos(a - st.a))) > 0.6) this.stick = { a, seq: ++this.seq };
+    else st.a = a;
+  }
 
   attackNearest() {
     const P = this.player;
     if (!P || P.dead) return false;
-    let t = this.target && !this.target.dead && this.canSee(this.target) && P.dist(this.target) < 10 ? this.target : null;
-    if (!t) t = this.nearestEnemy(this.hero.ranged() ? 10 : 7);
-    if (t) { this.setTarget(t); this.cmd = { type: 'attack', target: t }; return true; }
-    // 적이 없으면 가까운 물체·아이템
-    const near = this.nearestInteractable(3);
-    if (near) { this.tapAt(near.x, near.y, near); return true; }
+    const reach = this.hero.ranged() ? 10 : LEASH;
+    let t = this.target && !this.target.dead && this.canSee(this.target) && P.dist(this.target) <= reach ? this.target : null;
+    if (!t) t = this.nearestEnemy(reach);
+    if (t) { this.setTarget(t); return this.issue({ type: 'attack', target: t, leash: LEASH }); }
+    // 적이 없으면 손 닿는 곳의 아이템·물체·마을 사람
+    const near = this.nearestInteractable(REACH);
+    if (near) return this.tapAt(near.x, near.y, near);
     return false;
   }
   nearestInteractable(range) {
@@ -197,6 +216,7 @@ export class Game {
     let best = null, bd = range;
     for (const it of L.items) { const d = Math.hypot(it.x - P.x, it.y - P.y); if (d < bd) { bd = d; best = { item: it, x: it.x, y: it.y }; } }
     for (const o of L.objects) { if (!isInteractive(o) || o.type === 'door' || o.type === 'stairs_up' || o.type === 'stairs_down' || o.type === 'waypoint') continue; const d = Math.hypot(o.x - P.x, o.y - P.y); if (d < bd) { bd = d; best = { obj: o, x: o.x, y: o.y }; } }
+    for (const a of L.actors) { if (a.kind !== 'npc' || a.dead) continue; const d = Math.hypot(a.x - P.x, a.y - P.y) - (TALK - REACH); if (d < bd) { bd = d; best = { actor: a, x: a.x, y: a.y }; } }
     return best;
   }
   nearestEnemy(range = 10, from = this.player) {
@@ -229,15 +249,14 @@ export class Game {
     let target = aim?.actor || null, point = aim?.point || null;
     const range = def.range || 10;
     if (!target && !point && def.target !== 'self' && def.kind !== 'buff' && def.kind !== 'shout' && def.kind !== 'nova' && def.kind !== 'static') {
-      const t = this.target && !this.target.dead && this.canSee(this.target) && P.dist(this.target) <= range + 2 ? this.target : this.nearestEnemy(def.melee || def.kind === 'melee' || def.kind === 'cleave' ? 6 : range);
+      const t = this.target && !this.target.dead && this.canSee(this.target) && P.dist(this.target) <= range + 2 ? this.target : this.nearestEnemy(def.melee || def.kind === 'melee' || def.kind === 'cleave' ? LEASH : range);
       if (t) { target = t; this.setTarget(t); }
       else {
         const r = def.kind === 'melee' || def.kind === 'cleave' ? 1 : def.kind === 'teleport' || def.kind === 'leap' ? 5 : Math.min(6, range);
         point = { x: P.x + Math.cos(P.face) * r, y: P.y + Math.sin(P.face) * r };
       }
     }
-    this.cmd = { type: 'skill', id, target, point };
-    return true;
+    return this.issue({ type: 'skill', id, target, point, leash: LEASH });
   }
 
   // ───────── 갱신 ─────────
@@ -315,7 +334,7 @@ export class Game {
       A.t += dt * rate;
       if (A.hitAt != null && A.onHit && prev < A.hitAt * A.dur && A.t >= A.hitAt * A.dur) { const f = A.onHit; A.onHit = null; f(); }
       // 타격 뒤에는 새 명령으로 끊을 수 있다(디아블로 1)
-      const canCancel = !A.onHit && (A.name === 'attack' || A.name === 'cast') && this.cmd && this.cmd.type !== 'attack';
+      const canCancel = !A.onHit && (A.name === 'attack' || A.name === 'cast') && (this.cmd && this.cmd.type !== 'attack' || this.stick && this.stick.seq > (this.actSeq || 0));
       if (A.t >= A.dur || canCancel) { P.setAnim('idle', 1); if (A.after) A.after(); }
       else if (!P.mv) return;
     }
@@ -323,13 +342,18 @@ export class Game {
       if (!P.advance(L, dt * rate)) { P.moving = true; return; }
     }
     P.moving = false;
+    // 조이스틱이 더 나중 입력이면 앞선 명령(다가가 공격·줍기 등)을 버린다
+    const st = this.stick;
+    if (st && this.cmd && (this.cmd.seq || 0) < st.seq) this.cmd = null;
+    if (st && this.hold && this.hold.seq < st.seq) this.hold = null;
     if (this.hold && !this.cmd) {
       const hd = this.hold;
-      if (hd.actor && !hd.actor.dead) this.cmd = { type: 'attack', target: hd.actor, fromHold: true };
-      else this.cmd = { type: 'move', x: Math.round(hd.x), y: Math.round(hd.y), fromHold: true };
+      if (hd.actor && !hd.actor.dead) this.cmd = { type: 'attack', target: hd.actor, fromHold: true, leash: LEASH, seq: hd.seq };
+      else this.hold = null;
     }
     const c = this.cmd;
-    if (!c) return;
+    if (!c) { if (st) this.stickStep(); return; }
+    if (c.seq) this.actSeq = c.seq;
     switch (c.type) {
       case 'move': {
         if (P.tx === c.x && P.ty === c.y) { this.cmd = null; break; }
@@ -343,11 +367,11 @@ export class Game {
         if (!t || t.dead || t.team !== 1 || t.untargetable) { this.cmd = null; break; }
         if (h.ranged()) {
           if (P.dist(t) <= 12 && L.los(P.tx, P.ty, t.tx, t.ty)) { rangedAttack(this, P, t, {}); this.cmd = null; }
-          else if (!this.stepToward(t.tx, t.ty, c, true)) this.cmd = null;
+          else if (!this.approach(t, c)) this.cmd = null;
           else if (c.fromHold) this.cmd = null;
         } else {
           if (P.tdist(t) <= 1 && P.dist(t) < 1.6) { meleeAttack(this, P, t, {}); this.cmd = null; }
-          else if (!this.stepToward(t.tx, t.ty, c, true)) this.cmd = null;
+          else if (!this.approach(t, c)) this.cmd = null;
           else if (c.fromHold) this.cmd = null;
         }
         break;
@@ -356,9 +380,9 @@ export class Game {
         const def = skillDef(c.id);
         const tgt = c.target && !c.target.dead ? c.target : null;
         const needAdj = def && (def.kind === 'melee');
-        if (needAdj && tgt && (P.tdist(tgt) > 1 || P.dist(tgt) > 1.6)) { if (!this.stepToward(tgt.tx, tgt.ty, c, true)) this.cmd = null; break; }
+        if (needAdj && tgt && (P.tdist(tgt) > 1 || P.dist(tgt) > 1.6)) { if (!this.approach(tgt, c)) this.cmd = null; break; }
         const needLos = def && (def.kind === 'missile' || def.kind === 'arrow' || def.kind === 'beam' || def.kind === 'chain');
-        if (needLos && tgt && (!L.los(P.tx, P.ty, tgt.tx, tgt.ty) || P.dist(tgt) > (def.range || 11) + 1)) { if (!this.stepToward(tgt.tx, tgt.ty, c, true)) this.cmd = null; break; }
+        if (needLos && tgt && (!L.los(P.tx, P.ty, tgt.tx, tgt.ty) || P.dist(tgt) > (def.range || 11) + 1)) { if (!this.approach(tgt, c)) this.cmd = null; break; }
         this.cmd = null;
         castSkill(this, P, c.id, tgt, c.point || (tgt ? { x: tgt.x, y: tgt.y } : null));
         break;
@@ -367,26 +391,56 @@ export class Game {
         const it = c.item;
         if (!L.items.includes(it)) { this.cmd = null; break; }
         const ix = Math.round(it.x), iy = Math.round(it.y);
-        if (Math.max(Math.abs(ix - P.tx), Math.abs(iy - P.ty)) <= 1) { this.cmd = null; pickupItem(this, it); }
+        if (Math.max(Math.abs(ix - P.tx), Math.abs(iy - P.ty)) <= 1 || c.near && Math.hypot(it.x - P.x, it.y - P.y) <= REACH) { this.cmd = null; pickupItem(this, it); }
+        else if (c.near) { this.cmd = null; this.tooFar(); }
         else if (!this.stepToward(ix, iy, c, true)) this.cmd = null;
         break;
       }
       case 'use': {
         const o = c.obj;
-        const near = Math.max(Math.abs(o.x - P.tx), Math.abs(o.y - P.ty)) <= 1;
-        if (o.type === 'portal' ? Math.hypot(o.x - P.tx, o.y - P.ty) <= 1.5 : near && !(o.x === P.tx && o.y === P.ty)) { this.cmd = null; P.turnTo(o.x, o.y); useObject(this, o); }
+        const onTile = o.x === P.tx && o.y === P.ty;
+        // 터치 명령은 손 닿는 거리에서 바로 쓴다(문 칸에 서서 문을 닫을 수는 없다)
+        const ok = c.near ? Math.hypot(o.x - P.x, o.y - P.y) <= REACH && !(onTile && o.type === 'door')
+          : o.type === 'portal' ? Math.hypot(o.x - P.tx, o.y - P.ty) <= 1.5 : Math.max(Math.abs(o.x - P.tx), Math.abs(o.y - P.ty)) <= 1 && !onTile;
+        if (ok) { this.cmd = null; P.turnTo(o.x, o.y); useObject(this, o); }
+        else if (c.near) { this.cmd = null; if (!onTile) this.tooFar(); }
         else if (!this.stepToward(o.x, o.y, c, o.type !== 'portal')) this.cmd = null;
         break;
       }
       case 'talk': {
         const n = c.npc;
-        if (P.tdist(n) <= 1) { this.cmd = null; P.turnTo(n.x, n.y); if (n.anim.name !== 'dead') n.turnTo(P.x, P.y); this.emit('talk', n); }
+        if (P.tdist(n) <= 1 || c.near && P.dist(n) <= TALK) { this.cmd = null; P.turnTo(n.x, n.y); if (n.anim.name !== 'dead') n.turnTo(P.x, P.y); this.emit('talk', n); }
+        else if (c.near) { this.cmd = null; this.tooFar(); }
         else if (!this.stepToward(n.tx, n.ty, c, true)) this.cmd = null;
         break;
       }
     }
   }
 
+  // 공격하러 다가가기: 터치 명령(leash)은 가까운 적에게만 다가간다. 못 가면 false
+  approach(t, c) {
+    if (c.leash && this.player.dist(t) > c.leash) return false;
+    return this.stepToward(t.tx, t.ty, c, true);
+  }
+  tooFar() {
+    if (this.time - (this.farT ?? -9) < 1.5) return;
+    this.farT = this.time;
+    this.toast('더 가까이 가야 합니다');
+  }
+  // 조이스틱 한 걸음: 여덟 방향 중 가장 가까운 칸, 막혔으면 양옆 45도로 미끄러진다. 닫힌 문은 밀면 열린다
+  stickStep() {
+    const P = this.player, L = this.level, a = this.stick.a;
+    const k = Math.round(a / (Math.PI / 4));
+    for (const o of [0, 1, -1]) {
+      const an = (k + o) * Math.PI / 4;
+      const dx = Math.round(Math.cos(an)), dy = Math.round(Math.sin(an));
+      const nx = P.tx + dx, ny = P.ty + dy;
+      const dr = L.obj(nx, ny);
+      if (!o && dr && dr.type === 'door' && !dr.open && !dr.locked) { P.turnTo(nx, ny); useObject(this, dr); P.setAnim('special', 0.25); return; }
+      if (L.canStep(P.tx, P.ty, nx, ny, P.id)) { P.step(L, nx, ny); return; }
+    }
+    P.faceTo = a;
+  }
   // 목표로 한 걸음. adjacent면 옆에 닿으면 멈춘다. 못 가면 false
   stepToward(tx, ty, c, adjacent = false) {
     const P = this.player, L = this.level;

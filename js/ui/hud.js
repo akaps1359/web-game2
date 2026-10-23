@@ -1,4 +1,4 @@
-// HUD: 생명력·마나 구슬, 물약 띠, 기술 단추(탭 = 자동 조준, 끌기 = 조준), 메뉴 단추, 작은 지도, 대상 정보
+// HUD: 생명력·마나 구슬, 물약 띠, 기술 단추(탭 = 자동 조준, 끌기 = 조준), 이동 조이스틱, 메뉴 단추, 작은 지도, 대상 정보
 import { $, el, onTap, canvasFor } from './dom.js';
 import { drawItemIcon } from '../render/icons.js';
 import { drawSkillIcon } from '../render/skillicons.js';
@@ -98,6 +98,11 @@ export class HUD {
       this.sbtns.push(S);
     });
     r.appendChild(this.pad);
+    // 이동 조이스틱: 쉬는 자리는 생명력 구슬 위, 왼쪽 아래를 누르면 그 자리로 옮겨 간다(입력은 input.js)
+    this.stickEl = el('div', 'stick');
+    this.stickKnob = el('div', 'knob');
+    this.stickEl.appendChild(this.stickKnob);
+    r.appendChild(this.stickEl);
     // 조준선·지도 겹침
     this.aimCv = canvasFor(null, window.innerWidth, window.innerHeight);
     this.aimCv.c.className = 'aimline'; r.appendChild(this.aimCv.c);
@@ -268,6 +273,18 @@ export class HUD {
     setTimeout(() => m.remove(), 400);
   }
   holdMark(x) { /* 누르고 있는 동안은 따로 표시하지 않는다 */ }
+  stickShow(bx, by, dx, dy) {
+    if (!this.stickEl) return;
+    this.stickEl.classList.add('on');
+    this.stickEl.style.left = bx + 'px'; this.stickEl.style.top = by + 'px';
+    this.stickKnob.style.transform = `translate(${dx}px,${dy}px)`;
+  }
+  stickHide() {
+    if (!this.stickEl) return;
+    this.stickEl.classList.remove('on');
+    this.stickEl.style.left = ''; this.stickEl.style.top = '';
+    this.stickKnob.style.transform = '';
+  }
 
   toggleMap() {
     this.showMap = !this.showMap;
