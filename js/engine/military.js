@@ -316,8 +316,8 @@ export function hourlyDivisions(G) {
     if (D.org > maxOrg) D.org = maxOrg;
     const maxEnt = 5 + (st.mods.entrench || 0) + M(C, 'land.entrench') * 5;
     D.ent = Math.min(maxEnt, D.ent + 1 / 24);
-    // 공세 계획: 공격 명령을 받은 군, AI는 전선에서 대기 중인 사단
-    if ((D.army && G.armies[D.army]?.order === 'attack') || (C.isAI && G.warRel[D.tag] && enemyAround(G, D))) {
+    // 공세 계획: 적과 맞닿은 채 대기하는 사단(AI, 플레이어의 자동 군 — 방어 중에도 쌓아 두었다가 공세 때 쓴다)
+    if ((C.isAI || G.armies[D.army]?.auto) && G.warRel[D.tag] && enemyAround(G, D)) {
       const maxPlan = 0.3 + M(C, 'land.planning');
       D.plan = Math.min(maxPlan, D.plan + 0.3 / (10 * 24));
     }

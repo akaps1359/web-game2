@@ -6,7 +6,8 @@ import { BATTALIONS, BAT_KEYS, SUPPORT, SUP_KEYS, EQUIPMENT, AIR_TYPES, AIR_MISS
 import { tplStats, tplAvailable, getTpl, divsOf, divStats, manpowerAvailable, eqLevel, eqCost, createArmy, deleteArmy, armiesOf, assignArmy, setupArmies, editTemplate } from '../../engine/military.js';
 import { createWing, wingCoverage, WING_SIZE } from '../../engine/air.js';
 import { fleetSize, fleetPower } from '../../engine/naval.js';
-import { atWarAny, enemiesOf } from '../../engine/world.js';
+import { atWarAny, enemiesOf, friendlyCtrl } from '../../engine/world.js';
+import { M } from '../../engine/mods.js';
 import { fmtNum, fmtMan, pct, fmtDays } from '../fmt.js';
 import { showDialog } from '../modal.js';
 import { shipLine } from './state.js';
@@ -22,7 +23,7 @@ export const militaryPanel = {
   tabs: [['armies', '군'], ['recruit', '징집'], ['tpl', '사단 편제'], ['air', '공군'], ['navy', '해군']],
   sig: (app, arg, tab) => {
     const G = app.G, C = G.countries[G.player];
-    const A = armiesOf(G, G.player).map((a) => `${a.id}${a.auto ? 1 : 0}${a.order}${a.enemy}${a.divs.length}${a.gen}`).join();
+    const A = armiesOf(G, G.player).map((a) => `${a.id}${a.auto ? 1 : 0}${a.order}${a.aggr}${a.goal}${a.enemy}${a.divs.length}${a.gen}${G.hour - (a.chance ?? -1e9) < 72}${Math.round(armyPlan(G, a) * 50)}`).join();
     return `${tab}|${A}|${C.training.length}|${C.templates.length}|${editTpl ? JSON.stringify(editTpl) : ''}|${recruitN}|${openArmy}|${Object.keys(G.wings).length}|${Object.keys(G.fleets).length}|${G.wars.length}|${Object.keys(G.divs).length}`;
   },
   render(app, body, arg, ctx) {
@@ -42,12 +43,29 @@ export const militaryPanel = {
 };
 
 // ───────── 군 ─────────
+// 원작의 작전 계획처럼: 방어는 전선만 지키며 계획 보너스를 쌓고, 공세는 플레이어가 개시한다(성향·목표 선택)
+const AGGR_OPTS = [['careful', '신중'], ['balanced', '균형'], ['bold', '과감']];
+function armyPlan(G, A) { let s = 0, n = 0; for (const id of A.divs) { const D = G.divs[id]; if (D) { s += D.plan || 0; n++; } } return n ? s / n : 0; }
+function pickGoal(app, A) {
+  const G = app.G;
+  app.sheet.close();
+  app.pick(`${A.name}의 공세 목표로 삼을 적 주를 탭하세요`, (st) => {
+    if (friendlyCtrl(G, G.player, st)) { app.toast('적이 차지한 주를 골라야 합니다', 'war'); return; }
+    A.goal = st;
+    app.toast(`${A.name} 공세 목표: ${app.map.name[st]}`);
+    app.openPanel('military');
+  });
+}
 function armies(app, body, ctx) {
   const G = app.G, C = G.countries[G.player];
   const list = armiesOf(G, G.player);
   const enemies = enemiesOf(G, C.tag);
   const war = atWarAny(G, C.tag);
-  body.appendChild(h('div', { class: 'note', style: { margin: '0 2px 10px' } }, war ? '자동 전선을 켠 군은 전선을 나눠 맡아 방어하거나 공세를 펼칩니다. 지도에서 사단을 직접 움직이면 해당 군의 자동 전선이 꺼집니다.' : '평시입니다. 자동 전선을 켜 두면 전쟁이 시작될 때 군이 알아서 전선에 배치됩니다.'));
+  body.appendChild(h('div', { class: 'note', style: { margin: '0 2px 10px' } }, war ? '방어 중인 군은 전선을 지키며 계획 보너스를 쌓습니다. 정면의 적이 지치면 「반격 기회」를 알려 드리니, 그때 공세를 개시하세요. 지도에서 사단을 직접 움직이면 그 군은 수동이 됩니다.' : '평시입니다. 군을 방어나 공세로 두면 전쟁이 시작될 때 알아서 전선에 배치됩니다.'));
+  if (war && list.length > 1) {
+    const all = (k) => { for (const A of list) { A.auto = true; A.order = k; } ctx.rerender(); };
+    body.appendChild(h('div', { class: 'row', style: { gap: '6px', margin: '0 2px 10px' } }, h('span', { class: 'small grow muted' }, '모든 군'), btn('전군 방어', () => all('hold'), 'sm', 'shield'), btn('전군 공세', () => all('attack'), 'sm primary', 'attack')));
+  }
   for (const A of list) {
     const divs = A.divs.map((id) => G.divs[id]).filter(Boolean);
     const gen = C.generals.find((g) => g.id === A.gen);
@@ -60,11 +78,30 @@ function armies(app, body, ctx) {
       h('div', { style: { width: '70px' } }, bar(divs.length ? str / divs.length : 0, 'thin'), h('div', { style: { height: '3px' } }), bar(orgMax ? org / orgMax : 0, 'green thin')));
     c.appendChild(head);
     const seg = h('div', { class: 'seg', style: { marginTop: '10px' } });
-    const opts = [['manual', '수동'], ['hold', '자동 방어'], ['attack', '자동 공세']];
+    const opts = [['manual', '수동'], ['hold', '방어'], ['attack', '공세']];
     const curK = !A.auto ? 'manual' : A.order;
     for (const [k, label] of opts) { const b = h('button', { class: curK === k ? 'on' : '' }, label); onTap(b, () => { if (k === 'manual') A.auto = false; else { A.auto = true; A.order = k; } ctx.rerender(); }); seg.appendChild(b); }
     c.appendChild(seg);
-    c.appendChild(h('div', { class: 'tiny muted', style: { margin: '6px 2px 0' } }, !A.auto ? '지도에서 사단을 직접 움직여 지휘합니다.' : A.order === 'attack' ? '유리한 곳부터 공격해 전선을 밀어붙입니다.' : '전선을 지키다가 적 공세가 꺾이면(적 조직력이 바닥나면) 반격해 빼앗긴 땅을 되찾습니다. 국경 너머 깊이 들어가지는 않습니다.'));
+    const goal = A.goal >= 0 ? app.map.name[A.goal] : null;
+    if (A.auto && A.order === 'attack') {
+      const s2 = h('div', { class: 'seg', style: { marginTop: '6px' } });
+      for (const [k, label] of AGGR_OPTS) { const b = h('button', { class: (A.aggr || 'balanced') === k ? 'on' : '' }, label); onTap(b, () => { A.aggr = k; ctx.rerender(); }); s2.appendChild(b); }
+      c.appendChild(s2);
+    }
+    c.appendChild(h('div', { class: 'tiny muted', style: { margin: '6px 2px 0' } }, !A.auto ? '지도에서 사단을 직접 움직여 지휘합니다.'
+      : A.order === 'attack' ? `${goal ? `${goal} 쪽으로 밀고 나갑니다. 점령하면 방어로 돌아갑니다.` : '전선 전체에서 유리한 곳부터 공격합니다.'} ${{ careful: '전력이 1.6배 넘게 앞설 때만', balanced: '전력이 1.3배 넘게 앞서면', bold: '조금만 앞서도' }[A.aggr || 'balanced']} 공격합니다.`
+      : '전선을 지키며 계획 보너스를 쌓습니다. 먼저 공격하지 않습니다.'));
+    if (A.auto) {
+      // 계획 보너스: 적과 맞닿아 대기하는 동안 쌓이고, 공세 때 공격력에 더해진다
+      const plan = armyPlan(G, A), maxPlan = 0.3 + M(C, 'land.planning');
+      c.appendChild(h('div', { class: 'row', style: { gap: '8px', marginTop: '8px' } }, h('span', { class: 'tiny muted' }, '계획 보너스'), h('div', { class: 'grow' }, bar(maxPlan > 0 ? plan / maxPlan : 0, 'thin')), h('span', { class: 'tiny', style: { minWidth: '36px', textAlign: 'right', color: plan < 0 ? 'var(--red)' : '' } }, `${plan >= 0 ? '+' : ''}${Math.round(plan * 100)}%`)));
+      c.appendChild(h('div', { class: 'row', style: { gap: '6px', marginTop: '6px', alignItems: 'center' } },
+        h('span', { class: 'tiny muted' }, '공세 목표'), h('span', { class: 'small grow', style: { color: goal ? 'var(--paper)' : 'var(--muted)' } }, goal || '없음 · 전선 전체'),
+        btn(goal ? '변경' : '지정', () => pickGoal(app, A), 'xs', 'target'), goal ? btn('해제', () => { A.goal = -1; ctx.rerender(); }, 'xs') : null));
+      if (A.order !== 'attack' && G.hour - (A.chance ?? -1e9) < 72) {
+        c.appendChild(h('div', { class: 'chance' }, h('span', { class: 'grow' }, h('b', null, '반격 기회'), ' · 정면의 적이 지쳤습니다'), btn('공세 개시', () => { A.order = 'attack'; ctx.rerender(); }, 'xs primary', 'attack')));
+      }
+    }
     if (A.auto && enemies.length > 1) {
       const es = h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '5px', marginTop: '8px' } }, h('span', { class: 'tiny muted' }, '상대:'));
       const mk = (tag, label) => { const b = h('button', { class: 'btn xs' + ((A.enemy || null) === tag ? ' primary' : '') }, label); onTap(b, () => { A.enemy = tag; ctx.rerender(); }); es.appendChild(b); };

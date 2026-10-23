@@ -2,7 +2,8 @@
 import { MapData } from '../engine/mapdata.js';
 import { createGame, tick, serialize, deserialize, setPlayer, resolveEvent, EVENT_INDEX } from '../engine/game.js';
 import { fmtDate, atWar, atWarAny, allied, ymd, news } from '../engine/world.js';
-import { orderMove, findPath, divStats, manpowerAvailable, setupArmies } from '../engine/military.js';
+import { orderMove, findPath, divStats, manpowerAvailable, setupArmies, armiesOf } from '../engine/military.js';
+import { counterChances } from '../engine/ai.js';
 import { transportTime, canInvade } from '../engine/naval.js';
 import { M } from '../engine/mods.js';
 import { MapRenderer } from './render.js';
@@ -144,8 +145,21 @@ export class App {
     const G = this.G;
     const m = ymd(G.hour).m;
     if (m !== this.lastMonth) { this.lastMonth = m; if (G.player && this.settings().autosave !== false) this.save('auto', true); }
+    this.checkChances();
     const C = G.countries[G.player];
     if (C && !C.alive && !this.gameOverShown) { this.gameOverShown = true; this.setSpeed(0); showDialog(this, { title: '패배', body: `${C.name}은(는) 더 이상 존재하지 않습니다.`, buttons: [{ text: '타이틀로', primary: true, fn: () => showTitle(this) }, { text: '계속 관전', fn: () => {} }] }); }
+  }
+  // 반격 기회: 방어 중인 군 정면의 적이 공세 끝에 지치면(조직력 바닥) 알린다. 공세 개시는 플레이어가 정한다
+  checkChances() {
+    const G = this.G, me = G.player;
+    if (!me || !atWarAny(G, me)) return;
+    for (const A of armiesOf(G, me)) {
+      if (!A.auto || A.order === 'attack') continue;
+      const opp = counterChances(G, A);
+      if (!opp.length) continue;
+      A.chance = G.hour;
+      if (G.hour - (A.chanceTold ?? -1e9) >= 24 * 7) { A.chanceTold = G.hour; this.toast(`반격 기회 — ${A.name} 정면 ${this.map.name[opp[0]]}`, 'peace', () => this.openPanel('military')); }
+    }
   }
   setSpeed(s) {
     if (s > 0) this.prevSpeed = s;
@@ -178,9 +192,10 @@ export class App {
     // 플레이어 관련 선전포고는 일시정지
     if (n.kind === 'war' && mine && n.big && this.settings().pauseOnWar !== false) { this.pausedForEvent = this.speed; this.setSpeed(0); }
   }
-  toast(text, kind = '') {
+  toast(text, kind = '', onClick) {
     const box = $('#toasts');
-    const t = h('div', { class: 'toast ' + kind }, text);
+    const t = h('div', { class: 'toast ' + kind + (onClick ? ' tap' : '') }, text);
+    if (onClick) onTap(t, () => { t.remove(); onClick(); });
     box.appendChild(t);
     while (box.children.length > 3) box.removeChild(box.firstChild);
     setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 3200);

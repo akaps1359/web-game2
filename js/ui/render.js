@@ -494,6 +494,14 @@ export class MapRenderer {
     }
     // 이동 경로 미리보기
     if (sel.path && sel.path.length) this.drawArrowPath(ctx, sel.pathFrom, sel.path, 'rgba(255,220,120,0.95)', 3.2, true);
+    // 공세 목표(원작의 공세선): 군에서 목표 주까지 굵은 점선 화살표 — 공세 중이면 붉게, 방어 중(계획만)이면 옅게
+    for (const id in G.armies) {
+      const A = G.armies[id];
+      if (A.tag !== player || !A.auto || !(A.goal >= 0)) continue;
+      let from = -1, best = Infinity;
+      for (const did of A.divs) { const D = G.divs[did]; if (!D || D.sea) continue; const d = map.dist(D.loc, A.goal); if (d < best) { best = d; from = D.loc; } }
+      if (from >= 0 && from !== A.goal) this.drawArrowPath(ctx, from, [A.goal], A.order === 'attack' ? 'rgba(240,110,60,0.9)' : 'rgba(235,205,130,0.7)', 5, true);
+    }
     // 아군 이동/공격 화살표
     const zoomShowAll = c.s > 0.12;
     const arrowsDrawn = new Set();
