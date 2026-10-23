@@ -250,8 +250,27 @@ button { font-family: inherit; color: inherit; }
 /* 신문 스타일 */
 .paper { background: #e9e0c7; color: #23201a; border-radius: 6px; padding: 14px 14px 12px; box-shadow: inset 0 0 40px rgba(120,90,40,.25), 0 10px 30px rgba(0,0,0,.6); position: relative; }
 .paper::before { content: ''; position: absolute; inset: 0; border-radius: 6px; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.025) 0 1px, transparent 1px 3px); }
-.paper .mast { font-family: var(--serif); text-align: center; font-size: 25px; font-weight: 800; letter-spacing: 4px; border-bottom: 3px double #2c2416; padding-bottom: 5px; }
-.paper .meta { display: flex; justify-content: space-between; font-size: 10px; border-bottom: 1px solid #2c2416; padding: 3px 0; margin-bottom: 8px; font-family: var(--serif); }
+.paper .mast { font-family: var(--serif); text-align: center; font-size: 25px; font-weight: 800; letter-spacing: 4px; border-bottom: 3px double #2c2416; padding-bottom: 5px; white-space: nowrap; overflow: hidden; line-height: 1.25; }
+/* 신문 제호: 나라마다 실제 신문의 원어 이름, 시대 느낌의 글꼴(fonts/, SIL OFL, 제호 글자만 담은 부분 글꼴) */
+@font-face { font-family: 'Mast frak'; src: url(../fonts/frak.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Mast black'; src: url(../fonts/black.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Mast roman'; src: url(../fonts/roman.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Mast didone'; src: url(../fonts/didone.woff2) format('woff2'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Mast imperial'; src: url(../fonts/imperial.woff2) format('woff2'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Mast grot'; src: url(../fonts/grot.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Mast greek'; src: url(../fonts/greek.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Mast arabic'; src: url(../fonts/arabic.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Mast ethiopic'; src: url(../fonts/ethiopic.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+.paper .mast.frak { font-family: 'Mast frak', serif; font-weight: 400; font-size: 38px; letter-spacing: 0; padding-bottom: 2px; }
+.paper .mast.black { font-family: 'Mast black', serif; font-weight: 700; font-size: 36px; letter-spacing: 0; padding-bottom: 2px; }
+.paper .mast.roman { font-family: 'Mast roman', var(--serif); font-weight: 700; font-size: 31px; letter-spacing: 2px; text-transform: uppercase; }
+.paper .mast.didone { font-family: 'Mast didone', var(--serif); font-weight: 900; font-size: 36px; letter-spacing: 0.5px; }
+.paper .mast.imperial { font-family: 'Mast imperial', var(--serif); font-weight: 900; font-size: 29px; letter-spacing: 3px; }
+.paper .mast.grot { font-family: 'Mast grot', var(--sans); font-weight: 700; font-size: 38px; letter-spacing: 6px; text-transform: uppercase; }
+.paper .mast.greek { font-family: 'Mast greek', var(--serif); font-weight: 400; font-size: 36px; letter-spacing: 2px; }
+.paper .mast.arabic { font-family: 'Mast arabic', serif; font-weight: 700; font-size: 38px; letter-spacing: 0; line-height: 1.5; }
+.paper .mast.ethiopic { font-family: 'Mast ethiopic', serif; font-weight: 700; font-size: 32px; letter-spacing: 1px; }
+.paper .meta { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: 10px; border-bottom: 1px solid #2c2416; padding: 3px 0; margin-bottom: 8px; font-family: var(--serif); }
 .paper .head { font-family: var(--serif); font-size: 22px; font-weight: 800; line-height: 1.2; margin: 6px 0 8px; }
 .paper .pic { width: 100%; border: 1px solid #2c2416; display: block; filter: sepia(.35) contrast(1.05); }
 .paper .body { font-family: var(--serif); font-size: 13.5px; line-height: 1.6; margin-top: 8px; text-align: justify; }

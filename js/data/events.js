@@ -1,5 +1,5 @@
 // 역사 이벤트 모음
-// 형식: {id, who(태그·목록), title, desc, pic, style('telegram'|신문), paper?, trig(조건), mtth(평균 일수), repeat, manual(다른 효과가 호출),
+// 형식: {id, who(태그·목록), title, desc, pic, style('telegram'|신문), edition?(신문 호외 문구), trig(조건), mtth(평균 일수), repeat, manual(다른 효과가 호출),
 //        immediate(즉시 효과), news, newsText, opts:[{t, fx, ai(가중치), aiIf}]}
 // 본문의 {country}·{leader}는 해당 국가 이름·지도자로 바뀐다.
 import { E1936 } from './events/e1936.js';

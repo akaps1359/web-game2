@@ -136,7 +136,7 @@ export const E1940 = [
       { t: '영국으로', ai: 5, aiIf: [['atWar', 'ENG', 'GER']], fx: [['for', 'ENG', [['equip', 'inf_eq', 3000], ['equip', 'fighter', 100], ['equip', 'mot', 300], ['fuel', 20000], ['news', '미국의 무기 대여 물자가 도착했습니다.']]]] },
       { t: '소련으로', ai: 5, aiIf: [['atWar', 'SOV', 'GER']], fx: [['for', 'SOV', [['equip', 'inf_eq', 3000], ['equip', 'mot', 800], ['equip', 'fighter', 100], ['news', '미국의 무기 대여 물자가 무르만스크에 도착했습니다.']]]] },
     ] },
-  { id: 'usa_pearl', who: 'USA', trig: [['after', '1941-12-07'], ['notAtWar', 'USA', 'GER'], ['not', ['flag', 'pearl_harbor']]], pic: 'ships', paper: '뉴욕 타임스', news: true, newsText: '일본이 진주만을 기습했습니다! 미국이 전쟁에 뛰어듭니다.',
+  { id: 'usa_pearl', who: 'USA', trig: [['after', '1941-12-07'], ['notAtWar', 'USA', 'GER'], ['not', ['flag', 'pearl_harbor']]], pic: 'ships', news: true, newsText: '일본이 진주만을 기습했습니다! 미국이 전쟁에 뛰어듭니다.',
     immediate: [['flag', 'pearl_harbor'], ['rmSpirit', 'usa_neutral'], ['ws', 0.4]],
     title: '진주만 공습', desc: '12월 7일 아침, 일본 해군 항공대가 하와이 진주만의 태평양 함대를 기습했다. 전함 8척이 가라앉거나 부서졌고 2,400여 명이 숨졌다. 루스벨트는 의회에서 이날을 "치욕의 날"로 기억하자고 말했다.',
     opts: [{ t: '치욕의 날을 기억하라', fx: [['law', 'economy', 'war'], ['event', 'ger_declare_usa', 'GER', 4]] }] },

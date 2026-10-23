@@ -4,6 +4,7 @@ import { picSVG } from './pics.js';
 import { fmtDate, ymd } from '../engine/world.js';
 import { EVENT_INDEX } from '../engine/game.js';
 import { describeEffects } from './describe.js';
+import { PAPERS, MAST_FONTS } from '../data/papers.js';
 
 export function closeModal() { const m = $('#modal'); m.classList.remove('show'); clear(m); }
 
@@ -33,7 +34,7 @@ export function showEventModal(app, pending, choose) {
     onTap(b, () => choose(i));
     opts.appendChild(b);
   });
-  let card;
+  let card, mast;
   if (E.style === 'telegram') {
     card = h('div', { class: 'dialog telegram' },
       h('div', { class: 'th' }, h('span', null, '전 보'), h('span', null, `${t.y}. ${t.m}. ${t.d}.`)),
@@ -41,11 +42,13 @@ export function showEventModal(app, pending, choose) {
       h('div', { class: 'note', style: { color: '#3a3326', fontSize: '13.5px', lineHeight: 1.6, whiteSpace: 'pre-line' } }, fill(E.desc)),
       opts);
   } else {
-    const paperName = E.paper || PAPERS[C.tag] || '세계 일보';
+    // 제호는 그 나라 신문의 원어 이름과 시대 느낌의 글꼴로, 기사는 한국어로
+    const [name, style, city] = PAPERS[C.tag] || PAPERS[C.master] || ['The World Herald', 'roman', 'London'];
+    mast = h('div', { class: 'mast ' + style }, name);
     card = h('div', { class: 'dialog', style: { background: 'transparent', border: '0', boxShadow: 'none', padding: '0' } },
       h('div', { class: 'paper' },
-        h('div', { class: 'mast' }, paperName),
-        h('div', { class: 'meta' }, h('span', null, `${t.y}년 ${t.m}월 ${t.d}일`), h('span', null, '호외 · 특보'), h('span', null, '1부 10전')),
+        mast,
+        h('div', { class: 'meta' }, h('span', null, `${t.y}년 ${t.m}월 ${t.d}일`), h('span', null, E.edition || '호외 · 특보'), h('span', null, city)),
         h('div', { class: 'head' }, fill(E.title)),
         h('div', { html: picSVG(E.pic || 'map'), style: { lineHeight: 0 } }),
         h('div', { class: 'body', style: { whiteSpace: 'pre-line' } }, fill(E.desc))),
@@ -53,6 +56,17 @@ export function showEventModal(app, pending, choose) {
   }
   m.appendChild(card);
   m.classList.add('show');
+  if (mast) fitMast(mast);
 }
 
-const PAPERS = { GER: '푈키셔 베오바흐터', ENG: '더 타임스', FRA: '르 피가로', ITA: '일 포폴로 디탈리아', SOV: '프라우다', USA: '뉴욕 타임스', POL: '쿠리에르 바르샤프스키', SPR: '엘 솔', JAP: '아사히 신문' };
+// 긴 제호(「Danziger Neueste Nachrichten」 등)도 한 줄에 들어가게 글자 크기를 줄인다. 글꼴이 늦게 오면 다시 맞춘다
+function fitMast(el) {
+  const fit = () => {
+    el.style.fontSize = '';
+    let s = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth + 1 && s > 12) { s -= 1; el.style.fontSize = s + 'px'; }
+  };
+  fit();
+  const style = [...el.classList].find((c) => MAST_FONTS[c]);
+  if (style && document.fonts?.load) document.fonts.load(`${MAST_FONTS[style][1]} 20px "Mast ${style}"`, el.textContent).then(fit, () => {});
+}

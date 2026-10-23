@@ -74,7 +74,7 @@ export const E1942 = [
     immediate: [['flag', 've_day'], ['settleCap', null, { puppet: false }]],
     title: '무조건 항복', desc: '베를린이 함락되었다. 5월 7일 랭스, 8일 베를린 카를스호르스트에서 독일군은 무조건 항복 문서에 서명했다. 유럽에서 전쟁이 끝났다.',
     opts: [{ t: '전쟁이 끝났다', fx: [] }] },
-  { id: 've_day', who: ['ENG', 'FRA', 'SOV', 'USA', 'POL'], trig: [['flag', 've_day']], pic: 'victory', paper: '승전 특보',
+  { id: 've_day', who: ['ENG', 'FRA', 'SOV', 'USA', 'POL'], trig: [['flag', 've_day']], pic: 'victory', edition: '승전 특보',
     title: '유럽 전승 기념일', desc: '런던의 트래펄가 광장, 파리의 샹젤리제, 모스크바의 붉은 광장에 사람들이 쏟아져 나왔다. 6년에 걸친 유럽의 전쟁이 끝났다. 이제 남은 것은 폐허 위에 새 질서를 세우는 일이다.',
     opts: [{ t: '승리!', fx: [['stab', 0.15], ['ws', -0.2]] }] },
 
