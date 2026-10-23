@@ -208,3 +208,21 @@ export function objectName(o) {
   return null;
 }
 export function isInteractive(o) { return !!objectName(o); }
+// 상호작용 단추에 쓸 말(쓸 수 없으면 null)
+export function objectVerb(o) {
+  if (!objectName(o)) return null;
+  switch (o.type) {
+    case 'door': return o.open ? null : '열기';
+    case 'stairs_down': return '내려가기';
+    case 'stairs_up': return '올라가기';
+    case 'chest': case 'sarc': return '열기';
+    case 'barrel': return '부수기';
+    case 'shrine': return '만지기';
+    case 'waypoint': return '순간 이동';
+    case 'portal': return '들어가기';
+    case 'stash': return '보관함';
+    case 'tome': return '읽기';
+    case 'pedestal': case 'fungus': case 'anvil': return '집기';
+    default: return '살펴보기';
+  }
+}

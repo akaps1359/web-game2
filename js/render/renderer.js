@@ -356,6 +356,14 @@ export class Renderer {
     this.labels.length = 0;
     // 마을 사람 이름, 가까운 출구·퀘스트 물체 이름
     const P = game.player;
+    // 상호작용 단추가 다룰 대상: 금빛 고리(아이템은 아래에서 이름표를 강조)
+    const f = game.focus;
+    if (f && f.kind !== 'item') {
+      const fx = ox + (f.x - f.y) * (TW / 2) * s, fy = oy + (f.x + f.y) * (TH / 2) * s;
+      const k = 0.5 + 0.5 * Math.sin(performance.now() / 160);
+      g.strokeStyle = `rgba(240,216,152,${0.55 + 0.35 * k})`; g.lineWidth = 2 * d;
+      g.beginPath(); g.ellipse(fx, fy, (18 + 3 * k) * s, (9 + 1.5 * k) * s, 0, 0, Math.PI * 2); g.stroke();
+    }
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = `700 ${Math.round(10.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
     const tag = (txt, x, y, z, col) => {
@@ -372,12 +380,15 @@ export class Renderer {
       if (o.type === 'anvil' && !o.quest) continue;
       tag(typeof nm === 'function' ? nm(o) : nm, o.x, o.y, o.type === 'portal' ? 78 : 36, o.type === 'portal' ? '#a8c8ff' : '#e8d8b0');
     }
-    if (!game.showLabels) return;
+    // 이름표를 끈 설정이어도 상호작용 대상 아이템의 이름표는 보인다
+    const only = game.showLabels ? null : f?.kind === 'item' ? f.ref : undefined;
+    if (only === undefined) return;
     g.font = `600 ${Math.round(11.5 * d)}px -apple-system, "Apple SD Gothic Neo", sans-serif`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     const placed = [];
     const items = L.items.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
     for (const it of items) {
+      if (only && it !== only) continue;
       if (it.x < x0 || it.x > x1 || it.y < y0 || it.y > y1) continue;
       const k = Math.round(it.y) * L.w + Math.round(it.x);
       if (!town && !(L.flags[k] & F_VIS)) continue;
@@ -396,6 +407,7 @@ export class Renderer {
       placed.push({ x: px, y: py, w });
       g.fillStyle = 'rgba(0,0,0,0.72)';
       g.fillRect(px - w / 2, py - h / 2, w, h);
+      if (f?.ref === it) { g.strokeStyle = 'rgba(240,216,152,0.95)'; g.lineWidth = 1.5 * d; g.strokeRect(px - w / 2, py - h / 2, w, h); }
       g.fillStyle = game.itemColor ? game.itemColor(it) : '#ddd';
       g.fillText(txt, px, py + 0.5 * d);
       this.labels.push({ it, x: (px - w / 2) / d, y: (py - h / 2) / d, w: w / d, h: h / d });

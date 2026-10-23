@@ -1,4 +1,4 @@
-// HUD: 생명력·마나 구슬, 물약 띠, 기술 단추(탭 = 자동 조준, 끌기 = 조준), 이동 조이스틱, 메뉴 단추, 작은 지도, 대상 정보
+// HUD: 생명력·마나 구슬, 물약 띠, 기술 단추(탭 = 자동 조준, 끌기 = 조준), 상호작용 단추, 이동 조이스틱, 메뉴 단추, 작은 지도, 대상 정보
 import { $, el, onTap, canvasFor } from './dom.js';
 import { drawItemIcon } from '../render/icons.js';
 import { drawSkillIcon } from '../render/skillicons.js';
@@ -98,6 +98,14 @@ export class HUD {
       this.sbtns.push(S);
     });
     r.appendChild(this.pad);
+    // 상호작용 단추(공격 단추 위): 손 닿는 곳에 무언가 있을 때만 보이고 할 일(줍기·열기·대화…)이 적힌다
+    this.actBtn = el('button', 'actbtn');
+    this.actTxt = el('span');
+    this.actBtn.appendChild(this.actTxt);
+    this.actBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.actBtn.classList.add('pressed'); this.game?.interact(); });
+    for (const t of ['pointerup', 'pointercancel']) this.actBtn.addEventListener(t, () => this.actBtn.classList.remove('pressed'));
+    r.appendChild(this.actBtn);
+    this.actVerb = null;
     // 이동 조이스틱: 쉬는 자리는 왼쪽 아래, 왼쪽 아래를 누르면 그 자리로 옮겨 간다(입력은 input.js)
     this.stickEl = el('div', 'stick');
     this.stickKnob = el('div', 'knob');
@@ -264,15 +272,6 @@ export class HUD {
     clearTimeout(this.vT);
     this.vT = setTimeout(() => { this.vign.style.boxShadow = 'inset 0 0 90px rgba(200,0,0,0)'; }, 160);
   }
-  tapMark(x, y, pick) {
-    const m = el('div');
-    const col = pick?.actor?.team === 1 ? 'rgba(255,80,60,.9)' : pick ? 'rgba(255,220,120,.9)' : 'rgba(200,220,255,.7)';
-    m.style.cssText = `position:absolute;left:${x - 14}px;top:${y - 7}px;width:28px;height:14px;border-radius:50%;border:2px solid ${col};pointer-events:none;z-index:16;transition:transform .35s ease-out, opacity .35s`;
-    this.root.appendChild(m);
-    requestAnimationFrame(() => { m.style.transform = 'scale(1.8)'; m.style.opacity = '0'; });
-    setTimeout(() => m.remove(), 400);
-  }
-  holdMark(x) { /* 누르고 있는 동안은 따로 표시하지 않는다 */ }
   stickShow(bx, by, dx, dy) {
     if (!this.stickEl) return;
     this.stickEl.classList.add('on');
@@ -320,8 +319,11 @@ export class HUD {
         S.cd.style.background = `conic-gradient(rgba(0,0,0,.65) ${k * 360}deg, transparent 0)`;
       } else if (S.cd.style.background) S.cd.style.background = '';
     }
+    // 상호작용 단추
+    const verb = g.focus?.verb || '';
+    if (verb !== this.actVerb) { this.actVerb = verb; this.actTxt.textContent = verb; this.actBtn.classList.toggle('on', !!verb); }
     // 대상 정보
-    const t = g.target && !g.target.dead ? g.target : (g.hold?.actor && !g.hold.actor.dead ? g.hold.actor : null);
+    const t = g.target && !g.target.dead ? g.target : null;
     if (t && g.canSee(t)) {
       this.tbox.classList.add('on');
       this.tname.textContent = t.name || '';
