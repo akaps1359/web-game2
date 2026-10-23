@@ -103,7 +103,8 @@ export class Renderer {
     const ox = Math.round(this.cv.width / 2 / K - camIX * s + shx * this.dpr / K), oy = Math.round(this.cv.height * this.anchorY / K - camIY * s + shy * this.dpr / K);
     const W = L.w, flags = L.flags, floor = L.floor, wall = L.wall;
     const t = this.time;
-    // 빛이 닿는 칸만 그린다(던전의 나머지는 어차피 거의 검다)
+    // 빛이 닿는 칸(괴물·아이템은 여기서만 보인다). 한 번 본 칸은 빛 밖에서도 어둡게 남겨 그린다(디아블로 2처럼:
+    // 걸을 때마다 빛 가장자리에서 바닥·벽이 나타났다 사라지지 않게)
     const lit = this.litMask(game, L, x0, y0, x1, y1, town);
     const mw = x1 - x0 + 1;
     const isLit = (x, y) => town || (x >= x0 && y >= y0 && x <= x1 && y <= y1 && lit[(y - y0) * mw + (x - x0)] === 1);
@@ -119,7 +120,6 @@ export class Renderer {
       if (!f) continue;
       const fl = flags[k];
       if (!(fl & F_SEEN) && !town) continue;
-      if (!town && lit[(y - y0) * mw + (x - x0)] !== 1) continue;
       const px = ox + (x - y) * (TW / 2) * s, py = oy + (x + y) * (TH / 2) * s;
       if (px < -fw || px > cw + fw || py < -fh || py > ch + fh) continue;
       let spr;
@@ -133,7 +133,6 @@ export class Renderer {
       if (d.x < x0 || d.x > x1 || d.y < y0 || d.y > y1) continue;
       const k = Math.round(d.y) * W + Math.round(d.x);
       if (!(flags[k] & F_SEEN) && !town) continue;
-      if (!isLit(Math.round(d.x), Math.round(d.y))) continue;
       drawDecal(g, d, ox + (d.x - d.y) * (TW / 2) * s, oy + (d.x + d.y) * (TH / 2) * s, s, !(flags[k] & F_VIS) && !town);
     }
     for (const c of L.corpses) {
@@ -152,14 +151,12 @@ export class Renderer {
       const k = y * W + x;
       if (!wall[k]) continue;
       if (!(flags[k] & F_SEEN) && !town) continue;
-      if (!town && !(isLit(x, y) || isLit(x - 1, y - 1) || isLit(x - 2, y - 2) || isLit(x - 1, y) || isLit(x, y - 1) || isLit(x - 2, y - 1) || isLit(x - 1, y - 2))) continue;
       this.push(x + y, 1, k, null);
     }
     for (const o of L.objects) {
       if (o.x < x0 || o.x > x1 || o.y < y0 || o.y > y1 || o.hidden) continue;
       const k = o.y * W + o.x;
       if (!(flags[k] & F_SEEN) && !town) continue;
-      if (!isLit(o.x, o.y) && !isLit(o.x - 1, o.y - 1)) continue;
       this.push(o.x + o.y + (o.type === 'door' ? 0 : 0.05), 2, o, null);
     }
     for (const lt of L.lights) {
@@ -177,6 +174,7 @@ export class Renderer {
       if (it.x < x0 || it.x > x1 || it.y < y0 || it.y > y1) continue;
       const k = Math.round(it.y) * W + Math.round(it.x);
       if (!(flags[k] & F_VIS) && !town) continue;
+      if (!isLit(Math.round(it.x), Math.round(it.y))) continue;
       this.push(it.x + it.y - 0.3, 4, it, null);
     }
     this.fx.collect(this, x0, y0, x1, y1);
@@ -337,7 +335,8 @@ export class Renderer {
   // 어둠 위에 광원 구멍을 뚫는다(세상 판과 같은 해상도에서 계단진 동심원으로)
   drawLighting(g, game, L, ox, oy, s, x0, y0, x1, y1, town) {
     const lg = this.lg, lw = this.light.width, lh = this.light.height;
-    const amb = town ? (game.townDark ?? 0.32) : 0.965;
+    // 빛 밖의 어둠: 던전에서도 한 번 본 곳의 바닥·벽이 어렴풋이 보이는 정도
+    const amb = town ? (game.townDark ?? 0.32) : 0.84;
     lg.globalCompositeOperation = 'source-over';
     lg.clearRect(0, 0, lw, lh);
     lg.fillStyle = `rgba(0,0,0,${amb})`;

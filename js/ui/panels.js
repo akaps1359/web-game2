@@ -1,8 +1,7 @@
 // 패널: 가방(장비창·격자·물약 띠), 캐릭터, 기술 나무, 퀘스트, 메뉴·설정, 상점, 보관함, 순간 이동
 import { $, el, btn, onTap, canvasFor } from './dom.js';
-import { drawItemIcon } from '../render/icons.js';
-import { drawSkillIcon } from '../render/skillicons.js';
-import { pixIcon } from './pixui.js';
+import { paintItemIcon } from '../render/icons.js';
+import { paintSkillIcon } from '../render/skillicons.js';
 import { drawPortrait } from '../render/figures.js';
 import { BASE } from '../data/items.js';
 import { itemName, itemColor, itemLines, qualityClass, meetsReq, isEquip, itemDmg, itemAC, sellPrice, repairCost, isBeltable, itemMods } from '../game/items.js';
@@ -13,6 +12,58 @@ import { stock, ALWAYS, buy, sell, buyPrice, repairAll, repairOne, identify, res
 import { makeItem } from '../game/items.js';
 import { levelName, LEVELS } from '../game/world.js';
 import { EXP_TABLE } from '../data/classes.js';
+
+const HELP = [
+  ['이동·공격', `■ 움직이기
+조이스틱과 단추로만 합니다(게임 화면을 눌러서는 아무 일도 없습니다). 화면 왼쪽을 누르고 끌면 그 자리에 조이스틱이 생기고, 민 방향으로 바로 걷습니다. 손을 떼면 멈춥니다. 벽에 비스듬히 밀면 벽을 따라 미끄러지고, 닫힌 문은 밀면 열립니다.
+
+■ 공격
+오른쪽 아래 큰 단추를 누르면 그 자리에서 바로 공격합니다. 적에게 다가가지 않습니다. 조이스틱을 민 쪽(밀지 않으면 바라보는 쪽)으로 휘두르거나 쏘고, 사거리 안에 적이 있으면 그쪽으로 몸을 돌립니다. 누르고 있으면 계속 공격합니다.
+
+■ 사거리
+근접 무기는 손 닿는 거리(한 칸 반 남짓) 앞쪽만 맞습니다. 활은 화살이 날아가 처음 닿는 적을 맞힙니다. 공격 사이사이 조이스틱으로 물러나며 싸울 수 있습니다(카이팅). 괴물의 공격도 내려치기 전에 비켜서면 빗나갑니다.`],
+  ['단추', `■ 상호작용
+손 닿는 곳에 아이템·상자·문·계단·마을 사람이 있으면 공격 단추 위에 할 일이 적힌 단추(줍기·열기·대화·내려가기…)가 나타납니다. 대상에는 금빛 고리가 표시됩니다.
+
+■ 기술
+작은 단추 네 개에 기술을 넣어 씁니다(기술 창에서 넣기). 탭하면 공격처럼 그 자리에서 바로 쓰고, 단추에서 손가락을 화면 쪽으로 끌면 원하는 곳을 겨눕니다.
+
+■ 물약
+물약 띠를 탭하면 마십니다. 빨간 구슬(생명력)·파란 구슬(마나)을 탭하면 알맞은 물약을 자동으로 마십니다.
+
+■ 화면
+두 손가락으로 오므리고 벌리면 화면을 확대·축소합니다.`],
+  ['아이템', `■ 줍기
+가까이 가서 상호작용 단추(줍기)로 줍습니다. 이름표 색은 등급입니다: 흰색 일반, 파란색 마법, 노란색 희귀, 금색 고유.
+
+■ 가방
+아이템을 누르면 설명이 나오고 장착·사용·버리기를 할 수 있습니다. 끌어서 옮기거나 장비 칸에 놓아 장착할 수도 있습니다.
+
+■ 감정·내구도
+마법 이상의 아이템은 감정해야 능력을 알 수 있습니다(감정 주문서 또는 현자 알데릭, 100골드). 저주받은 아이템도 있습니다. 장비는 쓰면 닳고, 내구도가 0이 되면 효과가 없으니 대장장이에게 고치세요.
+
+■ 물약 띠
+허리띠를 차면 띠의 줄이 늘어납니다.`],
+  ['마을·지도', `■ 마을
+치유사 마렌과 말하면 생명력이 모두 찹니다. 대장장이는 무기·방어구를 팔고 고쳐 주고, 마녀는 마나 물약·주문서·지팡이·장신구를 팝니다. 소년 핍은 비싸지만 좋은 물건을 가끔 가져옵니다.
+
+■ 귀환
+오른쪽 위 파란 단추(차원문)로 귀환 주문서를 읽으면 마을로 돌아갑니다. 차원문을 다시 지나면 원래 자리로 돌아갑니다.
+
+■ 순간 이동
+홀수 층(3, 5, 7…)의 순간 이동 지점을 켜 두면 마을에서 바로 갈 수 있습니다.
+
+■ 지도
+오른쪽 위 작은 지도를 탭하면 큰 지도가 겹쳐 보입니다. 한 번 본 곳은 빛이 닿지 않아도 어둡게 남아 보입니다.`],
+  ['성장', `■ 레벨
+레벨이 오르면 능력치 점수 5와 기술 점수 1을 얻습니다. 생명력과 마나도 모두 찹니다.
+
+■ 능력치
+힘은 근접 피해와 장비 요구치, 마력은 마나와 주문, 민첩은 명중·방어도·막기와 활 피해, 활력은 생명력을 올립니다.
+
+■ 무기와 괴물
+칼은 짐승에게 강하고 해골에게 약합니다. 둔기는 그 반대입니다(디아블로 1 규칙).`],
+];
 
 const SLOT_LABEL = { head: '투구', amulet: '목걸이', body: '갑옷', weapon: '무기', shield: '방패', ring1: '반지', ring2: '반지', gloves: '장갑', belt: '허리띠', boots: '장화' };
 
@@ -34,7 +85,9 @@ export class Panels {
     this.game.stopAll?.();
     this.cur = name; this.opts = opts; this.sel = null;
     this.tab = opts.tab ?? this.tab ?? 0;
+    this.page = 0;
     this.root.classList.add('on');
+    this.enter = true;
     this.render();
     this.game.sfx('ui_open');
   }
@@ -49,15 +102,17 @@ export class Panels {
   }
   refresh() { if (this.cur) this.render(); }
 
+  // 창 틀: 새로 열 때만 새로 만들어 올라오는 움직임을 보이고, 단추를 눌러 다시 그릴 때는 같은 틀에 내용만 바꾼다(깜빡이지 않게)
   frame(title, sub) {
-    this.root.innerHTML = '';
-    const p = el('div', 'pnl');
+    let p = this.root.firstElementChild;
+    if (this.enter || !p?.classList.contains('pnl')) { this.root.innerHTML = ''; p = el('div', 'pnl enter'); this.root.appendChild(p); }
+    else { while (this.root.lastChild !== p) this.root.lastChild.remove(); p.textContent = ''; p.className = 'pnl'; }
+    this.enter = false;
     const head = el('div', 'pnl-head');
     head.appendChild(el('div', 'pnl-title', title));
     if (sub) { const s = el('div', 'gold-line'); s.innerHTML = sub; head.appendChild(s); }
     head.appendChild(btn('pnl-x', '✕', () => this.close()));
     p.appendChild(head);
-    this.root.appendChild(p);
     return p;
   }
   goldHTML() { return `<span class="coin"></span>${this.hero.data.gold.toLocaleString('ko-KR')}`; }
@@ -73,9 +128,15 @@ export class Panels {
     return [L, R];
   }
 
+  // 다시 그려도 두루마리 위치는 그대로
   render() {
     const fn = this['r_' + this.cur];
-    if (fn) fn.call(this);
+    if (!fn) return;
+    const SCR = '.pnl-body, .col, .sinfo';
+    const keep = this.enter ? [] : [...this.root.querySelectorAll(SCR)].map((e) => e.scrollTop);
+    if (!this.sel) this.tipIt = null;
+    fn.call(this);
+    if (keep.some((v) => v)) this.root.querySelectorAll(SCR).forEach((e, i) => { if (keep[i]) e.scrollTop = keep[i]; });
   }
 
   // ═════════ 가방 ═════════
@@ -83,32 +144,32 @@ export class Panels {
     const h = this.hero;
     const idm = this.opts.identifyWith;
     const p = this.frame(idm ? '감정할 아이템을 고르세요' : this.opts.sage ? '현자 알데릭 · 감정' : '가방', this.goldHTML());
-    const body = el('div', 'pnl-body');
-    p.appendChild(body);
-    const sp = this.space(body), rows = h.beltRows();
-    const C = Math.max(22, Math.floor(Math.min(40, (sp.w - 24) / 20, sp.h / 6.7, (sp.h - 64) / (INV_H + rows))));
-    const [L, R] = this.cols(body);
+    const body = el('div', 'pnl-body'); p.appendChild(body);
+    const sp = this.space(body), rows = h.beltRows(), extra = this.opts.sage ? 40 : 0;
+    // 장비창(10×6.6칸)과 가방(10×4칸)·물약 띠를 한 화면에: 칸 크기를 남은 너비·높이에 맞춘다
+    const C = Math.max(20, Math.floor(Math.min(40, (sp.w - 16) / 20, sp.h / 6.6, (sp.h - 14 - extra) / (INV_H + rows))));
+    const [L, R] = this.cols(body, 'tight');
     L.appendChild(this.doll(C));
     R.appendChild(this.grid(h.data.inv, INV_W, INV_H, C, 'inv'));
     R.appendChild(this.beltView(C));
     if (this.opts.sage) {
       const n = h.data.inv.filter((i) => !i.id).length + Object.values(h.data.equip).filter((i) => !i.id).length;
-      const row = el('div'); row.style.cssText = 'display:flex;gap:6px;margin-top:10px';
+      const row = el('div', 'tbtns');
       row.appendChild(btn('btn' + (n ? '' : ' dim'), `모두 감정 (${n * 100}골드)`, () => { for (const it of [...h.data.inv, ...Object.values(h.data.equip)]) if (!it.id) { if (!identify(this.game, it)) break; } h.recalc(); this.render(); }));
       R.appendChild(row);
     }
-    const hint = el('div', 'shop-hint', idm ? '감정되지 않은 아이템(?)을 누르세요.' : '아이템을 누르면 자세히 보이고, 끌어서 옮기거나 장착할 수 있습니다.');
-    R.appendChild(hint);
   }
 
   doll(C) {
     const h = this.hero, d = h.data;
     const wrap = el('div', 'doll');
     wrap.style.width = 10 * C + 'px'; wrap.style.height = 6.6 * C + 'px';
-    // 가운데 인물 그림
-    const fig = canvasFor(null, 120, 200);
+    // 가운데 인물 그림(칸 크기에 맞춘 판에 그려 도트 크기는 그대로)
+    const fw = Math.round(3 * C), fh = Math.round(5.2 * C);
+    const fig = canvasFor(null, fw, fh);
     fig.c.className = 'doll-fig';
-    drawPortrait(fig.g, this.game.player.look, 60, 190, 1.75, performance.now() / 1000);
+    fig.c.style.top = Math.round(0.2 * C) + 'px';
+    drawPortrait(fig.g, this.game.player.look, fw / 2, fh - 0.25 * C, 1.75 * C / 40, 0.3);
     wrap.appendChild(fig.c);
     const L = { head: [4, 0, 2, 2], amulet: [6.3, 0.5, 1, 1], weapon: [0.15, 0.3, 2, 4], shield: [7.85, 0.3, 2, 4], body: [4, 2.2, 2, 3], ring1: [2.65, 4.45, 1, 1], ring2: [6.35, 4.45, 1, 1], gloves: [0.15, 4.55, 2, 2], belt: [4, 5.45, 2, 1], boots: [7.85, 4.55, 2, 2] };
     for (const s of EQUIP_SLOTS) {
@@ -121,14 +182,14 @@ export class Panels {
       const bw = 6;
       if (it) {
         const cv = canvasFor(b, w * C - bw, hh * C - bw);
-        pixIcon(cv, (g) => drawItemIcon(g, it, 2, 2, w * C - 4 - bw, hh * C - 4 - bw));
+        paintItemIcon(cv, it, 1);
         b.classList.add(qualityClass(it));
         if (!meetsReq(it, h.st) || (it.durMax && it.dur <= 0 && !it.indestr)) b.classList.add('bad');
         if (this.sel?.it === it) b.classList.add('sel');
         this.dragSource(b, it, 'equip', s);
       } else b.appendChild(el('span', 'lbl', SLOT_LABEL[s]));
       // 두 손 무기면 방패 칸을 흐리게
-      if (s === 'shield' && !it && d.equip.weapon && BASE[d.equip.weapon.b].hands === 2 && !itemMods(d.equip.weapon).oneHand) { const cv = canvasFor(b, w * C - bw, hh * C - bw); cv.g.globalAlpha = 0.25; pixIcon(cv, (g) => drawItemIcon(g, d.equip.weapon, 2, 2, w * C - 4 - bw, hh * C - 4 - bw)); }
+      if (s === 'shield' && !it && d.equip.weapon && BASE[d.equip.weapon.b].hands === 2 && !itemMods(d.equip.weapon).oneHand) { const cv = canvasFor(b, w * C - bw, hh * C - bw); cv.g.globalAlpha = 0.25; paintItemIcon(cv, d.equip.weapon, 1); }
       onTap(b, () => { if (it) this.select(it, 'equip', s); });
       wrap.appendChild(b);
     }
@@ -150,7 +211,7 @@ export class Panels {
       const n = el('div', 'gi ' + qualityClass(it));
       n.style.cssText = `left:${it.x * C + 1}px;top:${it.y * C + 1}px;width:${b.w * C}px;height:${b.h * C}px`;
       const cv = canvasFor(n, b.w * C, b.h * C);
-      pixIcon(cv, (g) => drawItemIcon(g, it, 2, 2, b.w * C - 4, b.h * C - 4));
+      paintItemIcon(cv, it, 1);
       if (!it.id && (it.q === 'magic' || it.q === 'rare' || it.q === 'unique')) n.classList.add('unid');
       if (isEquip(it) && !meetsReq(it, this.hero.st)) n.classList.add('bad');
       if (this.sel?.it === it) n.classList.add('sel');
@@ -165,9 +226,8 @@ export class Panels {
 
   beltView(C) {
     const h = this.hero, rows = h.beltRows();
-    const wrap = el('div');
-    wrap.style.cssText = 'margin:10px auto 0;display:flex;flex-direction:column;align-items:center;gap:4px';
-    wrap.appendChild(el('div', 'shop-hint', `물약 띠 (${rows}줄 · 허리띠를 차면 늘어납니다)`));
+    const wrap = el('div', 'beltv');
+    wrap.appendChild(el('div', 'shop-hint', rows > 1 ? `물약 띠\n${rows}줄` : '물약 띠\n(허리띠를 차면\n늘어납니다)'));
     const g = el('div', 'grid');
     g.style.width = 4 * C + 2 + 'px'; g.style.height = rows * C + 2 + 'px';
     for (let r = rows - 1; r >= 0; r--) for (let c = 0; c < 4; c++) {
@@ -176,7 +236,7 @@ export class Panels {
       const it = h.data.belt[r * 4 + c];
       if (!it) continue;
       const n = el('div', 'gi'); n.style.cssText = `left:${c * C + 1}px;top:${yy * C + 1}px;width:${C}px;height:${C}px`;
-      const cv = canvasFor(n, C, C); pixIcon(cv, (g) => drawItemIcon(g, it, 2, 2, C - 4, C - 4));
+      const cv = canvasFor(n, C, C); paintItemIcon(cv, it, 1);
       if (this.sel?.it === it) n.classList.add('sel');
       onTap(n, () => this.select(it, 'belt'));
       g.appendChild(n);
@@ -199,7 +259,7 @@ export class Panels {
         const b = BASE[it.b], C = this.C || 38;
         const gh = el('div', 'drag-ghost');
         const cv = canvasFor(gh, b.w * C, b.h * C);
-        pixIcon(cv, (g) => drawItemIcon(g, it, 0, 0, b.w * C, b.h * C));
+        paintItemIcon(cv, it, 0);
         $('#app').appendChild(gh);
         st.ghost = gh; st.w = b.w * C; st.h = b.h * C;
         this.game.sfx('item_pickup', null, null, { vol: 0.5 });
@@ -342,7 +402,9 @@ export class Panels {
   }
   tooltip(it, where, slot) {
     const h = this.hero, g = this.game;
-    const tip = el('div', 'tip' + (where === 'inv' || where === 'belt' ? ' left' : ''));
+    // 같은 아이템의 설명창을 다시 띄울 때(수리·감정 뒤 등)는 움직임 없이
+    const tip = el('div', 'tip' + (where === 'inv' || where === 'belt' ? ' left' : '') + (this.tipIt === it ? '' : ' enter'));
+    this.tipIt = it;
     const nm = el('div', 'tname ' + 'q-' + qualityClass(it), itemName(it));
     tip.appendChild(nm);
     if ((it.q === 'magic' || it.q === 'rare' || it.q === 'unique') && it.id) tip.appendChild(el('div', 'tbase', BASE[it.b].name));
@@ -408,55 +470,53 @@ export class Panels {
   }
 
   // ═════════ 캐릭터 ═════════
+  // 세 단(능력치 / 전투·생존 / 기록·기타)으로 한 화면에
   r_character() {
     const h = this.hero, d = h.data, st = h.st, P = this.game.player;
     const p = this.frame(`${d.name}`, `${h.C.name} · 레벨 ${d.lvl}${d.hc ? ' · <span style="color:#ff6a5a">하드코어</span>' : ''}`);
     const body = el('div', 'pnl-body'); p.appendChild(body);
-    const [CL, CR] = this.cols(body, 'wide');
-    const next = d.lvl >= 50 ? '최대' : EXP_TABLE[d.lvl].toLocaleString('ko-KR');
-    const top = el('div', 'cbox');
-    top.innerHTML = `<div class="crow"><span>경험치</span><span class="v">${d.exp.toLocaleString('ko-KR')}</span></div><div class="crow"><span>다음 레벨</span><span class="v">${next}</span></div><div class="crow"><span>골드</span><span class="v">${d.gold.toLocaleString('ko-KR')}</span></div>`;
-    CL.appendChild(top);
-    CL.appendChild(el('div', 'pts', d.statPts ? `남은 능력치 점수: ${d.statPts}` : ''));
+    const cols = el('div', 'ccols'), C1 = el('div'), C2 = el('div'), C3 = el('div');
+    cols.append(C1, C2, C3); body.appendChild(cols);
+    const box = (title, rows) => { const b = el('div', 'cbox'); if (title) b.appendChild(el('h4', '', title)); for (const [a, v, c] of rows) { const r = el('div', 'crow'); r.innerHTML = `<span>${a}</span><span class="v ${c || ''}">${v}</span>`; b.appendChild(r); } return b; };
     const attrs = el('div', 'cbox');
-    const A = [['str', '힘', '근접 피해(전사·소서러)와 장비 요구치'], ['mag', '마력', '마나와 주문 위력'], ['dex', '민첩', '명중·방어도·막기·활 피해(로그)'], ['vit', '활력', '생명력']];
+    attrs.appendChild(el('h4', '', d.statPts ? `능력치 · 남은 점수 ${d.statPts}` : '능력치'));
+    const A = [['str', '힘', '근접 피해·장비 요구치'], ['mag', '마력', '마나·주문 위력'], ['dex', '민첩', '명중·방어도·막기·활'], ['vit', '활력', '생명력']];
     for (const [k, n, tip] of A) {
       const row = el('div', 'attr');
-      const nm = el('div', 'an'); nm.innerHTML = `${n} <span style="color:var(--dim)">${tip}</span>`;
+      const nm = el('div', 'an'); nm.innerHTML = `${n}<span class="ad">${tip}</span>`;
       const base = st['base' + k[0].toUpperCase() + k.slice(1)], tot = st[k];
-      const v = el('div', 'av'); v.innerHTML = tot !== base ? `<span style="color:${tot > base ? '#8aa0ff' : '#ff6a5a'}">${tot}</span>` : `${tot}`;
+      const v = el('div', 'av'); v.innerHTML = (tot !== base ? `<span style="color:${tot > base ? '#8aa0ff' : '#ff6a5a'}">${tot}</span>` : `${tot}`) + `<span class="ad">최대 ${h.C.max[k]}</span>`;
       const plus = btn('plus', '+', () => { if (h.addStat(k)) { this.game.sfx('stat_up'); this.render(); this.app.hud.badges(); } });
       plus.disabled = !d.statPts || d.base[k] >= h.C.max[k];
       row.append(nm, v, plus);
       attrs.appendChild(row);
     }
-    attrs.appendChild(el('div', 'shop-hint', `직업 한계: 힘 ${h.C.max.str} · 마력 ${h.C.max.mag} · 민첩 ${h.C.max.dex} · 활력 ${h.C.max.vit}`));
-    CL.appendChild(attrs);
-    const g2 = el('div', 'cstats');
-    const box = (title, rows) => { const b = el('div', 'cbox'); b.appendChild(el('h4', '', title)); for (const [a, v, c] of rows) { const r = el('div', 'crow'); r.innerHTML = `<span>${a}</span><span class="v ${c || ''}">${v}</span>`; b.appendChild(r); } return b; };
-    g2.appendChild(box('전투', [
+    C1.appendChild(attrs);
+    C2.appendChild(box('전투', [
       ['피해', `${st.dmgMin}-${st.dmgMax}`], ['명중률', `${st.tohitSheet}%`], ['방어도', st.ac], ['막기', st.hasShield ? `${Math.min(75, st.block)}%` : '-'],
       ['공격 속도', `${(1 / st.atkTime).toFixed(2)}회/초`], ['시전 속도', `${(1 / st.castTime).toFixed(2)}회/초`],
     ]));
-    g2.appendChild(box('생존', [
-      ['생명력', `${Math.ceil(P.hp)}/${P.hpMax}`], ['마나', `${Math.floor(P.mp)}/${P.mpMax}`],
-      ['화염 저항', `${st.res.fire}%`, st.res.fire < 0 ? 'dn' : ''], ['냉기 저항', `${st.res.cold}%`, st.res.cold < 0 ? 'dn' : ''], ['번개 저항', `${st.res.light}%`, st.res.light < 0 ? 'dn' : ''], ['독 저항', `${st.res.poison}%`, st.res.poison < 0 ? 'dn' : ''],
+    const sv = box('생존', [['생명력', `${Math.ceil(P.hp)}/${P.hpMax}`], ['마나', `${Math.floor(P.mp)}/${P.mpMax}`]]);
+    const res = el('div', 'cres');
+    for (const [k, n] of [['fire', '화염'], ['cold', '냉기'], ['light', '번개'], ['poison', '독']]) { const r = el('div', 'crow'); r.innerHTML = `<span>${n} 저항</span><span class="v ${st.res[k] < 0 ? 'dn' : ''}">${st.res[k]}%</span>`; res.appendChild(r); }
+    sv.appendChild(res);
+    C2.appendChild(sv);
+    const next = d.lvl >= 50 ? '최대' : EXP_TABLE[d.lvl].toLocaleString('ko-KR');
+    C3.appendChild(box('', [
+      ['경험치', d.exp.toLocaleString('ko-KR')], ['다음 레벨', next], ['골드', d.gold.toLocaleString('ko-KR')],
+      ['처치한 괴물', (d.kills || 0).toLocaleString('ko-KR')], ['죽은 횟수', d.deaths || 0],
+      ['플레이 시간', `${Math.floor((d.played || 0) / 3600)}시간 ${Math.floor(((d.played || 0) % 3600) / 60)}분`],
     ]));
     const extra = [];
+    if (d.cls === 'warrior') extra.push(['치명타(전사)', d.lvl + '%']);
+    if (st.crit) extra.push(['치명타', st.crit + '%']);
     if (st.lifeSteal) extra.push(['생명력 흡수', st.lifeSteal + '%']);
     if (st.manaSteal) extra.push(['마나 흡수', st.manaSteal + '%']);
     if (st.dmgTaken) extra.push(['받는 피해', st.dmgTaken]);
     if (st.mf) extra.push(['마법 아이템 발견', st.mf + '%']);
     if (st.gf) extra.push(['골드 발견', st.gf + '%']);
     if (st.frw) extra.push(['이동 속도', '+' + st.frw + '%']);
-    if (st.crit) extra.push(['치명타', st.crit + '%']);
-    if (d.cls === 'warrior') extra.push(['치명타(전사)', d.lvl + '%']);
-    extra.push(['처치한 괴물', (d.kills || 0).toLocaleString('ko-KR')]);
-    extra.push(['죽은 횟수', d.deaths || 0]);
-    extra.push(['플레이 시간', `${Math.floor((d.played || 0) / 3600)}시간 ${Math.floor(((d.played || 0) % 3600) / 60)}분`]);
-    const eb = box('기타', extra); eb.style.gridColumn = '1 / span 2';
-    g2.appendChild(eb);
-    CR.appendChild(g2);
+    if (extra.length) C3.appendChild(box('기타', extra));
   }
 
   // ═════════ 기술 ═════════
@@ -469,10 +529,11 @@ export class Panels {
     const body = el('div', 'pnl-body'); p.appendChild(body);
     const list = skillsOf(d.cls).filter((s) => s.tab === this.tab);
     const sp = this.space(body);
-    const N = Math.max(38, Math.min(56, Math.floor((sp.h - 20) / 3) - 14, Math.floor((sp.w - 260) / 6) - 20));
-    const rowH = N + 14, colW = N + 20, W = colW * 6, TH = rowH * 3 + 16;
-    const [TL, TR] = this.cols(body);
-    TR.style.flex = '1 1 240px';
+    // 나무(6단×3줄)와 설명을 나란히 한 화면에: 기술 칸 크기를 남은 자리에 맞춘다
+    const N = Math.max(34, Math.min(56, Math.floor((sp.h - 16) / 3) - 12, Math.floor((sp.w - 300) / 6) - 16));
+    const rowH = N + 12, colW = N + 16, W = colW * 6, TH = rowH * 3 + 16;
+    const [TL, TR] = this.cols(body, 'fill');
+    TR.style.flex = '1 1 280px';
     const tree = el('div', 'stree'); tree.style.width = W + 'px'; tree.style.height = TH + 'px';
     // 열 = 단계(필요 레벨), 행 = 갈래 안의 자리
     const pos = (s) => ({ x: s.pos[1] * colW + (colW - N) / 2, y: 16 + s.pos[0] * rowH + (rowH - N) / 2 });
@@ -494,7 +555,7 @@ export class Panels {
       const q = pos(s);
       const n = el('button', 'snode');
       n.style.left = q.x + 'px'; n.style.top = q.y + 'px'; n.style.width = n.style.height = N + 'px';
-      const cv = canvasFor(n, N - 4, N - 4); drawSkillIcon(cv.g, s, 0, 0, N - 4);
+      const cv = canvasFor(n, N - 4, N - 4); paintSkillIcon(cv, s);
       const lv = h.skillPoints(s.id), bonus = lv ? h.skillLevel(s.id) - lv : 0;
       const sl = el('span', 'sl', lv ? (bonus ? `${lv}+${bonus}` : `${lv}`) : '');
       if (lv) n.appendChild(sl);
@@ -508,30 +569,30 @@ export class Panels {
     TL.appendChild(tree);
     const s = this.selSkill ? SKILLS[this.selSkill] : null;
     const info = el('div', 'sinfo');
-    if (!s) { info.innerHTML = '<div class="sd">기술을 눌러 설명을 보세요. 배운 능동 기술은 오른쪽 아래 단추에 넣어 쓸 수 있습니다.<br>단추를 누르면 가까운 적을 자동으로 겨누고, 단추에서 손가락을 끌어 원하는 곳을 겨눌 수도 있습니다.</div>'; TR.appendChild(info); return; }
+    if (!s) { info.innerHTML = '<div class="sd">기술을 눌러 설명을 보세요. 배운 능동 기술은 오른쪽 아래 단추에 넣어 쓸 수 있습니다.<br>단추를 누르면 그 자리에서 바로 쓰고(사거리 안의 적이 있으면 그쪽으로), 단추에서 손가락을 끌면 원하는 곳을 겨눕니다.</div>'; TR.appendChild(info); return; }
     const pts = h.skillPoints(s.id), lv = h.skillLevel(s.id);
-    info.appendChild(el('h4', '', `${s.name} ${pts ? `(레벨 ${lv})` : ''}`));
-    info.appendChild(el('div', 'sd', `${s.passive ? '패시브' : '능동'} · 필요 레벨 ${s.req}${s.pre?.length ? ' · 선행: ' + s.pre.map((x) => SKILLS[x].name).join(', ') : ''}`));
-    info.appendChild(el('div', 'sd', s.about || ''));
+    // 이름 줄 오른쪽에 배우기 단추
+    const top = el('div', 'assign top');
+    top.appendChild(el('h4', '', `${s.name} ${pts ? `(레벨 ${lv})` : ''}`));
+    const c = h.canLearn(s.id);
+    top.appendChild(btn('btn small' + (c.ok ? '' : ' dim'), c.ok ? '배우기 +1' : c.why, () => { const r = h.learn(s.id); if (r.ok) { this.game.sfx('stat_up'); this.app.hud.refreshSkills(); this.app.hud.badges(); } else this.game.toast(r.why); this.render(); }));
+    info.appendChild(top);
+    info.appendChild(el('div', 'sd', `${s.passive ? '패시브' : '능동'} · 필요 레벨 ${s.req}${s.pre?.length ? ' · 선행: ' + s.pre.map((x) => SKILLS[x].name).join(', ') : ''} — ${s.about || ''}`));
     const cur = el('div', 'sn');
     if (pts) { cur.innerHTML = '<b>현재:</b> ' + s.desc(lv, h).join(' · ') + (s.passive ? '' : ` · 마나 ${Math.round(skillManaCost(h, s.id) * 10) / 10}`); info.appendChild(cur); }
     const nx = el('div', 'sx');
     nx.innerHTML = '<b>다음 레벨:</b> ' + s.desc(Math.max(1, lv + 1), h).join(' · ') + (s.passive ? '' : ` · 마나 ${Math.round(s.mana(lv + 1) * 10) / 10}`);
     info.appendChild(nx);
-    const row = el('div', 'assign');
-    const c = h.canLearn(s.id);
-    row.appendChild(btn('btn' + (c.ok ? '' : ' dim'), c.ok ? '배우기 (+1)' : c.why, () => { const r = h.learn(s.id); if (r.ok) { this.game.sfx('stat_up'); this.app.hud.refreshSkills(); this.app.hud.badges(); } else this.game.toast(r.why); this.render(); }));
-    info.appendChild(row);
     if (pts && !s.passive) {
       const row2 = el('div', 'assign');
-      row2.appendChild(el('span', 'sd', '단추에 넣기:'));
+      row2.appendChild(el('span', 'sd', '단추:'));
       ['주', '1', '2', '3', '4'].forEach((label, i) => {
         const on = d.bar[i] === s.id;
         row2.appendChild(btn('btn small' + (on ? '' : ' dim'), label, () => { const j = d.bar.indexOf(s.id); if (j >= 0) d.bar[j] = j === 0 ? 'attack' : null; d.bar[i] = s.id; this.app.hud.refreshSkills(); this.render(); }));
       });
+      if (d.bar[0] && d.bar[0] !== 'attack') row2.appendChild(btn('btn small dim', '기본', () => { d.bar[0] = 'attack'; this.app.hud.refreshSkills(); this.render(); }));
       info.appendChild(row2);
-    }
-    if (d.bar[0] && d.bar[0] !== 'attack') {
+    } else if (d.bar[0] && d.bar[0] !== 'attack') {
       const row3 = el('div', 'assign');
       row3.appendChild(btn('btn small dim', '주 단추를 기본 공격으로', () => { d.bar[0] = 'attack'; this.app.hud.refreshSkills(); this.render(); }));
       info.appendChild(row3);
@@ -544,7 +605,7 @@ export class Panels {
     const h = this.hero, d = h.data;
     const p = this.frame('퀘스트');
     const body = el('div', 'pnl-body'); p.appendChild(body);
-    const list = el('div', 'qlist');
+    const list = el('div', 'qlist two');
     let n = 0;
     for (const q of Object.values(QUESTS)) {
       if (q.lore) continue;
@@ -561,8 +622,8 @@ export class Panels {
     body.appendChild(list);
     // 읽은 기록
     const lore = Object.keys(d.lore || {});
-    body.appendChild(el('h4', '', ''));
     const box = el('div', 'qitem');
+    box.style.marginTop = '6px';
     box.appendChild(el('h4', '', '기록'));
     const row = el('div', 'assign'); row.style.flexWrap = 'wrap';
     row.appendChild(btn('btn small', '처음 이야기', () => this.app.dialog.story(LORE.intro, '공허의 왕관')));
@@ -576,73 +637,45 @@ export class Panels {
     const S = this.app.settings;
     const p = this.frame('메뉴');
     const body = el('div', 'pnl-body'); p.appendChild(body);
+    // 왼쪽: 음량·단추, 오른쪽: 켜고 끄기
+    const [ML, MR] = this.cols(body, 'menu');
     const slider = (label, key) => {
       const r = el('div', 'set-row'); r.appendChild(el('span', 'sn', label));
       const i = el('input'); i.type = 'range'; i.min = 0; i.max = 1; i.step = 0.05; i.value = S[key];
       i.addEventListener('input', () => { S[key] = +i.value; this.app.applySettings(); });
-      r.appendChild(i); body.appendChild(r);
+      r.appendChild(i); ML.appendChild(r);
     };
     const toggle = (label, key, sub) => {
       const r = el('div', 'set-row'); const n = el('span', 'sn'); n.innerHTML = label + (sub ? `<br><span style="color:var(--dim)">${sub}</span>` : ''); r.appendChild(n);
       const t = el('button', 'tog' + (S[key] ? ' on' : ''));
       onTap(t, () => { S[key] = !S[key]; t.classList.toggle('on', S[key]); this.app.applySettings(); });
-      r.appendChild(t); body.appendChild(r);
+      r.appendChild(t); MR.appendChild(r);
     };
     slider('전체 음량', 'master'); slider('효과음', 'sfx'); slider('음악', 'music');
-    toggle('무음 모드에서도 소리', 'silentMode', '아이폰 옆 스위치가 무음이어도 소리를 냅니다');
+    toggle('무음 모드에서도 소리', 'silentMode', '아이폰 옆 스위치가 무음이어도');
     toggle('바닥 아이템 이름 표시', 'labels');
     toggle('괴물 체력 막대', 'bars');
-    toggle('피해 숫자 표시', 'dmg', '디아블로 1·2에는 없던 기능');
+    toggle('피해 숫자 표시', 'dmg');
     toggle('골드 자동 줍기', 'autoGold');
     toggle('고화질', 'hiq', '배터리를 더 씁니다');
-    const row = el('div', 'tbtns'); row.style.marginTop = '14px'; row.style.display = 'flex'; row.style.flexDirection = 'column'; row.style.gap = '8px';
+    const row = el('div', 'tbtns');
     row.appendChild(btn('btn', '도움말', () => this.open('help')));
     row.appendChild(btn('btn', '저장', () => { this.app.saveNow(); this.game.toast('저장했습니다'); }));
-    row.appendChild(btn('btn red', '저장하고 제목 화면으로', () => this.app.quitToTitle(true)));
-    body.appendChild(row);
-    body.appendChild(el('div', 'shop-hint', '게임은 층을 옮길 때·마을에 갈 때·레벨이 오를 때 자동으로 저장됩니다. 다시 불러오면 마을에서 시작하고 던전은 새로 만들어집니다.'));
+    ML.appendChild(row);
+    const row2 = el('div', 'tbtns');
+    row2.appendChild(btn('btn red', '저장하고 제목 화면으로', () => this.app.quitToTitle(true)));
+    ML.appendChild(row2);
+    ML.appendChild(el('div', 'shop-hint', '층을 옮길 때·레벨이 오를 때 자동으로 저장됩니다. 불러오면 마을에서 시작하고 던전은 새로 만들어집니다.'));
   }
+  // 도움말: 주제별 쪽으로 나눠 한 화면에
   r_help() {
     const p = this.frame('도움말');
+    const tabs = el('div', 'pnl-tabs');
+    HELP.forEach(([t], i) => tabs.appendChild(btn('pnl-tab' + (this.page === i ? ' on' : ''), t, () => { this.page = i; this.render(); })));
+    p.appendChild(tabs);
     const body = el('div', 'pnl-body'); p.appendChild(body);
     const t = el('div', 'story help');
-    t.style.lineHeight = '1.7';
-    t.textContent = `플레이스테이션으로 디아블로를 하듯 조이스틱과 단추로만 합니다. 게임 화면을 눌러서는 아무 일도 일어나지 않습니다.
-
-■ 움직이기
-화면 왼쪽을 누르고 끌면 그 자리에 조이스틱이 생기고, 민 방향으로 바로 걷습니다. 손을 떼면 그 자리에 멈춥니다.
-벽에 비스듬히 밀면 벽을 따라 미끄러지고, 닫힌 문은 조이스틱으로 밀면 열립니다.
-
-■ 공격
-오른쪽 아래 큰 단추로 공격합니다. 조이스틱을 민 쪽(밀지 않으면 바라보는 쪽)의 가까운 적을 겨누고, 가까운 적에게는 몇 걸음 다가갑니다. 활은 멀리서 쏩니다. 누르고 있으면 계속 싸웁니다.
-
-■ 상호작용
-손 닿는 곳에 아이템·상자·문·계단·마을 사람 등이 있으면 공격 단추 위에 할 일이 적힌 단추(줍기·열기·대화·내려가기…)가 나타납니다. 대상에는 금빛 고리가, 아이템에는 금빛 이름표가 표시됩니다. 공격 단추로는 공격만 합니다.
-
-■ 기술
-작은 단추 네 개에 기술을 넣어 씁니다(기술 창에서 넣기). 탭하면 공격 단추처럼 적을 자동으로 겨누고, 단추에서 손가락을 화면 쪽으로 끌면 원하는 곳을 겨눕니다.
-
-■ 물약
-가운데 아래의 물약 띠를 탭하면 마십니다. 띠 왼쪽의 빨간 구슬(생명력)이나 오른쪽의 파란 구슬(마나)을 탭하면 알맞은 물약을 자동으로 마십니다. 허리띠를 차면 띠의 줄이 늘어납니다.
-
-■ 아이템
-가까이 가서 상호작용 단추(줍기)로 줍습니다. 이름표 색은 등급입니다: 흰색 일반, 파란색 마법, 노란색 희귀, 금색 고유.
-마법 이상의 아이템은 감정해야 능력을 알 수 있습니다(감정 주문서 또는 현자 알데릭, 100골드). 저주받은 아이템도 있습니다.
-장비는 쓰면 닳습니다. 내구도가 0이 되면 효과가 없으니 대장장이에게 고치세요.
-
-■ 마을
-치유사 마렌과 말하면 생명력이 모두 찹니다. 대장장이는 무기·방어구를 팔고 고쳐 주고, 마녀는 마나 물약·주문서·지팡이·장신구를 팝니다. 소년 핍은 비싸지만 좋은 물건을 가끔 가져옵니다.
-오른쪽 위 파란 단추(차원문)로 귀환 주문서를 읽으면 마을로 돌아갈 수 있습니다. 차원문을 다시 지나면 원래 자리로 돌아갑니다.
-홀수 층(3, 5, 7…)의 순간 이동 지점을 켜 두면 마을에서 바로 갈 수 있습니다.
-
-■ 지도
-오른쪽 위 작은 지도를 탭하면 큰 지도가 화면에 겹쳐 보입니다.
-
-■ 성장
-레벨이 오르면 능력치 점수 5와 기술 점수 1을 얻습니다. 생명력과 마나도 모두 찹니다.
-칼은 짐승에게 강하고 해골에게 약합니다. 둔기는 그 반대입니다(디아블로 1 규칙).
-
-두 손가락으로 오므리고 벌리면 화면을 확대·축소합니다.`;
+    t.textContent = HELP[this.page]?.[1] || '';
     body.appendChild(t);
   }
 
@@ -660,18 +693,34 @@ export class Panels {
       return;
     }
     const sp = this.space(body);
-    const C = Math.max(22, Math.floor(Math.min(38, (sp.w - 24) / 20)));
+    // 가게 격자와 가방 격자를 나란히 한 화면에: 칸 크기는 너비와 높이에 맞추고, 물건이 많으면 종류·쪽으로 나눈다
+    const C = Math.max(22, Math.floor(Math.min(38, (sp.w - 20) / 20, (sp.h - 30) / 6)));
+    const rowsFit = Math.max(4, Math.min(12, Math.floor((sp.h - 36) / C)));
     const [SL, SR] = this.cols(body, 'fill');
     const always = (ALWAYS[which] || []).map((id) => makeItem(id));
     this.opts.always = always;
     const list = [...always, ...stock(g, which === 'premium' ? 'premium' : which)];
-    // 가게 물건을 격자에 차례로 배치
-    const placed = [];
-    const rows = 12;
-    for (const it of list) { if (!h.invAdd(it, placed, 10, rows)) break; }
+    const kind = (it) => { const b = BASE[it.b]; return b.slot === 'weapon' ? '무기' : b.jewel || b.slot === 'ring' || b.slot === 'amulet' ? '장신구' : b.slot ? '방어구' : '물약·주문서'; };
+    const pages = [];
+    const fill = (items, name) => {
+      let cur = null, n = 0;
+      for (const it of items) {
+        if (!cur || !h.invAdd(it, cur.items, 10, rowsFit)) { cur = { name, items: [] }; pages.push(cur); n++; if (n > 1) cur.name = `${name} ${n}`; h.invAdd(it, cur.items, 10, rowsFit); }
+      }
+    };
+    const one = [];
+    for (const it of list) if (!h.invAdd(it, one, 10, rowsFit)) break;
+    if (one.length === list.length) pages.push({ name: '', items: one });
+    else for (const k of ['무기', '방어구', '장신구', '물약·주문서']) fill(list.filter((it) => kind(it) === k), k);
+    if (this.page >= pages.length) this.page = 0;
+    if (pages.length > 1) {
+      const tabs = el('div', 'pnl-tabs in');
+      pages.forEach((pg, i) => tabs.appendChild(btn('pnl-tab' + (this.page === i ? ' on' : ''), pg.name, () => { this.page = i; this.sel = null; this.render(); })));
+      SL.appendChild(tabs);
+    } else SL.appendChild(el('div', 'shop-hint', '파는 물건 — 눌러서 사기'));
+    const placed = pages[this.page]?.items || [];
     let maxY = 0; for (const it of placed) maxY = Math.max(maxY, it.y + BASE[it.b].h);
-    SL.appendChild(el('div', 'shop-hint', '파는 물건 — 눌러서 사기'));
-    SL.appendChild(this.grid(placed, 10, Math.max(2, maxY), C, 'shop', { price: (it) => buyPrice(it, which) >= 1000 ? Math.round(buyPrice(it, which) / 100) / 10 + 'k' : buyPrice(it, which) }));
+    SL.appendChild(this.grid(placed, 10, Math.max(2, Math.min(rowsFit, pages.length > 1 ? rowsFit : maxY)), C, 'shop', { price: (it) => buyPrice(it, which) >= 1000 ? Math.round(buyPrice(it, which) / 100) / 10 + 'k' : buyPrice(it, which) }));
     if (which === 'smith' || which === 'premium') {
       let tot = 0; for (const it of [...Object.values(h.data.equip), ...h.data.inv]) tot += repairCost(it);
       const r = el('div', 'tbtns');
@@ -708,7 +757,7 @@ export class Panels {
     const h = this.hero, g = this.game;
     const p = this.frame('순간 이동 지점');
     const body = el('div', 'pnl-body'); p.appendChild(body);
-    const list = el('div', 'qlist');
+    const list = el('div', 'qlist two wp');
     const wps = [0, ...h.data.wps.filter((d) => d > 0).sort((a, b) => a - b)];
     for (let d = 0; d <= 15; d++) {
       if (d > 0 && !LEVELS[d].waypoint) continue;

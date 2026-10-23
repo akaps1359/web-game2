@@ -2,6 +2,7 @@
 import { WALL_H } from './tiles.js';
 import { shade } from './noise.js';
 import { drawItemIcon } from './icons.js';
+import { BASE } from '../data/items.js';
 
 const PI = Math.PI;
 const OUTC = 'rgba(10,7,5,0.9)';
@@ -531,12 +532,9 @@ export function drawGroundItem(g, it, px, py, s, t) {
     return;
   }
   if (!item) return;
-  const size = 22 * s;
-  g.save();
-  g.translate(px, py - bounce - 6 * s);
-  if (it.drop > 0) g.rotate((1 - it.drop) * PI * 2);
-  drawItemIcon(g, item, -size / 2, -size / 2, size, size, true);
-  g.restore();
+  // 긴 무기는 비스듬히 눕혀 그리니 상자를 조금 크게
+  const b = BASE[item.b], size = Math.round((b && b.h > b.w ? 30 : 22) * s);
+  drawItemIcon(g, item, Math.round(px - size / 2), Math.round(py - bounce - 6 * s - size / 2), size, size, true);
   // 등급별 반짝임
   const q = item.q;
   if (q === 'unique' || q === 'rare' || q === 'set') {

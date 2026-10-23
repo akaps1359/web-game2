@@ -11,12 +11,27 @@ export const TYPE_NAME = { phys: '물리', fire: '화염', cold: '냉기', light
 export const TYPE_COL = { phys: '#ffffff', fire: '#ff9a40', cold: '#8ad0ff', light: '#ffff80', poison: '#80ff60', magic: '#d080ff' };
 
 // ───────── 플레이어 근접 공격 ─────────
+// 손 닿는 거리(액터 중심 사이, 큰 괴물은 조금 더)와 앞쪽 부채꼴 반각
+export const MELEE_HIT = 1.9, MELEE_ARC = 1.2;
+const angOff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+// 내려치는 순간 맞을 적: 겨눈 적이 아직 손 닿는 곳·앞쪽에 있으면 그 적, 아니면 앞쪽 부채꼴 안의 가장 가까운 적(없으면 헛손질)
+export function swingTarget(game, P, t) {
+  const fa = P.faceTo ?? P.face;
+  const ok = (a) => a && !a.dead && a.team !== P.team && a.kind !== 'npc' && !a.untargetable
+    && Math.hypot(a.x - P.x, a.y - P.y) <= MELEE_HIT + (a.big ? 0.3 : 0) && angOff(Math.atan2(a.y - P.y, a.x - P.x), fa) < MELEE_ARC;
+  if (ok(t)) return t;
+  let best = null, bd = 1e9;
+  for (const a of game.level.actors) { if (!ok(a)) continue; const d = Math.hypot(a.x - P.x, a.y - P.y); if (d < bd) { bd = d; best = a; } }
+  return best;
+}
+// 근접 공격: t(없으면 mod.ang 쪽)로 몸을 돌려 휘두르고, 내려치는 순간 앞쪽 손 닿는 곳의 적을 맞힌다
 export function meleeAttack(game, P, t, mod = {}) {
   const st = P.hero.st;
-  P.turnTo(t.x, t.y);
+  if (t) P.turnTo(t.x, t.y);
+  else if (mod.ang != null) P.turnTo(P.x + Math.cos(mod.ang), P.y + Math.sin(mod.ang));
   const hitT = st.atkTime * (mod.speed || 1), dur = hitT + 0.1;
   const style = mod.style || (st.wcat === 'axe' || st.wcat === 'mace' ? 'swing' : null);
-  P.setAnim('attack', dur, { hitAt: hitT / dur, style, onHit: () => resolveMelee(game, P, t, mod) });
+  P.setAnim('attack', dur, { hitAt: hitT / dur, style, basic: !!mod.basic, onHit: () => resolveMelee(game, P, swingTarget(game, P, t), mod) });
   P.uninterruptible = !!mod.uninterruptible;
   game.sfx(st.wcat === 'axe' || (st.wcat === 'mace' && st.wdmg[1] > 10) ? 'swing_heavy' : 'swing_light', P.x, P.y);
 }
@@ -79,7 +94,7 @@ export function rangedAttack(game, P, t, mod = {}) {
   P.turnTo(tx, ty);
   const hitT = st.atkTime * (mod.speed || 1), dur = hitT + 0.12;
   P.setAnim('attack', dur, {
-    hitAt: hitT / dur, style: 'bow', onHit: () => {
+    hitAt: hitT / dur, style: 'bow', basic: !!mod.basic, onHit: () => {
       const n = mod.count || 1, spread = mod.spread ?? 0.16;
       const base = Math.atan2(ty - P.y, tx - P.x);
       for (let i = 0; i < n; i++) {

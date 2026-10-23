@@ -1,5 +1,5 @@
 // 기술: 직업마다 기술 나무 세 개(디아블로 2 방식). 수치는 디아블로 1의 생명력 규모에 맞췄다
-import { meleeAttack, resolveMelee, rangedAttack, fireArrow, spawnMissile, areaDamage, damageActor, spawnArea, spawnChargedBolts, freeze, knockback } from './combat.js';
+import { meleeAttack, resolveMelee, rangedAttack, fireArrow, spawnMissile, areaDamage, damageActor, spawnArea, spawnChargedBolts, freeze, knockback, MELEE_HIT } from './combat.js';
 import { addBuff } from './buffs.js';
 import { Actor } from './actor.js';
 import { clamp } from '../core/util.js';
@@ -394,8 +394,8 @@ export function passiveMods(h) {
 export function castSkill(game, P, id, target, point) {
   const h = P.hero;
   if (id === 'attack') {
-    if (!target) return false;
-    if (h.ranged()) rangedAttack(game, P, target, {}); else meleeAttack(game, P, target, {});
+    if (!target) game.freeAttack();
+    else if (h.ranged()) rangedAttack(game, P, target, {}); else meleeAttack(game, P, target, {});
     return true;
   }
   const s = SK[id];
@@ -423,9 +423,9 @@ export function castSkill(game, P, id, target, point) {
       const mod = { dmgPct: s.dmgPct?.(lv) || 0, dmgFlat: s.dmgFlat?.(lv) || 0, tohitPct: s.tohitPct?.(lv) || 0, knock: s.knock, type: s.type, uninterruptible: s.uninterruptible };
       if (s.defBuff) addBuff(P, 'concentrate', { t: h.st.atkTime + 0.3, mods: { defPct: s.defBuff(lv) } });
       if (s.berserk) addBuff(P, 'berserk', { t: 2, mods: { defPct: -100 } });
-      const t = target || frontEnemy(game, P);
-      if (!t) { meleeAttack(game, P, { x: pt.x, y: pt.y, dead: true, team: 1 }, mod); return true; }
-      meleeAttack(game, P, t, mod);
+      // 그 자리에서 휘두른다: 겨눈 적이 손 닿는 곳에 없으면 그쪽 빈 곳으로(내려치는 순간 앞쪽의 적이 맞는다)
+      const t = target && Math.hypot(target.x - P.x, target.y - P.y) <= MELEE_HIT + 0.6 ? target : null;
+      meleeAttack(game, P, t, { ...mod, ang: Math.atan2(pt.y - P.y, pt.x - P.x) });
       if (id === 'bash') game.sfx('swing_heavy', P.x, P.y, { vol: 0.5 });
       return true;
     }
@@ -717,16 +717,6 @@ export function castSkill(game, P, id, target, point) {
     }
   }
   return false;
-}
-
-function frontEnemy(game, P) {
-  let best = null, bd = 1.8;
-  for (const a of game.level.actors) {
-    if (a.dead || a.team === P.team || a.kind === 'npc') continue;
-    const d = Math.hypot(a.x - P.x, a.y - P.y);
-    if (d < bd) { bd = d; best = a; }
-  }
-  return best;
 }
 
 function shootArrows(game, P, target, pt, mod) {

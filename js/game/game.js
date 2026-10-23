@@ -7,7 +7,7 @@ import { F_VIS, F_SOLID } from './level.js';
 import { buildLevel, LEVELS, levelName } from './world.js';
 import { Hero } from './hero.js';
 import { updateMonster } from './ai.js';
-import { updateMissiles, updateAreas, meleeAttack, rangedAttack, damageActor } from './combat.js';
+import { updateMissiles, updateAreas, meleeAttack, rangedAttack, damageActor, MELEE_HIT } from './combat.js';
 import { castSkill, skillDef, updateWhirl } from './skills.js';
 import { updateBuffs, tickRegen, addBuff } from './buffs.js';
 import { useObject, objectVerb, SHRINES } from './objects.js';
@@ -22,6 +22,10 @@ const NOFX = new Proxy({}, { get: () => () => {} });
 // 터치로 내린 명령의 거리: 근접 공격은 이만큼 안의 적에게만 다가가고(이동은 조이스틱으로),
 // 아이템·물체·마을 사람은 손 닿는 거리에서만 쓴다
 const LEASH = 4.5, REACH = 2.6, TALK = 3.2;
+// 공격 단추가 몸을 돌려 겨누는 거리: 근접은 손 닿는 거리보다 조금 더(다가오는 적), 활은 빛이 닿는 데까지
+const MELEE_AIM = MELEE_HIT + 0.4, BOW_AIM = 10;
+// 시야 반지름: 화면 가장자리 너머까지(한 번 본 곳은 빛 밖에서도 어둡게 남는다)
+const FOV_R = 15;
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
@@ -111,7 +115,7 @@ export class Game {
     L.actors.push(P);
     for (const s of carry) { const p2 = L.nearestFree(pos.x + 1, pos.y + 1, 6); if (p2) { s.place(L, p2.x, p2.y); L.actors.push(s); } }
     this.cmd = null; this.stick = null; this.focus = null; this.setTarget(null);
-    if (L.theme === 'town') revealAll(L); else computeFOV(L, P.tx, P.ty, 13);
+    if (L.theme === 'town') revealAll(L); else computeFOV(L, P.tx, P.ty, FOV_R);
     this.dmap.build(L, P.tx, P.ty);
     this.lastTile = -1;
     if (depth > 0) {
@@ -194,19 +198,28 @@ export class Game {
     else st.a = a;
   }
 
-  // 공격 단추: 조이스틱(없으면 바라보는) 방향에 가까운 적을 겨눈다. 공격만 한다(줍기·대화는 상호작용 단추로)
+  // 공격 단추: 그 자리에서 바로 휘두르거나 쏜다(적에게 다가가지 않는다). 공격만 한다(줍기·대화는 상호작용 단추로)
   attackNearest() {
     const P = this.player;
-    if (!P || P.dead) return false;
-    const t = this.bestEnemy(this.hero.ranged() ? 10 : LEASH);
-    if (!t) return false;
-    this.setTarget(t);
-    return this.issue({ type: 'attack', target: t, leash: LEASH });
+    if (!P || P.dead || this.paused || this.depth === 0) return false;
+    return this.issue({ type: 'swing' });
   }
-  // 거리와 방향으로 고른 적. 지금 대상이 크게 나쁘지 않으면 그대로 둔다(대상이 이리저리 바뀌지 않게)
+  // 조이스틱(없으면 바라보는) 방향
+  aimDir() { const P = this.player; return this.stick ? this.stick.a : P.faceTo ?? P.face; }
+  // 휘두르기·쏘기: 겨누는 거리 안에 적이 있으면 그쪽으로, 없으면 조이스틱(바라보는) 쪽 빈 곳으로.
+  // 근접은 내려치는 순간 앞쪽 손 닿는 곳의 적을, 화살은 날아가다 처음 닿는 적을 맞힌다
+  freeAttack() {
+    const P = this.player, ranged = this.hero.ranged();
+    const t = this.bestEnemy(ranged ? BOW_AIM : MELEE_AIM);
+    const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : this.aimDir();
+    if (t) this.setTarget(t);
+    if (ranged) rangedAttack(this, P, t, { basic: true, point: { x: P.x + Math.cos(a) * 6, y: P.y + Math.sin(a) * 6 } });
+    else meleeAttack(this, P, t, { basic: true, ang: a });
+  }
+  // 거리와 방향으로 고른 적(조이스틱을 밀고 있으면 그 방향을 더 따진다). 지금 대상이 크게 나쁘지 않으면 그대로 둔다(대상이 이리저리 바뀌지 않게)
   bestEnemy(range) {
-    const P = this.player, ref = this.stick ? this.stick.a : P.faceTo ?? P.face;
-    const score = (a) => P.dist(a) + Math.abs(angDiff(Math.atan2(a.y - P.y, a.x - P.x), ref)) * 0.8;
+    const P = this.player, ref = this.aimDir(), w = this.stick ? 2 : 0.8;
+    const score = (a) => P.dist(a) + Math.abs(angDiff(Math.atan2(a.y - P.y, a.x - P.x), ref)) * w;
     let best = null, bs = 1e9;
     for (const a of this.level.actors) {
       if (a.team !== 1 || a.dead || a.untargetable || a.stone) continue;
@@ -223,6 +236,9 @@ export class Game {
     const P = this.player, L = this.level;
     this.focus = null;
     if (!P || P.dead) return;
+    // 겨눈 적이 어둠 속으로 사라지거나 멀어지면 고리를 지운다
+    const tg = this.target;
+    if (tg && (tg.dead || P.dist(tg) > BOW_AIM + 2 || !this.canSee(tg))) this.setTarget(null);
     const ref = this.stick ? this.stick.a : P.faceTo ?? P.face;
     let bs = 1e9;
     // bias: 작을수록 먼저(마을 사람·아이템 > 계단·상자 등 > 우물·책장처럼 살펴보기만 하는 것)
@@ -261,7 +277,8 @@ export class Game {
     return a.boss || a.glowCol || Math.hypot(a.x - this.player.x, a.y - this.player.y) <= this.lightRadius() + 1.5;
   }
 
-  // 기술 사용: 대상(괴물) 또는 지점, 없으면 자동 조준
+  // 기술 사용: 대상(괴물) 또는 지점. 없으면 사거리 안의 적(근접 기술은 손 닿는 곳)을, 그것도 없으면 조이스틱(바라보는) 쪽을 겨눈다.
+  // 공격 단추처럼 그 자리에서 바로 쓴다(다가가지 않는다)
   useSkill(id, aim = null) {
     const P = this.player;
     if (!P || P.dead || this.paused) return false;
@@ -272,14 +289,15 @@ export class Game {
     let target = aim?.actor || null, point = aim?.point || null;
     const range = def.range || 10;
     if (!target && !point && def.target !== 'self' && def.kind !== 'buff' && def.kind !== 'shout' && def.kind !== 'nova' && def.kind !== 'static') {
-      const t = this.bestEnemy(def.melee || def.kind === 'melee' || def.kind === 'cleave' ? LEASH : range + 2);
+      const melee = def.kind === 'melee' || def.kind === 'cleave';
+      const t = def.kind === 'teleport' ? null : this.bestEnemy(melee ? MELEE_AIM : range);
       if (t) { target = t; this.setTarget(t); }
       else {
-        const r = def.kind === 'melee' || def.kind === 'cleave' ? 1 : def.kind === 'teleport' || def.kind === 'leap' ? 5 : Math.min(6, range);
-        point = { x: P.x + Math.cos(P.face) * r, y: P.y + Math.sin(P.face) * r };
+        const r = melee ? 1 : def.kind === 'teleport' || def.kind === 'leap' ? 5 : Math.min(6, range), a = this.aimDir();
+        point = { x: P.x + Math.cos(a) * r, y: P.y + Math.sin(a) * r };
       }
     }
-    return this.issue({ type: 'skill', id, target, point, leash: LEASH });
+    return this.issue({ type: 'skill', id, target, point });
   }
 
   // ───────── 갱신 ─────────
@@ -293,7 +311,7 @@ export class Game {
     const pk = P.ty * L.w + P.tx;
     if (pk !== this.lastTile) {
       this.lastTile = pk;
-      if (L.theme !== 'town') computeFOV(L, P.tx, P.ty, 13);
+      if (L.theme !== 'town') computeFOV(L, P.tx, P.ty, FOV_R);
       this.dmap.build(L, P.tx, P.ty);
       this.checkTriggers();
       if (this.autoGold) autoGold(this);
@@ -357,8 +375,9 @@ export class Game {
       const prev = A.t;
       A.t += dt * rate;
       if (A.hitAt != null && A.onHit && prev < A.hitAt * A.dur && A.t >= A.hitAt * A.dur) { const f = A.onHit; A.onHit = null; f(); }
-      // 타격 뒤에는 새 명령으로 끊을 수 있다(디아블로 1)
-      const canCancel = !A.onHit && (A.name === 'attack' || A.name === 'cast') && (this.cmd && this.cmd.type !== 'attack' || this.stick && this.stick.seq > (this.actSeq || 0));
+      // 타격 뒤에는 새 명령으로 끊을 수 있다(디아블로 1). 기본 공격은 새로 민 조이스틱으로 내려치기 전에도 끊는다(물러나며 싸우기)
+      const fresh = this.stick && this.stick.seq > (this.actSeq || 0);
+      const canCancel = (A.name === 'attack' || A.name === 'cast') && (!A.onHit && (this.cmd && this.cmd.type !== 'attack' && this.cmd.type !== 'swing' || fresh) || A.basic && fresh);
       if (A.t >= A.dur || canCancel) { P.setAnim('idle', 1); if (A.after) A.after(); }
       else if (!P.mv) return;
     }
@@ -392,13 +411,9 @@ export class Game {
         }
         break;
       }
+      case 'swing': this.cmd = null; this.freeAttack(); break;
       case 'skill': {
-        const def = skillDef(c.id);
         const tgt = c.target && !c.target.dead ? c.target : null;
-        const needAdj = def && (def.kind === 'melee');
-        if (needAdj && tgt && (P.tdist(tgt) > 1 || P.dist(tgt) > 1.6)) { if (!this.approach(tgt, c)) this.cmd = null; break; }
-        const needLos = def && (def.kind === 'missile' || def.kind === 'arrow' || def.kind === 'beam' || def.kind === 'chain');
-        if (needLos && tgt && (!L.los(P.tx, P.ty, tgt.tx, tgt.ty) || P.dist(tgt) > (def.range || 11) + 1)) { if (!this.approach(tgt, c)) this.cmd = null; break; }
         this.cmd = null;
         castSkill(this, P, c.id, tgt, c.point || (tgt ? { x: tgt.x, y: tgt.y } : null));
         break;

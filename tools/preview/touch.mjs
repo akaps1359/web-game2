@@ -1,5 +1,5 @@
 // 실제 터치만으로 확인(가로 화면, 콘솔식 조작): 제목 → 새 캐릭터 → 모험 시작 → 이야기 닫기 → 게임 화면 탭은 아무 일 없음 →
-// 조이스틱 이동(바로 출발·놓자마자 멈춤) → 상호작용 단추(대화·떠난다·줍기·계단) → 공격 단추(조이스틱 방향의 적을 겨눔) → 가방 단추 → 물약 띠
+// 조이스틱 이동(바로 출발·놓자마자 멈춤) → 상호작용 단추(대화·떠난다·줍기·계단) → 공격 단추(그 자리에서 조이스틱 쪽 적을 겨눠 공격) → 가방 단추 → 물약 띠
 // 사용: node tools/preview/play.mjs tools/preview/touch.mjs [출력 폴더]
 export default async function (page, { wait, log, shot, tap }) {
   const center = (sel, text = '') => page.evaluate(([sel, text]) => {

@@ -1,7 +1,7 @@
 // 도트 UI: 창·단추 테두리(9칸 조각 그림), 둥근 단추·조이스틱·동전 그림, 메뉴 단추·버프 아이콘을 도트로 그려
 // CSS 변수로 넘긴다(main.css가 쓴다). 그림은 기기 픽셀 해상도로 직접 그려(도트 한 칸 = CSS 1.5px) 브라우저가 늘리며
 // 흐려지지 않게 한다
-import { ART, SpritePass } from '../render/pixel.js';
+import { ART } from '../render/pixel.js';
 
 const hex = (c) => {
   if (c.startsWith('rgba')) { const m = c.match(/[\d.]+/g).map(Number); return [m[0], m[1], m[2], Math.round(m[3] * 255)]; }
@@ -195,15 +195,6 @@ export function stamp(cv, img, op = 'source-over') {
   g.restore();
 }
 
-// 아이템 그림: 도트 해상도로 그린 뒤 가장자리를 굳히고 1도트 외곽선을 두른다
-let SP = null;
-export function pixIcon(cv, fn) {
-  if (!SP) SP = new SpritePass();
-  const c = cv.c, g = cv.g, k = c.width / parseFloat(c.style.width), a = g.globalAlpha;
-  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false;
-  SP.run(g, 0, 0, c.width, c.height, (sg) => { sg.scale(k, k); fn(sg); }, a);
-  g.restore();
-}
 
 // 처음 한 번, 그리고 화면 배율이 바뀌면(다른 화면으로 옮김 등) 그림을 다시 굽는다. 글꼴은 미리 불러 둔다(캔버스 글자용)
 let fontsAsked = false;

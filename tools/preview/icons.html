@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>아이템·기술 그림 미리 보기</title>
+<style>
+  body { background: #1a1612; color: #c8b890; font: 12px sans-serif; margin: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; margin-bottom: 10px; }
+  .it { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  canvas { image-rendering: pixelated; background: #2a221a; }
+  h3 { margin: 6px 0; }
+</style>
+<div id="out"></div>
+<script type="module">
+// 사용: ?cell=26&zoom=3 (한 칸의 도트 수, 보기 배율), &skills=1 기술 그림, &ground=22 바닥 크기
+import { BASE, BASES } from '../../js/data/items.js';
+import { itemSprite } from '../../js/render/icons.js';
+const q = new URLSearchParams(location.search);
+const cell = +(q.get('cell') || 26), Z = +(q.get('zoom') || 3), ground = +(q.get('ground') || 0), only = q.get('only');
+const out = document.getElementById('out');
+const row = (t) => { const h = document.createElement('h3'); h.textContent = t; out.appendChild(h); const r = document.createElement('div'); r.className = 'row'; out.appendChild(r); return r; };
+const show = (r, cv, label) => {
+  const d = document.createElement('div'); d.className = 'it';
+  const c = document.createElement('canvas'); c.width = cv.width * Z; c.height = cv.height * Z;
+  const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(cv, 0, 0, c.width, c.height);
+  d.appendChild(c); const s = document.createElement('span'); s.textContent = label; d.appendChild(s); r.appendChild(d);
+};
+if (!q.get('skills')) {
+  const groups = {};
+  for (const b of BASES) { if (only && !b.id.includes(only)) continue; const t = b.icon?.t || 'misc'; (groups[t] = groups[t] || []).push(b); }
+  for (const [t, list] of Object.entries(groups)) {
+    const r = row(t);
+    for (const b of list) {
+      const it = { b: b.id };
+      const cv = ground ? itemSprite(it, ground, ground, true) : itemSprite(it, b.w * cell - 4, b.h * cell - 4);
+      show(r, cv, b.name);
+    }
+  }
+} else {
+  const { SKILLS } = await import('../../js/game/skills.js');
+  const { skillSprite } = await import('../../js/render/skillicons.js');
+  const size = +(q.get('size') || 32);
+  let r = null, cls = '';
+  for (const s of Object.values(SKILLS)) { if (s.cls !== cls) { cls = s.cls; r = row(cls); } show(r, skillSprite(s, size), s.name); }
+}
+window.__done = true;
+</script>

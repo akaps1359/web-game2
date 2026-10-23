@@ -1,7 +1,7 @@
 // HUD: 생명력·마나 구슬, 물약 띠, 기술 단추(탭 = 자동 조준, 끌기 = 조준), 상호작용 단추, 이동 조이스틱, 메뉴 단추, 작은 지도, 대상 정보
 import { $, el, onTap, canvasFor } from './dom.js';
-import { drawItemIcon } from '../render/icons.js';
-import { drawSkillIcon } from '../render/skillicons.js';
+import { paintItemIcon } from '../render/icons.js';
+import { paintSkillIcon } from '../render/skillicons.js';
 import { skillDef, skillManaCost } from '../game/skills.js';
 import { BUFF_INFO } from '../game/buffs.js';
 import { levelName } from '../game/world.js';
@@ -9,7 +9,7 @@ import { EXP_TABLE } from '../data/classes.js';
 import { F_SEEN, F_VIS, F_LAVA } from '../game/level.js';
 import { TW, TH } from '../core/util.js';
 import { ART } from '../render/pixel.js';
-import { PIX_ICONS, pixIcon, pixRingCanvas, pixDiscCanvas, RING_BTN, stamp, uiFont } from './pixui.js';
+import { PIX_ICONS, pixRingCanvas, pixDiscCanvas, RING_BTN, stamp, uiFont } from './pixui.js';
 
 // 메뉴 단추 아이콘(도트 그림)
 const iconHTML = (k) => `<i class="pico" style="background-image:url(${PIX_ICONS[k]})"></i>`;
@@ -230,8 +230,7 @@ export class HUD {
       if (!S.id) { S.node.classList.add('empty'); S.mp.textContent = ''; cg.strokeStyle = 'rgba(199,164,92,0.5)'; cg.lineWidth = 2; cg.beginPath(); cg.moveTo(S.size / 2 - 7, S.size / 2); cg.lineTo(S.size / 2 + 7, S.size / 2); cg.moveTo(S.size / 2, S.size / 2 - 7); cg.lineTo(S.size / 2, S.size / 2 + 7); cg.stroke(); ring(); continue; }
       S.node.classList.remove('empty');
       const def = S.id === 'attack' ? null : skillDef(S.id);
-      if (!def) drawAttackIcon(cg, S.size, g.hero, ins);
-      else drawSkillIcon(cg, def, ins, ins, S.size - ins * 2);
+      paintSkillIcon(S.cv, def || { id: g.hero.ranged() ? 'attack_bow' : 'attack', icon: { c: '#d0c0a0' } }, Math.round(ins / ART));
       ring();
       const cost = S.id === 'attack' ? 0 : skillManaCost(g.hero, S.id);
       S.cost = cost;
@@ -247,7 +246,7 @@ export class HUD {
       const S = this.beltSlots[c], cg = S.cv.g;
       cg.clearRect(0, 0, 36, 36);
       const it = B[c];
-      if (it) pixIcon(S.cv, (ig) => drawItemIcon(ig, it, 1, 1, 34, 34));
+      if (it) paintItemIcon(S.cv, it, 1);
       let n = 0; for (let r = 0; r < rows; r++) if (B[r * 4 + c]) n++;
       S.k.textContent = n > 1 ? n : (it ? '' : '');
     }
@@ -455,7 +454,3 @@ const ORB_RING = ['#000', ['#c9a35a', '#6e5428'], '#4a3820', '#000'];
 const UMOD_NAME = { strong: '매우 강함', fast: '매우 빠름', cursed: '저주', magicres: '마법 저항', fire: '화염 강화', light: '번개 강화', cold: '냉기 강화', manaburn: '마나 연소', spectral: '유령 공격', stone: '돌 피부', multi: '다중 사격', teleport: '순간 이동' };
 const RES_IMM = { fire: '화염 면역', cold: '냉기 면역', light: '번개 면역', poison: '독 면역' };
 
-function drawAttackIcon(g, size, hero, ins = 0) {
-  const ranged = hero.ranged();
-  drawSkillIcon(g, { icon: { g: ranged ? 'arrow' : 'sword', c: '#e0d0b0' } }, ins, ins, size - ins * 2);
-}
