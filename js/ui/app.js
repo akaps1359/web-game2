@@ -21,6 +21,7 @@ export class App {
     this.settings = loadSettings();
     this.renderer = new Renderer(this.cv);
     if (this.settings.hiq) this.renderer.setQuality(true);
+    this.renderer.setPixel(this.settings.pixel);
     this.game = null;
     this.audio = null;
     this.stash = loadStash();
@@ -63,6 +64,7 @@ export class App {
     const g = this.game;
     if (g) { g.showLabels = this.settings.labels; g.showBars = this.settings.bars; g.showDmg = this.settings.dmg; g.autoGold = this.settings.autoGold; }
     this.renderer.setQuality(this.settings.hiq);
+    this.renderer.setPixel(this.settings.pixel);
   }
   onResize() { this.renderer.resize(); this.hud.layout?.(); this.panels.refresh(); }
 

@@ -6,6 +6,8 @@ import { J, WD, DIM, newPose, computePose, solveHuman, setDims, gaitCycle, attac
 import { drawHuman } from './fig/human.js';
 import { drawSmear } from './fig/gear.js';
 import { drawBeast, beastCycle } from './fig/beasts.js';
+import { pixEllipse, SpritePass } from './pixel.js';
+import { makeCanvas } from './noise.js';
 
 const P = newPose();
 const SM = { tips: [], bases: [], col: '#ffffff', a: 0 };
@@ -48,32 +50,49 @@ function shadowSprite() {
   return c;
 }
 
-export function drawActor(g, a, px, py, s, time) {
+// 발 기준으로 그림이 들어갈 상자(배율 sc): 모든 괴물·직업을 여러 동작·방향으로 그려 잰 최댓값(위 112·h, 옆 66·덩치, 아래 14)에 여유를 조금
+export function figBox(look, sc) {
+  const bulk = Math.max(1, look.bulk || 1, look.wingS || 1);
+  return { hw: Math.ceil(68 * bulk * sc) + 3, up: Math.ceil((114 * (look.h || 1) + 6) * sc) + 3, dn: Math.ceil(16 * sc) + 3 };
+}
+export function actorAlpha(a) {
+  let alpha = 1;
+  if (a.invis != null) alpha = a.invis;
+  if (a.fade != null) alpha *= a.fade;
+  return alpha;
+}
+// part: 0 전부, 1 바닥에 깔리는 것(그림자·대상 고리·기운)만, 2 몸만(투명도 없이 — 도트 그래픽은 다듬은 뒤 통째로 흐리게),
+// 3 바닥에 깔리는 것을 도트로(대상 고리를 각진 점으로)
+export function drawActor(g, a, px, py, s, time, part = 0) {
   const look = a.look;
   if (!look) return;
   const sc = s * (look.scale || 1);
   const anim = a.anim?.name;
   const dead = anim === 'death' || anim === 'dead';
-  // 그림자(발밑의 부드러운 어둠)
-  if (!dead && !look.noShadow) {
-    const r = 15 * sc * (look.shadow || 1);
-    g.drawImage(shadowSprite(), px - r, py - r * 0.5, r * 2, r);
-  }
-  let alpha = 1;
-  if (a.invis != null) alpha = a.invis;
-  if (a.fade != null) alpha *= a.fade;
-  if (alpha <= 0.02) return;
-  g.globalAlpha = alpha;
-  if (a.targeted) {
-    g.strokeStyle = a.team === 1 ? 'rgba(220,60,40,0.85)' : 'rgba(120,200,255,0.8)'; g.lineWidth = 1.6 * s;
-    g.beginPath(); g.ellipse(px, py, 18 * sc, 9 * sc, 0, 0, TAU); g.stroke();
-  }
-  if (look.aura && !dead) {
-    g.globalAlpha = alpha * (0.3 + 0.15 * Math.sin(time * 4 + a.id));
-    g.fillStyle = look.aura;
-    g.beginPath(); g.ellipse(px, py, 20 * sc, 10 * sc, 0, 0, TAU); g.fill();
+  const alpha = actorAlpha(a);
+  if (part !== 2) {
+    // 그림자(발밑의 부드러운 어둠)
+    if (!dead && !look.noShadow) {
+      const r = 15 * sc * (look.shadow || 1);
+      g.drawImage(shadowSprite(), px - r, py - r * 0.5, r * 2, r);
+    }
+    if (alpha <= 0.02) return;
     g.globalAlpha = alpha;
+    if (a.targeted) {
+      const col = a.team === 1 ? 'rgba(220,60,40,0.85)' : 'rgba(120,200,255,0.8)';
+      if (part === 3) pixEllipse(g, px, py, Math.round(18 * sc), Math.round(9 * sc), col);
+      else { g.strokeStyle = col; g.lineWidth = 1.6 * s; g.beginPath(); g.ellipse(px, py, 18 * sc, 9 * sc, 0, 0, TAU); g.stroke(); }
+    }
+    if (look.aura && !dead) {
+      g.globalAlpha = alpha * (0.3 + 0.15 * Math.sin(time * 4 + a.id));
+      g.fillStyle = look.aura;
+      g.beginPath(); g.ellipse(px, py, 20 * sc, 10 * sc, 0, 0, TAU); g.fill();
+      g.globalAlpha = alpha;
+    }
+    if (part === 1 || part === 3) { g.globalAlpha = 1; return; }
   }
+  if (alpha <= 0.02) return;
+  g.globalAlpha = part === 2 ? 1 : alpha;
   setProj(a.face || 0, px, py, sc);
   setFlash(a.flash > 0);
   beginFig(g);
@@ -144,8 +163,21 @@ export function drawCorpse(g, c, px, py, s) {
   g.globalAlpha = 1;
 }
 
-// 미리보기(초상화·캐릭터 선택 화면)
+// 미리보기(초상화·캐릭터 선택 화면). 도트 그래픽이면 도트 한 칸 PART px로 작게 그려 다듬은 뒤 각진 그대로 키운다
+let PART = 0, PSP = null;
+export function setPortraitPixel(art) { PART = art; }
 export function drawPortrait(g, look, x, y, s, time, anim = 'idle', face = Math.PI / 4) {
   const a = { id: 1, look, face, anim: { name: anim, t: (time % 1.2), dur: 1.2 }, flash: 0, portrait: true };
-  drawActor(g, a, x, y, s, time);
+  if (!PART) { drawActor(g, a, x, y, s, time); return; }
+  const sl = s / PART, { hw, up, dn } = figBox(look, sl * (look.scale || 1));
+  if (!PSP) PSP = { sp: new SpritePass(), cv: makeCanvas(8, 8) };
+  const cv = PSP.cv;
+  cv.width = hw * 2; cv.height = up + dn;
+  const cg = cv.getContext('2d');
+  drawActor(cg, a, hw, up, sl, time, 3);
+  PSP.sp.run(cg, 0, 0, hw * 2, up + dn, (sg) => drawActor(sg, a, hw, up, sl, time, 2));
+  const sm = g.imageSmoothingEnabled;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(cv, x - hw * PART, y - up * PART, cv.width * PART, cv.height * PART);
+  g.imageSmoothingEnabled = sm;
 }

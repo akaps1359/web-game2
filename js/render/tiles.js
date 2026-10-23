@@ -1,6 +1,7 @@
 // 바닥 타일·벽 블록을 테마별로 미리 그려 둔다(픽셀 단위 절차 텍스처)
 import { fbm, vnoise, hash2, hex, mix, makeCanvas } from './noise.js';
 import { TW, TH } from '../core/util.js';
+import { shrink } from './pixel.js';
 
 export const WALL_H = 78;
 
@@ -271,36 +272,44 @@ export function dimmed(src, a = 0.62) {
   return c;
 }
 
-// 빛 번짐 스프라이트(가산 합성용)
+// 빛 번짐 스프라이트(가산 합성용). 도트 그래픽에서는 계단진 동심원
 const glowCache = new Map();
+let BANDED = false;
+export function setBandedGlow(on) { BANDED = !!on; }
+const GLOW_BANDS = [[0, 1], [0.14, 0.6], [0.3, 0.3], [0.5, 0.13], [0.72, 0.04], [0.92, 0]];
 export function glowSprite(r, g, b, size = 64) {
-  const key = `${r},${g},${b},${size}`;
+  const key = `${r},${g},${b},${size},${BANDED}`;
   let c = glowCache.get(key);
   if (c) return c;
   c = makeCanvas(size, size);
   const x = c.getContext('2d'), gr = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  gr.addColorStop(0, `rgba(${r},${g},${b},1)`);
-  gr.addColorStop(0.25, `rgba(${r},${g},${b},0.55)`);
-  gr.addColorStop(0.6, `rgba(${r},${g},${b},0.15)`);
-  gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  if (BANDED) {
+    GLOW_BANDS.forEach(([o, a], i) => { gr.addColorStop(o, `rgba(${r},${g},${b},${a})`); gr.addColorStop(GLOW_BANDS[i + 1]?.[0] ?? 1, `rgba(${r},${g},${b},${a})`); });
+  } else {
+    gr.addColorStop(0, `rgba(${r},${g},${b},1)`);
+    gr.addColorStop(0.25, `rgba(${r},${g},${b},0.55)`);
+    gr.addColorStop(0.6, `rgba(${r},${g},${b},0.15)`);
+    gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  }
   x.fillStyle = gr; x.fillRect(0, 0, size, size);
   glowCache.set(key, c);
   return c;
 }
 
-// 테마 한 벌을 만든다
-export function buildTileset(theme, RS) {
+// 테마 한 벌을 만든다. ss: 도트 그래픽(ss배로 크게 그려 줄인다 — 가장자리가 딱 끊기고 색이 줄어든다)
+export function buildTileset(theme, RS, ss = 0) {
   const T = { theme, RS, floors: [null], walls: [null], wallsDim: [null], short: [null], shortDim: [null], floorsDim: [null], lava: [] };
+  const R = ss ? RS * ss : RS, fin = ss ? (c) => shrink(c, ss) : (c) => c;
   if (theme === 'town') {
-    for (let k = 1; k <= 6; k++) { const f = makeTownFloor(k, RS, 0); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.5)); }
-    for (let v = 1; v <= 2; v++) { const w = makeWall('crypt', v, RS); T.walls.push(w); T.wallsDim.push(dimmed(w)); const s = makeWall('crypt', v, RS, 14); T.short.push(s); T.shortDim.push(dimmed(s)); }
+    for (let k = 1; k <= 6; k++) { const f = fin(makeTownFloor(k, R, 0)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.5)); }
+    for (let v = 1; v <= 2; v++) { const w = fin(makeWall('crypt', v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w)); const s = fin(makeWall('crypt', v, R, 14)); T.short.push(s); T.shortDim.push(dimmed(s)); }
     return T;
   }
-  for (let v = 1; v <= 6; v++) { const f = makeFloor(theme, v, RS); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.55)); }
+  for (let v = 1; v <= 6; v++) { const f = fin(makeFloor(theme, v, R)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.55)); }
   for (let v = 1; v <= 4; v++) {
-    const w = makeWall(theme, v, RS); T.walls.push(w); T.wallsDim.push(dimmed(w));
-    const s = makeWall(theme, v, RS, 14); T.short.push(s); T.shortDim.push(dimmed(s));
+    const w = fin(makeWall(theme, v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w));
+    const s = fin(makeWall(theme, v, R, 14)); T.short.push(s); T.shortDim.push(dimmed(s));
   }
-  for (let v = 0; v < 3; v++) T.lava.push(makeLava(RS, v));
+  for (let v = 0; v < 3; v++) T.lava.push(fin(makeLava(R, v)));
   return T;
 }

@@ -1,5 +1,5 @@
 // 오프라인 캐시: 온라인이면 항상 서버의 최신 파일을 쓰고(업데이트가 바로 반영되도록), 받은 파일은 저장해 두었다가 오프라인일 때 쓴다.
-const CACHE = 'hollow-crown-v8';
+const CACHE = 'hollow-crown-v9';
 const CORE = [
   './',
   'index.html',
@@ -67,6 +67,7 @@ const CORE = [
   'js/render/fx.js',
   'js/render/icons.js',
   'js/render/noise.js',
+  'js/render/pixel.js',
   'js/render/props.js',
   'js/render/renderer.js',
   'js/render/skillicons.js',

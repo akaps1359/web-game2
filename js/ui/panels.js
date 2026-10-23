@@ -591,6 +591,7 @@ export class Panels {
     toggle('괴물 체력 막대', 'bars');
     toggle('피해 숫자 표시', 'dmg', '디아블로 1·2에는 없던 기능');
     toggle('골드 자동 줍기', 'autoGold');
+    toggle('도트 그래픽', 'pixel', '세상을 각진 도트로 그립니다(더 가볍습니다)');
     toggle('고화질', 'hiq', '배터리를 더 씁니다');
     const row = el('div', 'tbtns'); row.style.marginTop = '14px'; row.style.display = 'flex'; row.style.flexDirection = 'column'; row.style.gap = '8px';
     row.appendChild(btn('btn', '도움말', () => this.open('help')));
@@ -638,6 +639,9 @@ export class Panels {
 ■ 성장
 레벨이 오르면 능력치 점수 5와 기술 점수 1을 얻습니다. 생명력과 마나도 모두 찹니다.
 칼은 짐승에게 강하고 해골에게 약합니다. 둔기는 그 반대입니다(디아블로 1 규칙).
+
+■ 그래픽
+처음에는 세상을 각진 도트로 그립니다. 메뉴의 '도트 그래픽'을 끄면 부드러운 그림으로 돌아갑니다.
 
 두 손가락으로 오므리고 벌리면 화면을 확대·축소합니다.`;
     body.appendChild(t);

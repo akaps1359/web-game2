@@ -269,14 +269,16 @@ export class FX {
   }
   // 어둠 전에 그리는 입자(피·파편·연기)
   drawWorld(g, ox, oy, s) {
+    const pix = this.r.pixel; // 도트 그래픽: 파편은 정수 도트 자리에 적어도 한 도트로
     for (const q of this.ps) {
       if (q.glow) continue;
       const px = ox + (q.x - q.y) * (TW / 2) * s, py = oy + (q.x + q.y) * (TH / 2) * s - q.z * s;
       const a = Math.min(1, q.life / q.max * 2) * q.fade;
       g.globalAlpha = q.kind === 'smoke' ? a * 0.45 : a;
       g.fillStyle = `rgb(${q.col[0]},${q.col[1]},${q.col[2]})`;
-      const sz = q.size * s;
+      const sz = pix ? Math.max(1, Math.round(q.size * s)) : q.size * s;
       if (q.kind === 'smoke') { g.beginPath(); g.arc(px, py, sz, 0, PI * 2); g.fill(); }
+      else if (pix) g.fillRect(Math.round(px - sz / 2), Math.round(py - sz / 2), sz, sz);
       else g.fillRect(px - sz / 2, py - sz / 2, sz, sz);
     }
     g.globalAlpha = 1;
