@@ -3,7 +3,7 @@
 import { isZoomed } from '../core/viewport.js';
 
 const STICK_R = 46; // 손잡이가 움직이는 반지름(px)
-const STICK_DEAD = 9; // 이만큼은 밀어야 걷기 시작
+const STICK_DEAD = 6; // 이만큼은 밀어야 걷기 시작
 const ARROWS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
 export class TouchInput {

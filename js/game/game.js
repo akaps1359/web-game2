@@ -194,13 +194,14 @@ export class Game {
     else st.a = a;
   }
 
-  // 공격 단추: 조이스틱(없으면 바라보는) 방향에 가까운 적을 겨눈다. 적이 없으면 상호작용
+  // 공격 단추: 조이스틱(없으면 바라보는) 방향에 가까운 적을 겨눈다. 공격만 한다(줍기·대화는 상호작용 단추로)
   attackNearest() {
     const P = this.player;
     if (!P || P.dead) return false;
     const t = this.bestEnemy(this.hero.ranged() ? 10 : LEASH);
-    if (t) { this.setTarget(t); return this.issue({ type: 'attack', target: t, leash: LEASH }); }
-    return this.interact();
+    if (!t) return false;
+    this.setTarget(t);
+    return this.issue({ type: 'attack', target: t, leash: LEASH });
   }
   // 거리와 방향으로 고른 적. 지금 대상이 크게 나쁘지 않으면 그대로 둔다(대상이 이리저리 바뀌지 않게)
   bestEnemy(range) {
@@ -224,15 +225,16 @@ export class Game {
     if (!P || P.dead) return;
     const ref = this.stick ? this.stick.a : P.faceTo ?? P.face;
     let bs = 1e9;
-    const consider = (kind, ref2, x, y, reach, verb) => {
+    // bias: 작을수록 먼저(마을 사람·아이템 > 계단·상자 등 > 우물·책장처럼 살펴보기만 하는 것)
+    const consider = (kind, ref2, x, y, reach, verb, bias) => {
       const d = Math.hypot(x - P.x, y - P.y);
       if (d > reach) return;
-      const sc = d + (d < 0.3 ? 0 : Math.abs(angDiff(Math.atan2(y - P.y, x - P.x), ref)) * 0.5);
+      const sc = d + bias + (d < 0.3 ? 0 : Math.abs(angDiff(Math.atan2(y - P.y, x - P.x), ref)) * 0.5);
       if (sc < bs) { bs = sc; this.focus = { kind, ref: ref2, x, y, verb }; }
     };
-    for (const it of L.items) consider('item', it, it.x, it.y, REACH, '줍기');
-    for (const o of L.objects) { const v = objectVerb(o); if (v) consider('obj', o, o.x, o.y, REACH, v); }
-    for (const a of L.actors) if (a.kind === 'npc' && !a.dead) consider('npc', a, a.x, a.y, TALK, '대화');
+    for (const it of L.items) consider('item', it, it.x, it.y, REACH, '줍기', 0);
+    for (const o of L.objects) { const v = objectVerb(o); if (v) consider('obj', o, o.x, o.y, REACH, v, v === '살펴보기' ? 1.2 : 0.3); }
+    for (const a of L.actors) if (a.kind === 'npc' && !a.dead) consider('npc', a, a.x, a.y, TALK, '대화', -0.5);
   }
   // 상호작용 단추: 줍기·열기·대화·계단 등
   interact() {
@@ -360,15 +362,15 @@ export class Game {
       if (A.t >= A.dur || canCancel) { P.setAnim('idle', 1); if (A.after) A.after(); }
       else if (!P.mv) return;
     }
+    // 조이스틱이 더 나중 입력이면 앞선 명령(다가가 공격 등)을 버리고, 걷던 걸음도 그 자리에서 끊는다
+    const st = this.stick;
+    if (st && st.seq > (this.actSeq || 0)) { if (this.cmd && (this.cmd.seq || 0) < st.seq) this.cmd = null; P.halt(L); }
     if (P.mv) {
       if (!P.advance(L, dt * rate)) { P.moving = true; return; }
     }
     P.moving = false;
-    // 조이스틱이 더 나중 입력이면 앞선 명령(다가가 공격 등)을 버린다
-    const st = this.stick;
-    if (st && this.cmd && (this.cmd.seq || 0) < st.seq) this.cmd = null;
     const c = this.cmd;
-    if (!c) { if (st) this.stickStep(); return; }
+    if (!c) { if (st) this.stickMove(dt * rate); return; }
     if (c.seq) this.actSeq = c.seq;
     switch (c.type) {
       case 'move': {
@@ -441,19 +443,51 @@ export class Game {
     this.farT = this.time;
     this.toast('더 가까이 가야 합니다');
   }
-  // 조이스틱 한 걸음: 여덟 방향 중 가장 가까운 칸, 막혔으면 양옆 45도로 미끄러진다. 닫힌 문은 밀면 열린다
-  stickStep() {
-    const P = this.player, L = this.level, a = this.stick.a;
-    const k = Math.round(a / (Math.PI / 4));
-    for (const o of [0, 1, -1]) {
-      const an = (k + o) * Math.PI / 4;
-      const dx = Math.round(Math.cos(an)), dy = Math.round(Math.sin(an));
-      const nx = P.tx + dx, ny = P.ty + dy;
-      const dr = L.obj(nx, ny);
-      if (!o && dr && dr.type === 'door' && !dr.open && !dr.locked) { P.turnTo(nx, ny); useObject(this, dr); P.setAnim('special', 0.25); return; }
-      if (L.canStep(P.tx, P.ty, nx, ny, P.id)) { P.step(L, nx, ny); return; }
+  // 조이스틱 걸음: 칸에 매이지 않고 민 방향으로 곧장 움직인다(즉시 출발·정지·방향 바꾸기).
+  // 몸은 반지름 R의 원: 막힌 칸(벽·물체·다른 액터)에 더 깊이 들어가는 움직임만 막고, 막히면 축마다 따로 미끄러지며,
+  // 모서리에 걸리면 앞이 트인 줄 가운데로 당긴다. 칸 좌표·자리 차지는 가장 가까운 칸을 따른다. 닫힌 문은 밀면 열린다
+  stickMove(dt) {
+    const P = this.player, L = this.level, a = this.stick.a, R = 0.3;
+    const sp = P.moveSpeed() * dt, ux = Math.cos(a), uy = Math.sin(a);
+    const rd = (x, y, tx, ty) => Math.hypot(Math.max(0, Math.abs(x - tx) - 0.5), Math.max(0, Math.abs(y - ty) - 0.5));
+    const hit = (x, y) => {
+      for (let ty = Math.round(y - R); ty <= Math.round(y + R); ty++) for (let tx = Math.round(x - R); tx <= Math.round(x + R); tx++) {
+        if (L.free(tx, ty, P.id)) continue;
+        const d = rd(x, y, tx, ty);
+        if (d < R && d < rd(P.x, P.y, tx, ty) - 1e-6) return { tx, ty };
+      }
+      return null;
+    };
+    let x = P.x, y = P.y;
+    const full = hit(x + ux * sp, y + uy * sp);
+    if (!full) { x += ux * sp; y += uy * sp; }
+    else {
+      // 바로 앞의 닫힌 문이면 연다
+      const dr = L.obj(full.tx, full.ty);
+      if (dr && dr.type === 'door' && !dr.open && !dr.locked && full.tx === Math.round(P.x + ux * 0.8) && full.ty === Math.round(P.y + uy * 0.8)) {
+        P.turnTo(full.tx, full.ty); useObject(this, dr); P.setAnim('special', 0.25); return;
+      }
+      if (!hit(x + ux * sp, y)) x += ux * sp;
+      if (!hit(x, y + uy * sp)) y += uy * sp;
+      if (x === P.x && y === P.y) {
+        const ax = Math.abs(ux) >= Math.abs(uy);
+        if (L.free(Math.round(P.x + (ax ? Math.sign(ux) : 0)), Math.round(P.y + (ax ? 0 : Math.sign(uy))), P.id)) {
+          if (ax) { const d = Math.round(P.y) - P.y, ny = P.y + Math.sign(d) * Math.min(Math.abs(d), sp); if (!hit(P.x, ny)) y = ny; }
+          else { const d = Math.round(P.x) - P.x, nx = P.x + Math.sign(d) * Math.min(Math.abs(d), sp); if (!hit(nx, P.y)) x = nx; }
+        }
+      }
     }
     P.faceTo = a;
+    if (x === P.x && y === P.y) return;
+    P.walkPh += Math.hypot(x - P.x, y - P.y) * Math.PI * 2 / 1.25;
+    P.x = x; P.y = y; P.moving = true;
+    const ntx = Math.round(x), nty = Math.round(y);
+    if (ntx !== P.tx || nty !== P.ty) {
+      const k0 = P.ty * L.w + P.tx;
+      if (L.occ[k0] === P.id) L.occ[k0] = 0;
+      P.tx = ntx; P.ty = nty;
+      L.occ[nty * L.w + ntx] = P.id;
+    }
   }
   // 목표로 한 걸음. adjacent면 옆에 닿으면 멈춘다. 못 가면 false
   stepToward(tx, ty, c, adjacent = false) {

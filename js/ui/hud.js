@@ -102,7 +102,12 @@ export class HUD {
     this.actBtn = el('button', 'actbtn');
     this.actTxt = el('span');
     this.actBtn.appendChild(this.actTxt);
-    this.actBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.actBtn.classList.add('pressed'); this.game?.interact(); });
+    this.actBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this.actBtn.classList.add('pressed');
+      // 대화를 막 닫은 손가락이 다시 누른 것으로 치지 않게
+      if (performance.now() - (this.app.dialog.closedAt || 0) > 400) this.game?.interact();
+    });
     for (const t of ['pointerup', 'pointercancel']) this.actBtn.addEventListener(t, () => this.actBtn.classList.remove('pressed'));
     r.appendChild(this.actBtn);
     this.actVerb = null;
@@ -171,7 +176,15 @@ export class HUD {
       st = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now(), aiming: false };
       b.classList.add('pressed');
       // 주 공격 단추는 누르고 있으면 계속 공격
-      if (S.idx === 0 && (!S.id || S.id === 'attack')) { this.useSlot(0); clearInterval(this.repeat); this.repeat = setInterval(() => { if (this.game && !this.game.cmd) this.useSlot(0); }, 120); }
+      if (S.idx === 0 && (!S.id || S.id === 'attack')) {
+        this.useSlot(0);
+        clearInterval(this.repeat);
+        this.repeat = setInterval(() => {
+          const g = this.game;
+          if (!b.isConnected || !g || this.app.dialog.isOpen() || this.app.panels.isOpen()) { clearInterval(this.repeat); return; }
+          if (!g.cmd) g.attackNearest();
+        }, 120);
+      }
     });
     b.addEventListener('pointermove', (e) => {
       if (!st) return;

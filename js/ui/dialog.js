@@ -16,6 +16,7 @@ export class Dialog {
   get game() { return this.app.game; }
   isOpen() { return this.root.classList.contains('on'); }
   close() {
+    if (this.isOpen()) this.closedAt = performance.now();
     this.root.classList.remove('on');
     this.root.innerHTML = '';
     this.npc = null;

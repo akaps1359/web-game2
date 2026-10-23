@@ -1,5 +1,5 @@
 // 실제 터치만으로 확인(가로 화면, 콘솔식 조작): 제목 → 새 캐릭터 → 모험 시작 → 이야기 닫기 → 게임 화면 탭은 아무 일 없음 →
-// 조이스틱 이동·놓으면 멈춤 → 상호작용 단추(대화·줍기·계단) → 공격 단추(조이스틱 방향의 적을 겨눔) → 가방 단추 → 물약 띠
+// 조이스틱 이동(바로 출발·놓자마자 멈춤) → 상호작용 단추(대화·떠난다·줍기·계단) → 공격 단추(조이스틱 방향의 적을 겨눔) → 가방 단추 → 물약 띠
 // 사용: node tools/preview/play.mjs tools/preview/touch.mjs [출력 폴더]
 export default async function (page, { wait, log, shot, tap }) {
   const center = (sel, text = '') => page.evaluate(([sel, text]) => {
@@ -42,10 +42,17 @@ export default async function (page, { wait, log, shot, tap }) {
   // 조이스틱: 왼쪽을 누르고 오른쪽으로 끈다 → 화면 오른쪽으로 걷는다
   const sx = 110, sy = H - 110;
   await touch('touchStart', sx, sy);
-  for (let k = 1; k <= 5; k++) { await touch('touchMove', sx + k * 9, sy); await wait(30); }
+  await touch('touchMove', sx + 20, sy); await wait(120);
+  const go = await pos();
+  check('조이스틱: 밀자마자 출발', Math.hypot(go[0] - p1[0], go[1] - p1[1]) > 0.05, JSON.stringify(p1) + '→' + JSON.stringify(go));
+  for (let k = 3; k <= 5; k++) { await touch('touchMove', sx + k * 9, sy); await wait(30); }
   check('조이스틱 보임', await page.evaluate(() => document.querySelector('.stick')?.classList.contains('on')));
-  await wait(1200);
-  await touch('touchEnd'); await wait(500);
+  await wait(1100);
+  await touch('touchEnd');
+  const e0 = await pos(); await wait(150);
+  const e1 = await pos();
+  check('놓자마자 멈춤', Math.hypot(e1[0] - e0[0], e1[1] - e0[1]) < 0.15, JSON.stringify(e0) + '→' + JSON.stringify(e1));
+  await wait(350);
   const w1 = await pos();
   check('조이스틱으로 이동', moved(p1, w1), JSON.stringify(p1) + '→' + JSON.stringify(w1));
   check('오른쪽으로 걸음', (w1[0] - w1[1]) - (p1[0] - p1[1]) > 1.5 && Math.abs((w1[0] + w1[1]) - (p1[0] + p1[1])) < 1.5);
@@ -64,6 +71,21 @@ export default async function (page, { wait, log, shot, tap }) {
   const v1 = await verb();
   await press('.actbtn'); await wait(800);
   check(`가까운 마을 사람(${npc}) → 상호작용 단추 '${v1}' → 대화`, v1 === '대화' && await page.evaluate(() => window.__app.dialog.isOpen()));
+  await page.evaluate(() => window.__app.dialog.close()); await wait(300);
+  // 공격 단추에 엄지를 올려 둔 채 다른 손가락으로 대화를 열고 '떠난다' → 다시 뜨지 않는다
+  const T = (type, touchPoints) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+  const isOpen = () => page.evaluate(() => window.__app.dialog.isOpen());
+  const ab0 = await center('.sbtn.main'), f0 = { x: ab0[0], y: ab0[1], id: 1 };
+  await T('touchStart', [f0]); await wait(400);
+  const byAttack = await isOpen();
+  const ib = await center('.actbtn');
+  if (ib && !byAttack) { await T('touchStart', [f0, { x: ib[0], y: ib[1], id: 2 }]); await wait(60); await T('touchEnd', [f0]); await wait(600); }
+  const lv = await center('.dlg-opt', '떠난다');
+  if (lv) { await T('touchStart', [f0, { x: lv[0], y: lv[1], id: 3 }]); await wait(60); await T('touchEnd', [f0]); }
+  let again = false;
+  for (let i = 0; i < 8 && !again; i++) { await wait(150); again = await isOpen(); }
+  await T('touchEnd', []); await wait(300);
+  check("공격 단추를 누른 채 '떠난다' → 대화가 다시 뜨지 않음", !byAttack && !!lv && !again, byAttack ? '(공격 단추가 대화를 엶)' : '');
   await page.evaluate(() => window.__app.dialog.close()); await wait(300);
   // 옆의 아이템 → '줍기'
   await openSpot();
@@ -94,7 +116,6 @@ export default async function (page, { wait, log, shot, tap }) {
   });
   await wait(800);
   // 조이스틱을 오른쪽으로 살짝 민 채(첫째 손가락) 공격 단추(둘째 손가락)
-  const T = (type, touchPoints) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
   const f1 = { x: sx, y: sy, id: 1 };
   await T('touchStart', [f1]); f1.x += 14; await T('touchMove', [f1]); await wait(60);
   const ab = await center('.sbtn.main');

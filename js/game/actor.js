@@ -23,13 +23,13 @@ export class Actor {
     this.buffs = {};
     this.look = null;
   }
-  // 걸음 시작: 도착 칸을 미리 차지한다(출발 칸도 도착할 때까지 붙잡아 둔다)
+  // 걸음 시작: 도착 칸을 미리 차지한다(출발 칸도 도착할 때까지 붙잡아 둔다).
+  // 조이스틱으로 칸 사이에 서 있던 플레이어도 있으니 지금 자리(sx, sy)에서 출발한다
   step(L, nx, ny) {
-    const dx = nx - this.tx, dy = ny - this.ty;
-    const len = dx && dy ? 1.4142 : 1;
-    this.mv = { fx: this.tx, fy: this.ty, nx, ny, t: 0, dur: len / Math.max(0.3, this.moveSpeed()) };
+    const len = Math.max(0.2, Math.hypot(nx - this.x, ny - this.y));
+    this.mv = { fx: this.tx, fy: this.ty, sx: this.x, sy: this.y, nx, ny, t: 0, dur: len / Math.max(0.3, this.moveSpeed()) };
     L.occ[ny * L.w + nx] = this.id;
-    this.faceTo = Math.atan2(dy, dx);
+    this.faceTo = Math.atan2(ny - this.y, nx - this.x);
     this.moving = true;
   }
   moveSpeed() {
@@ -46,8 +46,8 @@ export class Actor {
     const prevX = this.x, prevY = this.y;
     m.t += dt;
     const k = Math.min(1, m.t / m.dur);
-    this.x = m.fx + (m.nx - m.fx) * k;
-    this.y = m.fy + (m.ny - m.fy) * k;
+    this.x = m.sx + (m.nx - m.sx) * k;
+    this.y = m.sy + (m.ny - m.sy) * k;
     this.walkPh += Math.hypot(this.x - prevX, this.y - prevY) * Math.PI * 2 / 1.25;
     if (k >= 1) {
       const fk = m.fy * L.w + m.fx;
@@ -58,6 +58,16 @@ export class Actor {
       return true;
     }
     return false;
+  }
+  // 걷던 걸음을 그 자리에서 멈춘다(조이스틱으로 끊을 때). 붙잡아 둔 두 칸 중 가까운 칸만 남긴다
+  halt(L) {
+    const m = this.mv;
+    if (!m) return;
+    this.mv = null;
+    const near = Math.hypot(this.x - m.nx, this.y - m.ny) < Math.hypot(this.x - m.fx, this.y - m.fy);
+    const [kx, ky, dx, dy] = near ? [m.nx, m.ny, m.fx, m.fy] : [m.fx, m.fy, m.nx, m.ny];
+    if (L.occ[dy * L.w + dx] === this.id) L.occ[dy * L.w + dx] = 0;
+    this.tx = kx; this.ty = ky;
   }
   // 걸음을 즉시 끊는다(넉백·순간 이동 등)
   place(L, x, y) {
