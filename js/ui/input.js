@@ -81,6 +81,11 @@ export class TouchInput {
     this.steer(0, 0);
     this.app.hud.stickHide?.();
   }
+  // 손가락 상태를 모두 지운다(앱 전환 등으로 손 뗌을 못 받았을 때)
+  reset() {
+    if (this.stick) this.stickEnd();
+    this.pts.clear(); this.pinch = null;
+  }
   // 화면 방향(dx, dy) → 게임의 월드 방향
   steer(dx, dy) {
     const g = this.game;

@@ -33,10 +33,30 @@ export class App {
     this.input = new TouchInput(this);
     this.acc = 0; this.last = 0;
     this.running = false;
+    // 화면 크기: 사파리에서 나갔다 들어오면 크기·방향이 잠깐 틀어진 채로 resize가 오거나 아예 안 오기도 한다.
+    // 알림 외에도 돌아왔을 때 몇 번 다시 재고, 그림판 크기가 실제 크기와 다르면 언제든 다시 맞춘다
     window.addEventListener('resize', () => this.onResize());
     window.visualViewport?.addEventListener('resize', () => this.onResize());
-    document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); });
-    window.addEventListener('pagehide', () => this.saveNow());
+    if (window.ResizeObserver) new window.ResizeObserver(() => this.checkSize()).observe(this.cv);
+    for (const ev of ['orientationchange', 'pageshow', 'focus']) window.addEventListener(ev, () => this.settle());
+    // 앱을 오가면 손 뗌 알림을 못 받아 조이스틱·단추가 눌린 채로 남을 수 있다: 숨을 때·돌아올 때 터치 상태를 지운다
+    document.addEventListener('visibilitychange', () => { this.resetTouches(); if (document.hidden) this.saveNow(); else this.settle(); });
+    window.addEventListener('pagehide', () => { this.resetTouches(); this.saveNow(); });
+    window.addEventListener('blur', () => this.resetTouches());
+    // 손가락이 하나도 없을 때의 첫 터치(isPrimary)라면 앞서 끝나지 않은 터치는 모두 지난 것이다
+    window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' && e.isPrimary) this.resetTouches(); }, { capture: true });
+  }
+  resetTouches() { this.input?.reset(); this.hud?.resetTouches(); }
+  // 돌아온 직후·화면을 돌린 직후에는 크기가 늦게 자리 잡으니 몇 번에 걸쳐 다시 잰다
+  settle() { for (const ms of [0, 150, 400, 900, 1800]) setTimeout(() => this.checkSize(), ms); }
+  // 그림판의 실제 크기(CSS)·배율과 그려 둔 크기가 다르면 다시 맞춘다
+  checkSize() {
+    const c = this.cv, r = this.renderer, w = c.clientWidth, h = c.clientHeight;
+    if (!w || !h) return;
+    if (Math.abs(w - r.W) > 0.5 || Math.abs(h - r.H) > 0.5 || c.width !== Math.round(w * r.dpr) || c.height !== Math.round(h * r.dpr) || this.dprSeen !== window.devicePixelRatio) {
+      this.dprSeen = window.devicePixelRatio;
+      this.onResize();
+    }
   }
 
   async boot() {
@@ -236,6 +256,8 @@ export class App {
     this.last = t;
     if (!this.running || !this.game) { this.title.frame?.(dt); return; }
     const g = this.game;
+    // 크기 알림을 놓쳤을 때를 위해 가끔 직접 잰다
+    if ((this.sizeN = (this.sizeN || 0) + 1) % 30 === 0) this.checkSize();
     // 세로로 들고 있으면(가로로 돌려 달라는 안내가 덮고 있다) 멈춘다
     this.portraitQ = this.portraitQ || window.matchMedia('(orientation: portrait) and (pointer: coarse)');
     const pause = this.panels.isOpen() && this.panels.pauses() || this.dialog.isOpen() || this.portraitQ.matches;

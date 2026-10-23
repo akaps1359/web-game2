@@ -122,6 +122,12 @@ export class HUD {
     this.refreshBelt(); this.refreshSkills(); this.badges(); this.onLevel();
   }
   layout() { if (this.game) this.build(); }
+  // 눌린 채로 남은 단추·계속 공격·겨눔 선을 지운다(앱 전환 등으로 손 뗌을 못 받았을 때)
+  resetTouches() {
+    clearInterval(this.repeat);
+    for (const b of this.root.querySelectorAll('.pressed')) b.classList.remove('pressed');
+    if (this.aim) { this.aim = null; this.clearAim(); }
+  }
 
   makeOrb(parent, kind) {
     const node = el('div', 'orb ' + kind);

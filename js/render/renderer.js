@@ -12,6 +12,8 @@ import { FX } from './fx.js';
 // 빛: 계단진 동심원 [시작, 끝, 세기]
 // 플레이어를 가리는 앞쪽 벽의 불투명도(디아블로 2처럼 반투명)
 const SEE_THRU = 0.34;
+// 기본 구도: 멀리서 넓게(가로 874px 화면에서 타일 약 21칸이 가로로 보인다). 두 손가락으로 0.75~2.2배까지 바꿀 수 있다
+const VIEW = 0.68;
 const LIGHT_BANDS = [[0, 0.3, 1], [0.3, 0.45, 0.86], [0.45, 0.56, 0.74], [0.56, 0.66, 0.6], [0.66, 0.75, 0.46], [0.75, 0.83, 0.33], [0.83, 0.9, 0.21], [0.9, 0.96, 0.11], [0.96, 1, 0.03]];
 
 export class Renderer {
@@ -36,8 +38,8 @@ export class Renderer {
     const r = this.cv.getBoundingClientRect();
     this.W = Math.max(1, r.width); this.H = Math.max(1, r.height);
     this.cv.width = Math.round(this.W * this.dpr); this.cv.height = Math.round(this.H * this.dpr);
-    // 가로 화면: 높이(세로로 보이는 거리)에 맞춘다
-    this.baseZoom = clamp(Math.min(this.W / 860, this.H / 440), 0.55, 1.4);
+    // 가로 화면: 높이(세로로 보이는 거리)에 맞추고, 멀리서 넓게 보는 구도로
+    this.baseZoom = clamp(Math.min(this.W / 860, this.H / 440), 0.55, 1.4) * VIEW;
     this.applyZoom();
     const lw = Math.ceil(this.cv.width / this.P), lh = Math.ceil(this.cv.height / this.P);
     if (this.lo.width !== lw || this.lo.height !== lh) { this.lo.width = lw; this.lo.height = lh; }
@@ -51,7 +53,7 @@ export class Renderer {
     this.sl = clamp(Math.round(16 * z * this.dpr / this.P), 3, 40) / 16;
     this.zoom = this.sl * this.P / this.dpr;
   }
-  setUserZoom(z) { this.userZoom = clamp(z, 0.7, 1.7); this.applyZoom(); }
+  setUserZoom(z) { this.userZoom = clamp(z, 0.75, 2.2); this.applyZoom(); }
   // 타일 묶음은 배율(도트 단위)마다 따로 굽는다
   tileset(theme) {
     const key = theme + ':' + this.sl;

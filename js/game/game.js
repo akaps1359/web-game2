@@ -25,7 +25,7 @@ const LEASH = 4.5, REACH = 2.6, TALK = 3.2;
 // 공격 단추가 몸을 돌려 겨누는 거리: 근접은 손 닿는 거리보다 조금 더(다가오는 적), 활은 빛이 닿는 데까지
 const MELEE_AIM = MELEE_HIT + 0.4, BOW_AIM = 10;
 // 시야 반지름: 화면 가장자리 너머까지(한 번 본 곳은 빛 밖에서도 어둡게 남는다)
-const FOV_R = 15;
+const FOV_R = 18;
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
