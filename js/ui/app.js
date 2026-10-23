@@ -17,6 +17,7 @@ import { PANELS } from './panels/index.js';
 import { showEventModal, showDialog, closeModal } from './modal.js';
 import { showTitle } from './title.js';
 import { getItem, setItem } from './store.js';
+import { Tutorial, TUTORIAL_KEY } from './tutorial.js';
 
 const SPEEDS = [0, 4, 10, 24, 60, 160]; // 게임 시간(시간)/초
 const SAVE_PREFIX = 'chulhyeol.save.';
@@ -46,6 +47,7 @@ export class App {
       changed: (end) => { this.dirty = true; if (end) this.r.staticDirty = true; },
     });
     this.sheet = new Sheet($('#sheet'), this);
+    this.coach = new Tutorial(this);
     this.sel = { divs: new Set(), mode: 'none' };
     this.r.sel.divs = this.sel.divs;
     this.speed = 0;
@@ -70,7 +72,9 @@ export class App {
     else this.r.focusOn(-2500, -6500, 0.07);
     this.setSpeed(0);
     this.toast(`${C.full} — ${C.leader} ${C.title}`, 'peace');
-    if (!getItem('chulhyeol.tutorialDone')) setTimeout(() => this.openPanel('help'), 400);
+    // 튜토리얼은 처음 새 게임을 시작할 때 한 번만(메뉴에서 다시 볼 수 있다)
+    this.coach.stop();
+    if (!getItem(TUTORIAL_KEY)) setTimeout(() => this.coach.start(), 700);
   }
   afterLoad() {
     const G = this.G;
@@ -100,6 +104,7 @@ export class App {
   load(slot = 'auto') {
     const data = getItem(SAVE_PREFIX + slot);
     if (!data) return false;
+    this.coach?.stop();
     try { this.G = deserialize(data, this.map); setPlayer(this.G, this.G.player); this.afterLoad(); const C = this.G.countries[this.G.player]; if (C.capital >= 0 && !this.map.virtual[C.capital]) this.r.focusState(C.capital, 0.14); this.setSpeed(0); return true; }
     catch (e) { console.error(e); this.toast('불러오기 실패', 'war'); return false; }
   }

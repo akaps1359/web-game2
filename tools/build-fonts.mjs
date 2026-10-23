@@ -4,15 +4,19 @@ import fs from 'fs';
 import path from 'path';
 import url from 'url';
 import { PAPERS, MAST_FONTS } from '../js/data/papers.js';
+import { LOGO_FONTS } from '../js/data/brand.js';
 
 const root = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 fs.mkdirSync(path.join(root, 'fonts'), { recursive: true });
-for (const [style, [family, weight]] of Object.entries(MAST_FONTS)) {
-  // 대문자로 보여 주는 양식(CSS text-transform)도 있으니 대문자도 함께 담는다
+// 신문 제호(대문자로 보여 주는 양식도 있으니 대문자도 함께 담는다) + 게임 로고
+const jobs = Object.entries(MAST_FONTS).map(([style, [family, weight]]) => {
   const names = Object.values(PAPERS).filter((p) => p[1] === style).map((p) => p[0]);
-  const chars = [...new Set(names.join('') + names.join('').toUpperCase() + ' ')].join('');
-  const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@${weight}&text=${encodeURIComponent(chars)}`, { headers: { 'user-agent': UA } })).text();
+  return [style, family, `wght@${weight}`, names.join('') + names.join('').toUpperCase()];
+}).concat(Object.entries(LOGO_FONTS).map(([key, [family, axes, text]]) => [key, family, axes, text]));
+for (const [style, family, axes, text] of jobs) {
+  const chars = [...new Set(text + ' ')].join('');
+  const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:${axes}&text=${encodeURIComponent(chars)}`, { headers: { 'user-agent': UA } })).text();
   const src = /src:\s*url\(([^)]+)\)/.exec(css)?.[1];
   if (!src) { console.error(style, family, '실패', css.slice(0, 200)); process.exitCode = 1; continue; }
   const buf = Buffer.from(await (await fetch(src, { headers: { 'user-agent': UA } })).arrayBuffer());

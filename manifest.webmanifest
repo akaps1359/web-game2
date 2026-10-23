@@ -1,7 +1,7 @@
 {
-  "name": "철혈전선 1936",
-  "short_name": "철혈전선",
-  "description": "1936–1945 제2차 세계대전 대전략 게임",
+  "name": "History · Strategy Simulation 1936–1945",
+  "short_name": "History",
+  "description": "1936–1945 제2차 세계대전 역사 전략 시뮬레이션",
   "lang": "ko",
   "start_url": "./",
   "scope": "./",

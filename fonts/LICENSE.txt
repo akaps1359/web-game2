@@ -1,5 +1,5 @@
-fonts/ 의 글꼴은 신문 제호 글자만 담은 부분 글꼴(구글 폰트에서 받음)이며, 모두 SIL Open Font License 1.1을 따릅니다.
-frak=UnifrakturMaguntia, black=UnifrakturCook, roman=Old Standard TT, didone=Playfair Display, imperial=Cinzel, grot=Oswald, greek=GFS Didot, arabic=Amiri, ethiopic=Noto Serif Ethiopic
+fonts/ 의 글꼴은 신문 제호·게임 로고 글자만 담은 부분 글꼴(구글 폰트에서 받음)이며, 모두 SIL Open Font License 1.1을 따릅니다.
+frak=UnifrakturMaguntia, black=UnifrakturCook, roman=Old Standard TT, didone=Playfair Display, imperial=Cinzel, grot=Oswald, greek=GFS Didot, arabic=Amiri, ethiopic=Noto Serif Ethiopic, logo=Cinzel, logosub=Cormorant Garamond
 
 ===== unifrakturmaguntia =====
 Copyright (c) 2010, j. 'mach' wust, with Reserved Font Name UnifrakturMaguntia.
@@ -176,6 +176,28 @@ https://openfontlicense.org/
 
 ===== notoserifethiopic =====
 Copyright 2022 The Noto Project Authors (https://github.com/notofonts/ethiopic)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+(라이선스 전문은 위와 같음)
+
+===== cinzel =====
+Copyright 2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+(라이선스 전문은 위와 같음)
+
+===== cormorantgaramond =====
+Copyright 2015 the Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

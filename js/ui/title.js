@@ -5,6 +5,7 @@ import { icon } from './icons.js';
 import { IDEOLOGIES } from '../data/countries.js';
 import { fmtDate } from '../engine/world.js';
 import { divsOf } from '../engine/military.js';
+import { BRAND } from '../data/brand.js';
 
 const BLURB = {
   GER: '베르사유 체제를 깨뜨린 제3제국. 라인란트 재무장과 4개년 계획으로 유럽의 질서를 뒤흔들 준비를 하고 있다. 강력한 공업과 전격전 교리가 무기지만, 자원은 부족하다.',
@@ -38,7 +39,7 @@ export function showTitle(app) {
   onTap(snd, () => { app.setSetting('music', app.settings().music === false); app.music?.apply(); sndIcon(); });
   sndIcon();
   el.appendChild(snd);
-  wrap.appendChild(h('div', { class: 'ttl-logo' }, h('div', { class: 't1' }, '철혈전선'), h('div', { class: 't2' }, '1936 – 1945 · 제2차 세계대전 대전략'), h('div', { class: 'rule' })));
+  wrap.appendChild(h('div', { class: 'ttl-logo' }, h('div', { class: 't1' }, BRAND.title.toUpperCase()), h('div', { class: 't1b' }, BRAND.sub), h('div', { class: 't2' }, `${BRAND.years} · 제2차 세계대전 대전략`), h('div', { class: 'rule' })));
   // 이어하기
   const auto = app.saveMeta('auto');
   if (auto) {

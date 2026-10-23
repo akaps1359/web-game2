@@ -182,7 +182,7 @@ const AFTER = "r:.5 C:.5' r:.5 C:.5' r:.5 C:.5' r:.5 C:.5'";
 const WALTZ_LH = "R:1 C:1' C:1'";
 const HARP = 'a0:.5 a1 a2 a3 a4 a3 a2 a1';
 
-// 철혈전선(메인 테마): 라단조, 호른이 부르는 비장한 주제
+// 메인 테마: 라단조, 호른이 부르는 비장한 주제
 const TA = 'D4:1.5 E4:.5 F4:1 A4:1 | G4:1.5 F4:.5 D4:2 | E4:1.5 F4:.5 G4:1 A4:1 | A4:4 | D4:1.5 E4:.5 F4:1 A4:1 | D5:1.5 C5:.5 Bb4:1 A4:1 | Bb4:1.5 A4:.5 G4:1 E4:1 | D4:4';
 const TA_BASS = 'D3:2 A2:2 | G2:2 D3:2 | C3:2 G2:2 | A2:2 E2:2 | D3:2 A2:2 | Bb2:2 F2:2 | G2:2 A2:2 | D3:2 D2:2';
 const TA_TIMP = 'D2:4 | r:4 | r:4 | A2:1 A2:.5 A2:.5 A2:2 | D2:4 | r:4 | r:2 A2:2 | D2:2 r:2';
@@ -257,7 +257,7 @@ const RQ_BELL = 'D3:8 | D3:8 | D3:8 | D3:8';
 
 export const TRACKS = {
   title: {
-    name: '철혈전선', desc: '비장한 호른과 현악의 메인 테마', bpm: 76, gap: [5, 9],
+    name: '메인 테마', desc: '비장한 호른과 현악', bpm: 76, gap: [5, 9],
     order: ['intro', 'A', 'B', 'A2', 'outro'],
     sec: {
       intro: { bars: 4, ch: 'Dm Dm Bb A', parts: [
