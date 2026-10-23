@@ -35,6 +35,8 @@ function basics(app) {
     }
     return best && { left: best.x0, top: best.y0, width: best.x1 - best.x0, height: best.y1 - best.y0 };
   };
+  // 미국 본토처럼 땅으로 이어진 이웃이 없는 곳의 사단은 배로만 움직인다
+  const overSea = () => app.selectedDivs().every((D) => !app.map.nb[D.loc].length);
   return [
     { center: true, next: '시작하기', text: () => `${C().name}의 지도자가 되셨습니다.\n직접 눌러 보며 1분 만에 기본 조작을 익혀 볼까요?` },
     { text: '한 손가락으로 지도를 끌어 보세요. 두 손가락으로 벌리면 확대됩니다.', place: 'bottom',
@@ -56,7 +58,7 @@ function basics(app) {
       },
       target: myStack, done: () => app.sel.divs.size > 0 },
     { text: '이제 보낼 주를 지도에서 탭하세요. 사단이 그곳으로 이동합니다.', place: 'top',
-      skip: () => !app.sel.divs.size,
+      skip: () => !app.sel.divs.size || overSea(),
       // 사단 정보 패널이 지도를 가리지 않게 닫고(선택은 유지) 그 사단 쪽으로 지도를 옮긴다.
       // 사단을 직접 움직이면 그 군의 자동 지휘가 꺼지는데, 연습이니 끝나면 원래대로 돌려놓는다
       enter: (t) => {
@@ -66,6 +68,10 @@ function basics(app) {
         if (D) { app.r.focusState(D.loc, Math.max(app.r.cam.s, 0.2)); app.dirty = true; app.r.staticDirty = true; }
       },
       done: (t) => { const ok = app.selectedDivs().some((D) => D.path.length > 0); if (ok) for (const [A, auto] of t.armies) A.auto = auto; return ok; } },
+    { text: '바다 건너에 있는 사단은 땅으로 갈 수 없어요. 아래 「수송」(아군 항구로)이나 「상륙」(적 해안으로)을 누른 뒤 도착할 곳을 탭하면 배로 건너갑니다.', place: 'top', next: '다음',
+      skip: () => !app.sel.divs.size || !overSea(),
+      enter: () => app.sheet.close(),
+      target: () => withText('.opbar .btn', '수송') },
     { center: true, next: '게임 시작', enter: () => app.sheet.close(),
       text: '기본은 끝! 화면마다 오른쪽 위 「?」를 누르면 중점·정치·연구·산업·군사·외교를 1분씩 따로 배울 수 있어요.\n메뉴(☰) → 「튜토리얼」에도 모여 있습니다.' },
   ];

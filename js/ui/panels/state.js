@@ -1,7 +1,7 @@
 // 주 정보 · 해역 · 함대 패널
 import { h, onTap, clear } from '../dom.js';
 import { icon } from '../icons.js';
-import { btn, flag, bar, stat, card, item, empty } from './common.js';
+import { btn, flag, bar, stat, card, item, empty, kv } from './common.js';
 import { TERRAIN, RES_NAMES, RES_SCALE, SHIPS, SHIP_KEYS } from '../../data/units.js';
 import { BUILDINGS, canBuild, buildCost, stateSlots, stateUsedSlots, queueBuild } from '../../engine/economy.js';
 import { atWar, allied } from '../../engine/world.js';
@@ -27,19 +27,25 @@ export const statePanel = {
       const win = side === '방어' ? 1 - B.win : B.win;
       body.appendChild(card(`${icon('swords')} 전투 진행 중 <small>${B.atkIds.length} 대 ${B.defIds.length} 사단</small>`, h('div', { class: 'row' }, h('span', { class: 'small' }, `${G.countries[B.atkTag]?.name || '?'} → ${G.countries[B.defTag]?.name}`), h('span', { class: 'grow' }), h('b', { class: side ? (win >= 0.5 ? 'good' : 'bad') : '' }, side ? `우세 ${pct(win)}` : pct(B.win))), bar(side ? win : B.win, side && win < 0.5 ? 'red' : 'green'), h('div', { class: 'tiny muted', style: { marginTop: '4px' } }, `전장 너비 ${Math.round(B.width)} · 공격 방향 ${B.dirs.length}`)));
     }
+    // 지도 밖 본토(미국 본토): 처음부터 있던 공장·인구·자원은 나라의 지도 밖 자산에 들어 있으니 함께 보여 준다
+    const off = map.virtual[st] && G.countries[S.owner]?.offmap?.name === map.name[st] ? G.countries[S.owner].offmap : null;
+    if (map.virtual[st]) body.appendChild(h('div', { class: 'note', style: { marginBottom: '10px' } }, `지도 밖에 있는 본토라 서쪽 바다에 작은 지도로 그려 두었습니다. 유럽과는 ${map.coast[st].map((z) => map.seas[z].name).join('·')} 해역으로만 이어지니, 사단을 고른 뒤 「수송」(아군 항구로)이나 「상륙」(적 해안으로)으로 바다를 건너세요.`));
+    const civ = Math.round((S.civ || 0) + (off?.civ || 0)), mil = Math.round((S.mil || 0) + (off?.mil || 0)), dock = Math.round((S.dock || 0) + (off?.dock || 0));
+    const base = off ? Math.round((off.civ || 0) + (off.mil || 0) + (off.dock || 0)) : 0;
     const grid = h('div', { class: 'grid3' },
       stat('승점', S.vp, 'star'), stat('지형', T?.name || '-', 'mountain'), stat('기반 시설', S.infra, 'infra'),
-      stat('인구', fmtNum(S.pop * 1000), 'people'), stat('공장', `${S.civ}/${S.mil}`, 'industry', S.dock ? `조선 ${S.dock}` : ''), stat('슬롯', `${stateUsedSlots(S)}/${stateSlots(G, G.countries[S.owner], st)}`, 'gear'));
+      stat('인구', fmtNum(off ? off.pop * 1e6 : S.pop * 1000), 'people'), stat('공장', `${civ}/${mil}`, 'industry', dock ? `조선 ${dock}` : ''), stat('슬롯', `${stateUsedSlots(S) + base}/${stateSlots(G, G.countries[S.owner], st) + base}`, 'gear'));
     body.appendChild(grid);
     const extra = [];
     if (S.fort) extra.push(`요새 ${S.fort}`); if (S.aa) extra.push(`대공 ${S.aa}`); if (S.air) extra.push(`공군기지 ${S.air}`); if (S.port) extra.push(`해군기지 ${S.port}`); if (S.ref) extra.push(`정유소 ${S.ref}`); if (S.demil) extra.push('비무장 지대');
     if (S.res) for (const r in S.res) extra.push(`${RES_NAMES[r]} ${Math.round(S.res[r] * RES_SCALE)}`);
+    if (off?.res) for (const r in off.res) if (off.res[r] >= 1) extra.push(`${RES_NAMES[r]} ${Math.round(off.res[r])}`);
     const so = G.supplyOf?.[G.player];
     if (S.ctrl === G.player || allied(G, G.player, S.ctrl)) extra.push(`보급 ${pct(so ? so[st] : 1)}`);
     if (extra.length) body.appendChild(h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px', margin: '10px 0' } }, extra.map((e) => h('span', { class: 'pill' }, e))));
     const cores = S.cores.map((t) => G.countries[t]?.name || t).join(', ');
     const claims = S.claims.map((t) => G.countries[t]?.name || t).join(', ');
-    body.appendChild(h('div', { class: 'kv', style: { margin: '6px 2px 10px' } }, '핵심 영토', cores || '없음', '영유권 주장', claims || '없음'));
+    body.appendChild(kv([['핵심 영토', cores || '없음'], ['영유권 주장', claims || '없음']], { margin: '6px 2px 10px' }));
     // 사단
     const ids = G.divsAt?.[st] || [];
     if (ids.length) {
@@ -59,12 +65,12 @@ export const statePanel = {
       body.appendChild(btn(`선택한 ${app.sel.divs.size}개 사단 ${hostile ? '공격' : '이동'}`, () => app.orderMoveSelected(st), 'primary wide', hostile ? 'attack' : 'move'));
     }
     // 건설
-    if (mine && !map.virtual[st]) {
+    if (mine) {
       const c = card(`${icon('industry')} 건설 <small>민간 공장 여유 ${Math.floor(P.eco.civFree || 0)}</small>`);
       const list = h('div', { class: 'grid2' });
       for (const type of ['civ', 'mil', 'dock', 'infra', 'fort', 'air', 'aa', 'ref', 'port']) {
         const why = canBuild(G, P, type, st);
-        if (why === '해안 주가 아닙니다' || (why === '기술 필요' && type === 'ref')) continue;
+        if (why === '해안 주가 아닙니다' || why === '불가' || (why === '기술 필요' && type === 'ref')) continue;
         const B = BUILDINGS[type];
         const b = h('button', { class: 'btn sm' + (why ? ' disabled' : ''), style: { justifyContent: 'flex-start' }, html: `${icon(B.icon)}<span>${B.name}</span>` });
         b.title = why || '';
@@ -112,7 +118,7 @@ export const fleetPanel = {
       const X = G.countries[F.tag];
       const mine = F.tag === G.player;
       const p = fleetPower(G, F);
-      const c = card(`${icon('ship')} ${X.name} ${F.name} <small>${fleetSize(F)}척</small>`, h('div', { class: 'small muted' }, shipLine(F)), h('div', { class: 'kv', style: { marginTop: '8px' } }, '위치', map.seas[F.loc].name, '목표 해역', map.seas[F.target]?.name || '-', '임무', MISSIONS.find((m) => m[0] === F.mission)?.[1] || F.mission, '공격력', Math.round(p.atk), '손상', Math.round(F.dmg || 0), '모항', map.name[F.base]));
+      const c = card(`${icon('ship')} ${X.name} ${F.name} <small>${fleetSize(F)}척</small>`, h('div', { class: 'small muted' }, shipLine(F)), kv([['위치', map.seas[F.loc].name], ['목표 해역', map.seas[F.target]?.name || '-'], ['임무', MISSIONS.find((m) => m[0] === F.mission)?.[1] || F.mission], ['공격력', Math.round(p.atk)], ['손상', Math.round(F.dmg || 0)], ['모항', map.name[F.base]]], { marginTop: '8px' }));
       if (mine) {
         const seg = h('div', { class: 'seg', style: { marginTop: '10px' } });
         for (const [k, label] of MISSIONS) { const b = h('button', { class: F.mission === k ? 'on' : '' }, label); onTap(b, () => { F.mission = k; if (k === 'idle') F.target = map.coast[F.base]?.[0] ?? F.loc; ctx.rerender(); }); seg.appendChild(b); }

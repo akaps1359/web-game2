@@ -226,7 +226,7 @@ export const countryPanel = {
         body.appendChild(ll);
       }
     }
-    const locate = btn('수도 보기', () => { if (X.capital >= 0 && !app.map.virtual[X.capital]) { app.sheet.close(); app.r.focusState(X.capital, Math.max(0.12, app.r.cam.s)); app.r.sel.state = X.capital; app.dirty = true; } }, 'wide', 'locate');
+    const locate = btn('수도 보기', () => { if (X.capital >= 0) { app.sheet.close(); app.r.focusState(X.capital, Math.max(0.12, app.r.cam.s)); app.r.sel.state = X.capital; app.dirty = true; } }, 'wide', 'locate');
     body.appendChild(locate);
     body.appendChild(h('div', { class: 'pad-bottom' }));
   },

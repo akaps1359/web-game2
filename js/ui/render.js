@@ -5,6 +5,7 @@ import { atWar, allied } from '../engine/world.js';
 import { divStats, divKind } from '../engine/military.js';
 import { fleetSize } from '../engine/naval.js';
 import { drawFlag } from './flags.js';
+import { OFFMAP } from '../data/offmap.js';
 
 const LOD_TOL = [0, 2.5, 9];
 
@@ -82,6 +83,7 @@ export class MapRenderer {
     this.stPath = LOD_TOL.map(() => new Array(J.states.length));
     this.stBox = J.states.map((s) => { let b = [Infinity, Infinity, -Infinity, -Infinity]; for (const poly of s.a) for (const ring of poly) for (const a of ring) { const bb = this.arcBox[a < 0 ? ~a : a]; b = [Math.min(b[0], bb[0]), Math.min(b[1], bb[1]), Math.max(b[2], bb[2]), Math.max(b[3], bb[3])]; } return b; });
     this.offPath = LOD_TOL.map(() => null);
+    this.prepInsets();
     // 호수·하천·산맥·사막·해역선
     const decPoly = (enc) => { const p = new Path2D(); for (const r of enc) { let x = 0, y = 0; for (let i = 0; i < r.length; i += 2) { x += r[i]; y += r[i + 1]; if (i) p.lineTo(x / 10, y / 10); else p.moveTo(x / 10, y / 10); } p.closePath(); } return p; };
     this.lakes = J.lakes.map((l) => decPoly(l.p));
@@ -116,9 +118,33 @@ export class MapRenderer {
     path.closePath();
   }
   statePath(i, lod) {
+    if (i >= this.map.nGeo) return this.inset.get(i)?.frame || new Path2D();
     let p = this.stPath[lod][i];
     if (!p) { p = new Path2D(); for (const poly of this.json.states[i].a) for (const ring of poly) this.ringPath(p, ring, lod); this.stPath[lod][i] = p; }
     return p;
+  }
+  // 지도 밖 본토(미국 본토)는 서쪽 끝 바다에 테두리 친 인셋으로 그린다. 틀이 곧 그 주의 모양이라 누르기·선택·강조가 그대로 되고,
+  // 부대와 화살표는 인셋 속 본토 한가운데(this.lx/ly)에 선다. 엔진 좌표(map.lx/ly·경위도)는 건드리지 않는다
+  prepInsets() {
+    const map = this.map;
+    this.lx = map.lx.slice(); this.ly = map.ly.slice();
+    this.inset = new Map();
+    const merc = (lon, lat) => [lon * Math.PI / 180, -Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))];
+    for (let i = map.nGeo; i < map.n; i++) {
+      const D = OFFMAP[map.key[i]]; if (!D) continue;
+      const [W, H] = D.size;
+      const x0 = Math.max(map.bounds[0] + 50, map.lx[i] - W / 2), y0 = map.ly[i] - H / 2;
+      let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity;
+      for (let k = 0; k < D.land.length; k += 2) { const [u, v] = merc(D.land[k], D.land[k + 1]); u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+      const pad = W * 0.06, sc = Math.min((W - 2 * pad) / (u1 - u0), (H - 2 * pad) / (v1 - v0));
+      const tx = (lon, lat) => { const [u, v] = merc(lon, lat); return [x0 + W / 2 + (u - (u0 + u1) / 2) * sc, y0 + H / 2 + (v - (v0 + v1) / 2) * sc]; };
+      const poly = (rings) => { const p = new Path2D(); for (const r of rings) { for (let k = 0; k < r.length; k += 2) { const [x, y] = tx(r[k], r[k + 1]); if (k) p.lineTo(x, y); else p.moveTo(x, y); } p.closePath(); } return p; };
+      const frame = new Path2D(); roundRect(frame, x0, y0, W, H, 34);
+      const box = [x0, y0, x0 + W, y0 + H];
+      this.inset.set(i, { i, box, frame, land: poly([D.land]), lakes: poly(D.lakes || []), around: poly(D.around || []), sub: D.sub });
+      this.stBox[i] = box;
+      [this.lx[i], this.ly[i]] = tx(D.anchor[0], D.anchor[1]);
+    }
   }
   offmapPath(lod) {
     if (!this.offPath[lod]) { const p = new Path2D(); for (const poly of this.json.off) for (const ring of poly) this.ringPath(p, ring, lod); this.offPath[lod] = p; }
@@ -179,7 +205,7 @@ export class MapRenderer {
   toWorld(sx, sy) { const c = this.cam; return [(sx - this.w / 2) / c.s + c.x, (sy - this.h / 2) / c.s + c.y]; }
   viewBox(m = 0) { const [x0, y0] = this.toWorld(-m, -m), [x1, y1] = this.toWorld(this.w + m, this.h + m); return [x0, y0, x1, y1]; }
   focusOn(x, y, s) { this.cam.x = x; this.cam.y = y; if (s) this.cam.s = s; this.clampCam(); this.staticDirty = true; }
-  focusState(i, zoom) { this.focusOn(this.map.lx[i], this.map.ly[i] + (this.h * 0.12) / (zoom || this.cam.s), zoom || Math.max(this.cam.s, 0.35)); }
+  focusState(i, zoom) { this.focusOn(this.lx[i], this.ly[i] + (this.h * 0.12) / (zoom || this.cam.s), zoom || Math.max(this.cam.s, 0.35)); }
 
   // ───────── 클릭 판정 ─────────
   stateAt(sx, sy) {
@@ -193,7 +219,7 @@ export class MapRenderer {
     if (hit < 0) {
       // 작은 섬(지브롤터·몰타 등) 근접 판정
       let best = -1, bd = 18 / this.cam.s;
-      for (const i of cand) { const d = Math.hypot(this.map.lx[i] - x, this.map.ly[i] - y); if (this.map.area[i] < 3000 && d < bd) { bd = d; best = i; } }
+      for (const i of cand) { const d = Math.hypot(this.lx[i] - x, this.ly[i] - y); if (this.map.area[i] < 3000 && d < bd) { bd = d; best = i; } }
       hit = best;
     }
     return hit;
@@ -212,7 +238,7 @@ export class MapRenderer {
         return '#8a8676';
       }
       case 'terrain': return TERRAIN[this.map.terrain[i]]?.color || '#999';
-      case 'industry': { const f = (S.civ || 0) + (S.mil || 0) * 1.2 + (S.dock || 0); const t = Math.min(1, f / 12); return mix('#3a3f46', '#f0a030', t); }
+      case 'industry': { const o = this.map.virtual[i] ? owner?.offmap : null; const f = (S.civ || 0) + (o?.civ || 0) + ((S.mil || 0) + (o?.mil || 0)) * 1.2 + (S.dock || 0) + (o?.dock || 0); const t = Math.min(1, f / 12); return mix('#3a3f46', '#f0a030', t); }
       case 'supply': {
         const p = G.player; const so = G.supplyOf?.[p];
         if (!(S.ctrl === p || allied(G, p, S.ctrl))) return '#3a3e45';
@@ -314,6 +340,7 @@ export class MapRenderer {
         ctx.fill(p, 'evenodd');
       }
     }
+    for (const N of this.inset.values()) if (vis(N.box)) this.drawInset(G, ctx, N, px);
     // 종이 질감
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 0.07; ctx.globalCompositeOperation = 'overlay'; ctx.fillStyle = this.noise; ctx.fillRect(0, 0, W * dpr, H * dpr); ctx.restore();
     ctx.setTransform(dpr * c.s, 0, 0, dpr * c.s, dpr * (W / 2 - c.x * c.s), dpr * (H / 2 - c.y * c.s));
@@ -361,6 +388,11 @@ export class MapRenderer {
       ctx.strokeStyle = 'rgba(30,5,5,0.9)'; ctx.lineWidth = 3 * px; ctx.stroke(front);
       ctx.strokeStyle = 'rgba(220,70,55,0.95)'; ctx.lineWidth = 1.6 * px; ctx.stroke(front);
     } else { ctx.strokeStyle = 'rgba(12,12,12,0.85)'; ctx.lineWidth = 2 * px; ctx.stroke(front); }
+    for (const N of this.inset.values()) {
+      if (!vis(N.box)) continue;
+      ctx.strokeStyle = 'rgba(8,10,12,0.9)'; ctx.lineWidth = 4 * px; ctx.stroke(N.frame);
+      ctx.strokeStyle = 'rgba(226,206,150,0.85)'; ctx.lineWidth = 1.3 * px; ctx.stroke(N.frame);
+    }
     // 라벨 (화면 좌표)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.drawLabels(G, ctx);
@@ -371,6 +403,28 @@ export class MapRenderer {
     this.staticCam = { ...c };
     this.staticDirty = false;
     this.lastStaticMs = performance.now() - t0;
+  }
+
+  // 인셋 속: 바다 → 이웃 땅 → 본토(주인 색, 점령되면 빗금) → 호수 → 해안선
+  drawInset(G, ctx, N, px) {
+    const S = G.st[N.i];
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10 * this.dpr;
+    ctx.fillStyle = '#1b3a4b'; ctx.fill(N.frame);
+    ctx.restore();
+    ctx.save();
+    ctx.clip(N.frame);
+    ctx.fillStyle = '#3d3a32'; ctx.fill(N.around);
+    ctx.fillStyle = this.stateFill(G, N.i); ctx.fill(N.land);
+    if (this.mode === 'political' && S.ctrl !== S.owner) {
+      const pat = this.hatchPattern(G.countries[S.ctrl]?.color || '#777');
+      pat.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
+      ctx.fillStyle = pat; ctx.fill(N.land);
+    }
+    ctx.fillStyle = '#1a3646'; ctx.fill(N.lakes);
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(15,20,25,0.65)'; ctx.lineWidth = 0.9 * px; ctx.stroke(N.land); ctx.stroke(N.around); ctx.stroke(N.lakes);
+    ctx.restore();
   }
 
   arcStroke(path, a, lod) {
@@ -416,6 +470,20 @@ export class MapRenderer {
           xx += widths[k] + spacing;
         }
         ctx.restore();
+      }
+    }
+    // 인셋: 틀 위에 주 이름, 아래에 설명
+    for (const N of this.inset.values()) {
+      const [x0, y0] = this.toScreen(N.box[0], N.box[1]), [x1, y1] = this.toScreen(N.box[2], N.box[3]);
+      if (x1 < -40 || x0 > this.w + 40 || y1 < -40 || y0 > this.h + 40) continue;
+      const fs = Math.max(10, Math.min(17, (x1 - x0) * 0.085)), cx = (x0 + x1) / 2;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      ctx.font = `700 ${fs.toFixed(1)}px ${serif}`;
+      ctx.strokeStyle = 'rgba(10,10,10,0.6)'; ctx.lineWidth = Math.max(2.5, fs * 0.2); ctx.strokeText(map.name[N.i], cx, y0 - fs * 0.85);
+      ctx.fillStyle = 'rgba(245,238,220,0.95)'; ctx.fillText(map.name[N.i], cx, y0 - fs * 0.85);
+      if (x1 - x0 > 90 && N.sub) {
+        ctx.font = `italic ${Math.max(9, fs * 0.72).toFixed(1)}px ${serif}`;
+        ctx.fillStyle = 'rgba(190,212,226,0.7)'; ctx.fillText(N.sub, cx, y1 + fs * 0.8);
       }
     }
     // 주 이름 · 도시
@@ -481,10 +549,10 @@ export class MapRenderer {
       ctx.save();
       ctx.setTransform(this.dpr * c.s, 0, 0, this.dpr * c.s, this.dpr * (this.w / 2 - c.x * c.s), this.dpr * (this.h / 2 - c.y * c.s));
       ctx.fillStyle = this.highlight.color || 'rgba(255,220,120,0.18)';
-      for (const i of this.highlight.states) if (i < map.nGeo) ctx.fill(this.statePath(i, 1), 'evenodd');
+      for (const i of this.highlight.states) ctx.fill(this.statePath(i, 1), 'evenodd');
       ctx.restore();
     }
-    if (sel.state >= 0 && sel.state < map.nGeo) {
+    if (sel.state >= 0) {
       ctx.save();
       ctx.setTransform(this.dpr * c.s, 0, 0, this.dpr * c.s, this.dpr * (this.w / 2 - c.x * c.s), this.dpr * (this.h / 2 - c.y * c.s));
       const p = this.statePath(sel.state, c.s * this.dpr < 0.5 ? 1 : 0);
@@ -526,7 +594,7 @@ export class MapRenderer {
       const B = G.battles[k];
       const t = +k;
       const from = B.dirs?.[0] ?? t;
-      const [x1, y1] = this.toScreen(map.lx[from], map.ly[from]); const [x2, y2] = this.toScreen(map.lx[t], map.ly[t]);
+      const [x1, y1] = this.toScreen(this.lx[from], this.ly[from]); const [x2, y2] = this.toScreen(this.lx[t], this.ly[t]);
       let x = (x1 + x2) / 2, y = (y1 + y2) / 2;
       if (x < -30 || y < -30 || x > this.w + 30 || y > this.h + 30) continue;
       const playerSide = B.atkTag === player || allied(G, player, B.atkTag) ? 'atk' : (B.defTag === player || allied(G, player, B.defTag)) ? 'def' : null;
@@ -549,8 +617,7 @@ export class MapRenderer {
   }
 
   drawArrowPath(ctx, from, path, color, width, dashed, prog) {
-    const map = this.map;
-    const pts = [from, ...path].map((i) => this.toScreen(map.lx[i], map.ly[i]));
+    const pts = [from, ...path].map((i) => this.toScreen(this.lx[i], this.ly[i]));
     if (pts.length < 2) return;
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -584,10 +651,10 @@ export class MapRenderer {
     for (const id in G.divs) {
       const D = G.divs[id];
       if (D.sea) continue;
-      let x = this.map.lx[D.loc], y = this.map.ly[D.loc];
+      let x = this.lx[D.loc], y = this.ly[D.loc];
       let key = D.loc + ':' + D.tag;
       if (D.path.length && D.att < 0 && D.prog > 0) {
-        const nx = this.map.lx[D.path[0]], ny = this.map.ly[D.path[0]];
+        const nx = this.lx[D.path[0]], ny = this.ly[D.path[0]];
         const L = Math.max(1, this.map.dist(D.loc, D.path[0]) * 1.2);
         const t = Math.min(0.85, D.prog / L);
         x += (nx - x) * t; y += (ny - y) * t;
@@ -700,7 +767,7 @@ export class MapRenderer {
     for (const id in G.divs) {
       const D = G.divs[id]; if (!D.sea || D.tag !== player) continue;
       const t = Math.min(1, Math.max(0, 1 - (D.sea.eta - G.hour) / 72));
-      const [x1, y1] = this.toScreen(map.lx[D.loc], map.ly[D.loc]), [x2, y2] = this.toScreen(map.lx[D.sea.to], map.ly[D.sea.to]);
+      const [x1, y1] = this.toScreen(this.lx[D.loc], this.ly[D.loc]), [x2, y2] = this.toScreen(this.lx[D.sea.to], this.ly[D.sea.to]);
       const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t;
       ctx.fillStyle = 'rgba(255,230,150,0.9)'; ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill();
     }
@@ -713,6 +780,6 @@ export class MapRenderer {
   fleetAt(sx, sy) { for (const f of this._fleetHits || []) if (Math.abs(sx - f.x) < 18 && Math.abs(sy - f.y) < 12) return f; return null; }
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+function roundRect(ctx, x, y, w, h, r) { // ctx 또는 Path2D
+  ctx.beginPath?.(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
 }

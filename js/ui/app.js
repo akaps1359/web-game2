@@ -68,7 +68,8 @@ export class App {
     setupArmies(this.G, tag);
     this.afterLoad();
     const C = this.G.countries[tag];
-    if (C.capital >= 0 && !this.map.virtual[C.capital]) this.r.focusState(C.capital, 0.16);
+    // 지도 밖 수도(미국 본토)는 서쪽 끝 인셋이라 유럽까지 함께 보이게 멀리서 본다
+    if (C.capital >= 0) this.r.focusState(C.capital, this.map.virtual[C.capital] ? 0.07 : 0.16);
     else this.r.focusOn(-2500, -6500, 0.07);
     this.setSpeed(0);
     this.toast(`${C.full} — ${C.leader} ${C.title}`, 'peace');
@@ -105,7 +106,7 @@ export class App {
     const data = getItem(SAVE_PREFIX + slot);
     if (!data) return false;
     this.coach?.stop();
-    try { this.G = deserialize(data, this.map); setPlayer(this.G, this.G.player); this.afterLoad(); const C = this.G.countries[this.G.player]; if (C.capital >= 0 && !this.map.virtual[C.capital]) this.r.focusState(C.capital, 0.14); this.setSpeed(0); return true; }
+    try { this.G = deserialize(data, this.map); setPlayer(this.G, this.G.player); this.afterLoad(); const C = this.G.countries[this.G.player]; if (C.capital >= 0) this.r.focusState(C.capital, this.map.virtual[C.capital] ? 0.07 : 0.14); this.setSpeed(0); return true; }
     catch (e) { console.error(e); this.toast('불러오기 실패', 'war'); return false; }
   }
   saveMeta(slot) { try { return JSON.parse(getItem(SAVE_PREFIX + slot + '.meta') || 'null'); } catch { return null; } }
@@ -135,7 +136,7 @@ export class App {
         if (!Object.values(G.armies).some((A) => A.tag === G.player)) setupArmies(G, G.player);
         this.afterLoad();
         const C = G.countries[G.player];
-        if (C.capital >= 0 && !this.map.virtual[C.capital]) this.r.focusState(C.capital, Math.max(0.12, this.r.cam.s));
+        if (C.capital >= 0) this.r.focusState(C.capital, Math.max(0.12, this.r.cam.s));
         this.toast(`이제 ${C.full || C.name}을(를) 이끕니다`, 'peace');
       }
       if (G?.mapDirty) { G.mapDirty = false; this.r.labels = null; this.mapStale = true; }
@@ -282,7 +283,7 @@ export class App {
       side.appendChild(menu);
     });
     const home = h('button', { class: 'side-btn', html: icon('locate') });
-    onTap(home, () => { const C = this.G.countries[this.G.player]; if (C.capital >= 0 && !this.map.virtual[C.capital]) this.r.focusState(C.capital, Math.max(0.14, this.r.cam.s)); this.dirty = true; });
+    onTap(home, () => { const C = this.G.countries[this.G.player]; if (C.capital >= 0) this.r.focusState(C.capital, Math.max(0.14, this.r.cam.s)); this.dirty = true; });
     const newsBtn = h('button', { class: 'side-btn', html: icon('news') });
     onTap(newsBtn, () => this.openPanel('news'));
     side.append(btn, home, newsBtn);
