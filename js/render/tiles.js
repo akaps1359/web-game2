@@ -290,17 +290,16 @@ export function glowSprite(r, g, b, size = 64) {
 // 테마 한 벌을 만든다: 도트 배율 RS의 3배로 크게 그려 줄인다(가장자리가 딱 끊기고 색이 줄어든다)
 const SS = 3;
 export function buildTileset(theme, RS) {
-  const T = { theme, RS, floors: [null], walls: [null], wallsDim: [null], short: [null], shortDim: [null], floorsDim: [null], lava: [] };
+  const T = { theme, RS, floors: [null], walls: [null], wallsDim: [null], floorsDim: [null], lava: [] };
   const R = RS * SS, fin = (c) => shrink(c, SS);
   if (theme === 'town') {
     for (let k = 1; k <= 6; k++) { const f = fin(makeTownFloor(k, R, 0)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.5)); }
-    for (let v = 1; v <= 2; v++) { const w = fin(makeWall('crypt', v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w)); const s = fin(makeWall('crypt', v, R, 14)); T.short.push(s); T.shortDim.push(dimmed(s)); }
+    for (let v = 1; v <= 2; v++) { const w = fin(makeWall('crypt', v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w)); }
     return T;
   }
   for (let v = 1; v <= 6; v++) { const f = fin(makeFloor(theme, v, R)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.55)); }
   for (let v = 1; v <= 4; v++) {
     const w = fin(makeWall(theme, v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w));
-    const s = fin(makeWall(theme, v, R, 14)); T.short.push(s); T.shortDim.push(dimmed(s));
   }
   for (let v = 0; v < 3; v++) T.lava.push(fin(makeLava(R, v)));
   return T;

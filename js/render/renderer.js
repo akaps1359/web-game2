@@ -10,6 +10,8 @@ import { ART, SpriteAtlas, SpritePass, pixEllipse, pixText } from './pixel.js';
 import { FX } from './fx.js';
 
 // 빛: 계단진 동심원 [시작, 끝, 세기]
+// 플레이어를 가리는 앞쪽 벽의 불투명도(디아블로 2처럼 반투명)
+const SEE_THRU = 0.34;
 const LIGHT_BANDS = [[0, 0.3, 1], [0.3, 0.45, 0.86], [0.45, 0.56, 0.74], [0.56, 0.66, 0.6], [0.66, 0.75, 0.46], [0.75, 0.83, 0.33], [0.83, 0.9, 0.21], [0.9, 0.96, 0.11], [0.96, 1, 0.03]];
 
 export class Renderer {
@@ -96,7 +98,7 @@ export class Renderer {
     x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(L.w - 1, x1); y1 = Math.min(L.h - 1, y1);
     const fw = TW * s, fh = TH * s, wh = (WALL_H + TH) * s;
     // 벽 그림의 위쪽 끝(타일 중심에서). 그림은 제 크기 그대로 정수 도트 자리에
-    const wTop = Math.round((WALL_H + TH / 2) * s), sTop = Math.round((14 + TH / 2) * s);
+    const wTop = Math.round((WALL_H + TH / 2) * s);
     const camIX = isoX(this.cam.x, this.cam.y), camIY = isoY(this.cam.x, this.cam.y);
     const [shx, shy] = this.fx.shakeOffset();
     // 카메라를 도트 단위로 맞춰 타일 무늬가 움직일 때 일렁이지 않게
@@ -146,7 +148,7 @@ export class Renderer {
 
     // 2) 깊이순으로 세워진 것들
     this.list.length = 0;
-    const pd = P ? P.x + P.y : 0, pxy = P ? P.x - P.y : 0;
+    const pd = P ? P.x + P.y : 0;
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const k = y * W + x;
       if (!wall[k]) continue;
@@ -184,6 +186,21 @@ export class Renderer {
     for (const e of this.list) if (e.k === 3) e.b = this.pixPrep(e.a, s, t);
     this.atlas.render();
     mark('collect');
+    // 플레이어를 실제로 가리는 앞쪽 벽·문·횃불만 반투명하게(디아블로 2처럼). 칸마다 투명도를 서서히 바꿔
+    // 걸을 때 벽이 덜컥 사라졌다 생기지 않는다
+    if (this.fadeL !== L) { this.fadeL = L; this.fadeA = new Float32Array(L.w * L.h).fill(1); }
+    const FA = this.fadeA, fk = Math.min(1, dt * 7);
+    let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
+    if (P?.look && !P.dead) {
+      const ppx = ox + (P.x - P.y) * (TW / 2) * s, ppy = oy + (P.x + P.y) * (TH / 2) * s, fb = figBox(P.look, s * (P.look.scale || 1));
+      bx0 = ppx - TW * s * 0.36; bx1 = ppx + TW * s * 0.36; by0 = ppy - fb.up * 0.75; by1 = ppy - 6 * s;
+    }
+    const see = (k, d, px, py) => {
+      const want = d > pd + 0.4 && px + fw / 2 > bx0 && px - fw / 2 < bx1 && py - wTop < by1 && py + fh / 2 > by0 ? SEE_THRU : 1;
+      let a = FA[k] + (want - FA[k]) * fk;
+      if (Math.abs(want - a) < 0.02) a = want;
+      return (FA[k] = a);
+    };
     for (const e of this.list) {
       switch (e.k) {
         case 1: {
@@ -191,27 +208,17 @@ export class Renderer {
           const px = ox + (x - y) * (TW / 2) * s, py = oy + (x + y) * (TH / 2) * s;
           if (px < -fw || px > cw + fw || py < -fh || py > ch + wh + fh) break;
           const vis = town || flags[k] & F_VIS;
-          // 플레이어 앞을 가리는 벽은 낮게 잘라 보여 준다
-          let cut = false;
-          if (P) {
-            const dd = x + y - pd, dx = Math.abs(x - y - pxy);
-            cut = dd > 0.5 && dd < 6.5 && dx < 2.6 + dd * 0.15;
-          }
-          const wi = vis ? T.walls[wall[k]] : T.wallsDim[wall[k]];
-          if (cut) {
-            g.drawImage(vis ? T.short[wall[k]] : T.shortDim[wall[k]], px - fw / 2, py - sTop);
-            g.globalAlpha = 0.16;
-            g.drawImage(wi, px - fw / 2, py - wTop);
-            g.globalAlpha = 1;
-          } else g.drawImage(wi, px - fw / 2, py - wTop);
+          g.globalAlpha = see(k, x + y, px, py);
+          g.drawImage(vis ? T.walls[wall[k]] : T.wallsDim[wall[k]], px - fw / 2, py - wTop);
+          g.globalAlpha = 1;
           break;
         }
         case 2: {
           const o = e.a, px = ox + (o.x - o.y) * (TW / 2) * s, py = oy + (o.x + o.y) * (TH / 2) * s;
           const vis = town || flags[o.y * W + o.x] & F_VIS;
-          let cut = false;
-          if (P && o.type === 'door') { const dd = o.x + o.y - pd, dx = Math.abs(o.x - o.y - pxy); cut = dd > 0.5 && dd < 6.5 && dx < 2.6 + dd * 0.15; }
-          drawObject(g, o, px, py, s, t, vis, cut, L);
+          g.globalAlpha = o.type === 'door' ? see(o.y * W + o.x, o.x + o.y, px, py) : 1;
+          drawObject(g, o, px, py, s, t, vis, L);
+          g.globalAlpha = 1;
           break;
         }
         case 3: {
@@ -228,9 +235,10 @@ export class Renderer {
         case 5: {
           const lt = e.a, px = ox + (lt.tx - lt.ty) * (TW / 2) * s, py = oy + (lt.tx + lt.ty) * (TH / 2) * s;
           const vis = town || flags[lt.ty * W + lt.tx] & F_VIS;
-          let cut = false;
-          if (P) { const dd = lt.tx + lt.ty - pd, dx = Math.abs(lt.tx - lt.ty - pxy); cut = dd > 0.5 && dd < 6.5 && dx < 2.6 + dd * 0.15; }
-          if (!cut) drawTorch(g, lt, px, py, s, t, vis);
+          const k = lt.ty * W + lt.tx;
+          g.globalAlpha = wall[k] ? FA[k] : see(k, lt.tx + lt.ty, px, py);
+          drawTorch(g, lt, px, py, s, t, vis);
+          g.globalAlpha = 1;
           break;
         }
         case 6: this.fx.drawEntry(g, e, ox, oy, s); break;

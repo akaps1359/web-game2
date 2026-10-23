@@ -78,10 +78,10 @@ export function drawTorch(g, lt, px, py, s, t, vis) {
   if (vis) flame(g, x, y, s, t, 0.9, lt.flick);
 }
 
-export function drawObject(g, o, px, py, s, t, vis, cut, L) {
+export function drawObject(g, o, px, py, s, t, vis, L) {
   const dim = vis ? 1 : 0.45;
   switch (o.type) {
-    case 'door': return drawDoor(g, o, px, py, s, dim, cut, L);
+    case 'door': return drawDoor(g, o, px, py, s, dim, L);
     case 'stairs_down': return drawStairs(g, o, px, py, s, dim, true, L);
     case 'stairs_up': return drawStairs(g, o, px, py, s, dim, false, L);
     case 'barrel': {
@@ -272,7 +272,7 @@ export function drawObject(g, o, px, py, s, t, vis, cut, L) {
   }
 }
 
-function drawDoor(g, o, px, py, s, dim, cut, L) {
+function drawDoor(g, o, px, py, s, dim, L) {
   const H = 48;
   const wood = shade('#6a4628', dim), dark = shade('#3e2814', dim);
   // ori 'y': 벽이 y축으로 이어짐 → 문짝은 x = 0 평면(오른쪽 면이 보인다)
@@ -280,17 +280,17 @@ function drawDoor(g, o, px, py, s, dim, cut, L) {
   const quad = (p) => p.flat();
   if (!o.open) {
     if (o.ori === 'y') {
-      const pts = quad([Pp(0.1, -0.5, 0), Pp(0.1, 0.5, 0), Pp(0.1, 0.5, cut ? 14 : H), Pp(0.1, -0.5, cut ? 14 : H)]);
+      const pts = quad([Pp(0.1, -0.5, 0), Pp(0.1, 0.5, 0), Pp(0.1, 0.5, H), Pp(0.1, -0.5, H)]);
       poly(g, pts, wood, OUTC, Math.max(1, s));
       g.strokeStyle = dark; g.lineWidth = 1.2 * s;
-      for (const b of [-0.25, 0, 0.25]) { g.beginPath(); g.moveTo(...Pp(0.1, b, 0)); g.lineTo(...Pp(0.1, b, cut ? 14 : H)); g.stroke(); }
-      if (!cut) { g.fillStyle = shade('#b09040', dim); const [x, y] = Pp(0.1, 0.32, 24); g.fillRect(x - 1.5 * s, y - 1.5 * s, 3 * s, 3 * s); }
+      for (const b of [-0.25, 0, 0.25]) { g.beginPath(); g.moveTo(...Pp(0.1, b, 0)); g.lineTo(...Pp(0.1, b, H)); g.stroke(); }
+      g.fillStyle = shade('#b09040', dim); const [x, y] = Pp(0.1, 0.32, 24); g.fillRect(x - 1.5 * s, y - 1.5 * s, 3 * s, 3 * s);
     } else {
-      const pts = quad([Pp(-0.5, 0.1, 0), Pp(0.5, 0.1, 0), Pp(0.5, 0.1, cut ? 14 : H), Pp(-0.5, 0.1, cut ? 14 : H)]);
+      const pts = quad([Pp(-0.5, 0.1, 0), Pp(0.5, 0.1, 0), Pp(0.5, 0.1, H), Pp(-0.5, 0.1, H)]);
       poly(g, pts, shade('#7a5230', dim), OUTC, Math.max(1, s));
       g.strokeStyle = dark; g.lineWidth = 1.2 * s;
-      for (const a of [-0.25, 0, 0.25]) { g.beginPath(); g.moveTo(...Pp(a, 0.1, 0)); g.lineTo(...Pp(a, 0.1, cut ? 14 : H)); g.stroke(); }
-      if (!cut) { g.fillStyle = shade('#b09040', dim); const [x, y] = Pp(0.32, 0.1, 24); g.fillRect(x - 1.5 * s, y - 1.5 * s, 3 * s, 3 * s); }
+      for (const a of [-0.25, 0, 0.25]) { g.beginPath(); g.moveTo(...Pp(a, 0.1, 0)); g.lineTo(...Pp(a, 0.1, H)); g.stroke(); }
+      g.fillStyle = shade('#b09040', dim); const [x, y] = Pp(0.32, 0.1, 24); g.fillRect(x - 1.5 * s, y - 1.5 * s, 3 * s, 3 * s);
     }
   } else {
     // 열린 문: 벽 쪽으로 젖혀진 문짝
@@ -298,11 +298,9 @@ function drawDoor(g, o, px, py, s, dim, cut, L) {
     else poly(g, quad([Pp(-0.5, 0, 0), Pp(-0.5, 0.85, 0), Pp(-0.5, 0.85, H), Pp(-0.5, 0, H)]), shade('#5a3a20', dim), OUTC, Math.max(1, s));
   }
   // 문 위의 상인방(벽이 이어지게)
-  if (!cut) {
-    const th = L?.theme;
-    const wc = th === 'catacombs' ? '#5e4234' : th === 'hell' ? '#3e1c1e' : th === 'caves' ? '#4e3c2c' : '#6a5c4c';
-    isoBox(g, px, py, s, 0, 0, 0.5, 0.5, H, WALL_H - H, shade(wc, dim));
-  }
+  const th = L?.theme;
+  const wc = th === 'catacombs' ? '#5e4234' : th === 'hell' ? '#3e1c1e' : th === 'caves' ? '#4e3c2c' : '#6a5c4c';
+  isoBox(g, px, py, s, 0, 0, 0.5, 0.5, H, WALL_H - H, shade(wc, dim));
 }
 
 function drawStairs(g, o, px, py, s, dim, down, L) {
