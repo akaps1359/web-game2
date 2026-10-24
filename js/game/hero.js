@@ -21,6 +21,7 @@ export function newHeroData(cls, name, hardcore = false) {
     hp: null, mp: null, quests: {}, wps: [0], maxDepth: 0, deaths: 0, kills: 0,
     bestiary: {}, bestiarySeen: 0, bestiaryV: 1, // 생물도감: 종류마다 처치 수, 도감 창에서 마지막으로 본 등록 수
     found: [], // 이미 나온 고유 아이템(디아블로 1처럼 같은 고유품은 한 번만)
+    qgot: {}, // 주운 퀘스트 보상(잃어버린 보상만 다시 놓는다)
     town: { seen: {} },
   };
   // 시작 장비
@@ -49,6 +50,11 @@ export class Hero {
     this.st = {};
     for (const k of ['inv', 'belt']) if (!data[k]) data[k] = k === 'belt' ? new Array(16).fill(null) : [];
     backfillBestiary(data);
+    // 이 기록이 생기기 전의 저장: 이미 끝낸 퀘스트의 보상은 받은 것으로 친다(보관함에 넣거나 판 보상이 다시 놓여 늘어나지 않게)
+    if (!data.qgot) {
+      data.qgot = {};
+      for (const [q, u] of [['butcher', 'q_cleaver'], ['hollow_king', 'q_deadcrown'], ['blind', 'q_seer']]) { const s = data.quests?.[q]?.st; if (s === 'done' || s === 'reported') data.qgot[u] = true; }
+    }
     this.recalc();
   }
   bind(a) {
@@ -65,18 +71,43 @@ export class Hero {
   recalc() {
     const d = this.data, C = this.C, st = {};
     const items = EQUIP_SLOTS.map((s) => d.equip[s]).filter(Boolean);
-    // 내구도 0인 장비는 효과가 없다(디아블로 1)
-    const live = items.filter((it) => !it.durMax || it.dur > 0 || it.indestr);
-    const M = {};
-    const add = (k, v) => { if (Array.isArray(v)) { const o = M[k] || [0, 0]; M[k] = [o[0] + v[0], o[1] + v[1]]; } else M[k] = (M[k] || 0) + v; };
-    for (const it of live) { const m = itemMods(it); for (const k in m) add(k, m[k]); }
-    // 패시브 기술·버프, 생물도감 보너스
-    const pm = passiveMods(this);
-    for (const k in pm) add(k, pm[k]);
-    const bm = bestiaryMods(d);
-    for (const k in bm) add(k, bm[k]);
-    const bf = this.actor?.buffs || {};
-    for (const k in bf) if (bf[k].mods) for (const m in bf[k].mods) add(m, bf[k].mods[m]);
+    // 내구도 0인 장비, 힘·민첩·마력이 모자란 장비는 효과가 없다(디아블로 1). 다른 장비·도감·버프가 올려 주는 능력치로 채워도 되므로
+    // 모자란 것을 빼고 다시 재기를 더 빠지는 것이 없을 때까지 한다(빼면 능력치가 줄 뿐이라 금방 멈춘다)
+    const bm = bestiaryMods(d), bf = this.actor?.buffs || {};
+    const acc = (O, k, v) => { if (Array.isArray(v)) { const o = O[k] || [0, 0]; O[k] = [o[0] + v[0], o[1] + v[1]]; } else O[k] = (O[k] || 0) + v; };
+    const bfm = {};
+    for (const k in bf) if (bf[k].mods) for (const m in bf[k].mods) acc(bfm, m, bf[k].mods[m]);
+    const calc = (set) => {
+      const M = {};
+      for (const it of set) { const m = itemMods(it); for (const k in m) acc(M, k, m[k]); }
+      // 패시브 기술(장비·버프의 +기술을 이번 계산에서 바로 반영), 생물도감 보너스, 버프
+      const pm = passiveMods(this, (M.skills || 0) + (bfm.skills || 0));
+      for (const k in pm) acc(M, k, pm[k]);
+      for (const k in bm) acc(M, k, bm[k]);
+      for (const k in bfm) acc(M, k, bfm[k]);
+      const a = M.attrs || 0;
+      return { M, S: { str: d.base.str + (M.str || 0) + a, dex: d.base.dex + (M.dex || 0) + a, mag: d.base.mag + (M.mag || 0) + a } };
+    };
+    const usable = items.filter((it) => !it.durMax || it.dur > 0 || it.indestr);
+    let live = usable, R;
+    for (let pass = 0; pass <= items.length; pass++) {
+      R = calc(live);
+      const ok = live.filter((it) => meetsReq(it, R.S));
+      if (ok.length === live.length) break;
+      live = ok;
+    }
+    // 다른 장비 때문에 함께 빠진 것은 하나씩 다시 넣어 본다(제 능력치까지 셈해 모두 요구치를 채우면 되살린다: 저주받은 투구 하나 때문에 무기까지 꺼지지 않게)
+    for (let again = true, n = 0; again && n <= items.length; n++) {
+      again = false;
+      for (const it of usable) {
+        if (live.includes(it)) continue;
+        const set = [...live, it], T = calc(set);
+        if (set.every((x) => meetsReq(x, T.S))) { live = set; R = T; again = true; }
+      }
+    }
+    // 낀 채 효과가 없는 장비(창의 빨간 칸·설명창 경고가 이것을 본다)
+    this.off = new Set(usable.filter((it) => !live.includes(it)));
+    const M = R.M;
     this.mods = M;
     const attrs = M.attrs || 0;
     const itemStr = (M.str || 0) + attrs, itemDex = (M.dex || 0) + attrs, itemMag = (M.mag || 0) + attrs, itemVit = (M.vit || 0) + attrs;
@@ -112,7 +143,8 @@ export class Hero {
     st.tohitSheet = Math.floor(50 + st.dex / 2 + st.tohitItems);
     // 방어도
     let ac = Math.floor(st.dex / 5);
-    for (const it of live) ac += itemAC(it);
+    // 방어도가 없는 장비(무기 등)의 방어도 ± 접사도 더한다(뒤틀린 뿌리의 방어도 −10 등)
+    for (const it of live) ac += it.ac != null ? itemAC(it) : itemMods(it).acFlat || 0;
     ac += M.defFlat || 0;
     if (M.defPct) ac = Math.floor(ac * (1 + M.defPct / 100));
     st.ac = Math.max(0, ac);
@@ -207,7 +239,7 @@ export class Hero {
     if (ups) {
       this.recalc();
       const a = this.actor;
-      if (a) { a.hp = a.hpMax; a.mp = a.mpMax; }
+      if (a && !a.dead) { a.hp = a.hpMax; a.mp = a.mpMax; }
     }
     return ups;
   }
@@ -334,9 +366,12 @@ export class Hero {
       o.x = o._nx; o.y = o._ny; delete o._nx; delete o._ny;
       d.inv.push(o);
     }
+    const offBefore = this.off || new Set();
     d.equip[slot] = it;
     this.recalc();
-    return { ok: true, warn: c.soft ? c.why : null };
+    // 낀 것이 효과가 없거나, 그 때문에 다른 장비가 꺼지면 알린다
+    const warn = this.off.has(it) ? '능력치가 부족합니다' : [...this.off].some((x) => !offBefore.has(x)) ? '다른 장비의 능력치가 모자라게 됩니다' : null;
+    return { ok: true, warn };
   }
   unequip(slot) {
     const d = this.data, it = d.equip[slot];

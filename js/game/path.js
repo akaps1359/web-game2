@@ -80,9 +80,10 @@ export function findPath(L, sx, sy, tx, ty, opts = {}) {
 
 function isClosedDoor(L, x, y) { const o = L.obj(x, y); return !!(o && o.type === 'door' && !o.open && !o.locked); }
 
-// 거리 지도: 목표(플레이어)에서 반경 안의 모든 칸까지 걸음 수(다익스트라 근사, 8방향)
+// 거리 지도: 목표(플레이어)에서 반경 안의 모든 칸까지 걸음 수(다익스트라 근사, 8방향).
+// doors: 닫힌 문을 (조금 비싸게) 지나갈 수 있는 칸으로 칠지 — 문을 여는 괴물용과 못 여는 괴물용을 따로 만든다
 export class DistMap {
-  constructor() { this.d = null; this.W = 0; this.cx = -1; this.cy = -1; this.L = null; }
+  constructor(doors = true) { this.d = null; this.W = 0; this.cx = -1; this.cy = -1; this.L = null; this.doors = doors; }
   build(L, tx, ty, radius = 26) {
     const W = L.w, N = W * L.h;
     if (!this.d || this.d.length !== N) { this.d = new Float32Array(N); }
@@ -98,7 +99,7 @@ export class DistMap {
       const cx = cur % W, cy = (cur / W) | 0;
       for (let i = 0; i < 8; i++) {
         const nx = cx + DIRS[i][0], ny = cy + DIRS[i][1];
-        const door = !L.passable(nx, ny) && isClosedDoor(L, nx, ny);
+        const door = this.doors && !L.passable(nx, ny) && isClosedDoor(L, nx, ny);
         if (!L.passable(nx, ny) && !door) continue;
         if (i & 1) { if (door || !L.passable(nx, cy) || !L.passable(cx, ny)) continue; }
         const nk = ny * W + nx, nd = dc + (i & 1 ? 1.4142 : 1) + (door ? 3 : 0);

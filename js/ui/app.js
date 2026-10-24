@@ -12,7 +12,7 @@ import { TouchInput } from './input.js';
 import { levelName, themeOf } from '../game/world.js';
 import { LORE } from '../game/quests.js';
 import { itemName } from '../game/items.js';
-import { $, el } from './dom.js';
+import { $, el, btn } from './dom.js';
 
 const STEP = 1 / 60;
 
@@ -40,7 +40,7 @@ export class App {
     if (window.ResizeObserver) new window.ResizeObserver(() => this.checkSize()).observe(this.cv);
     for (const ev of ['orientationchange', 'pageshow', 'focus']) window.addEventListener(ev, () => this.settle());
     // 앱을 오가면 손 뗌 알림을 못 받아 조이스틱·단추가 눌린 채로 남을 수 있다: 숨을 때·돌아올 때 터치 상태를 지운다
-    document.addEventListener('visibilitychange', () => { this.resetTouches(); if (document.hidden) this.saveNow(); else this.settle(); });
+    document.addEventListener('visibilitychange', () => { this.resetTouches(); if (document.hidden) this.saveNow(); else { this.renderer.dirty = true; if (this.hud?.lifeOrb) this.hud.lifeOrb.dirty = this.hud.manaOrb.dirty = true; this.settle(); } });
     window.addEventListener('pagehide', () => { this.resetTouches(); this.saveNow(); });
     window.addEventListener('blur', () => this.resetTouches());
     // 손가락이 하나도 없을 때의 첫 터치(isPrimary)라면 앞서 끝나지 않은 터치는 모두 지난 것이다
@@ -51,7 +51,9 @@ export class App {
   settle() { for (const ms of [0, 150, 400, 900, 1800]) setTimeout(() => this.checkSize(), ms); }
   // 그림판의 실제 크기(CSS)·배율과 그려 둔 크기가 다르면 다시 맞춘다
   checkSize() {
-    const c = this.cv, r = this.renderer, w = c.clientWidth, h = c.clientHeight;
+    // 렌더러와 같은 방법(소수점까지)으로 잰다: 정수로 반올림한 clientWidth와 비교하면 크기가 소수점일 때(사파리 글자 확대 등)
+    // 늘 다르다고 보고 HUD를 0.5초마다 다시 만들었다
+    const c = this.cv, r = this.renderer, rc = c.getBoundingClientRect(), w = rc.width, h = rc.height;
     if (!w || !h) return;
     if (Math.abs(w - r.W) > 0.5 || Math.abs(h - r.H) > 0.5 || c.width !== Math.round(w * r.dpr) || c.height !== Math.round(h * r.dpr) || this.dprSeen !== window.devicePixelRatio) {
       this.dprSeen = window.devicePixelRatio;
@@ -84,9 +86,11 @@ export class App {
     this.audio?.applySettings?.();
     const g = this.game;
     if (g) { g.showLabels = this.settings.labels; g.showBars = this.settings.bars; g.showDmg = this.settings.dmg; g.autoGold = this.settings.autoGold; }
-    this.renderer.setQuality(this.settings.hiq);
+    // 고화질이 바뀔 때만 그림판을 다시 만든다(음량 밀대를 끌 때마다 다시 만들며 느린 기기의 낮춘 해상도를 되돌리던 것)
+    if (this.hiqApplied !== this.settings.hiq) { this.hiqApplied = this.settings.hiq; this.renderer.setQuality(this.settings.hiq); }
   }
-  onResize() { initPixelUI(); this.renderer.resize(); this.hud.layout?.(); this.panels.refresh(); }
+  // 크기가 바뀌면 창을 다시 그리는데 설명창은 사라지므로 고른 아이템도 놓는다(다음 탭이 선택 해제가 되지 않게)
+  onResize() { initPixelUI(); this.renderer.resize(); this.hud.layout?.(); this.panels.sel = null; this.panels.refresh(); }
 
   // ───────── 게임 시작 ─────────
   newGame(cls, name, hc) {
@@ -101,6 +105,9 @@ export class App {
   }
   startGame(data, isNew) {
     const app = this;
+    // 앞 캐릭터의 창 상태(다른 직업 기술 고름 등)를 비운다
+    this.panels.selSkill = null; this.panels.tab = 0; this.panels.selBeast = null;
+    this.stillDrawn = false; // 이야기 창이 바로 떠 멈춰 있어도 새 게임의 첫 장면은 그린다(앞 캐릭터의 마지막 장면이 남지 않게)
     const g = new Game({
       fx: this.renderer.fx,
       sfx: (n, x, y, o) => this.sfx(n, x, y, o),
@@ -138,6 +145,8 @@ export class App {
     this.hud.build();
     this.running = true;
     if (isNew) this.dialog.story(LORE.intro, '공허의 왕관');
+    // 벨가스를 쓰러뜨리고 엔딩이 뜨기 전에 나갔으면 지금 보여 준다
+    else if (data.wonPending && !data.won) setTimeout(() => this.onVictory(), 600);
   }
 
   sfx(name, x, y, opts) {
@@ -173,7 +182,7 @@ export class App {
     this.audio?.setAmbience(theme === 'town' ? 'town' : theme);
     this.banner(levelName(d), d === 0 ? '잿빛 성당의 그늘' : d === 16 ? '모든 것의 끝' : `지하 ${d}층`);
     this.hud.onLevel();
-    this.renderer.tileset(theme);
+    this.renderer.tileset(theme, true); // 화면이 어두운 사이에 정확한 배율로(늘린 타일이 보였다가 바뀌지 않게)
     this.renderer.cam.x = this.game.player.x; this.renderer.cam.y = this.game.player.y;
   }
   travel(d, how, at) {
@@ -204,28 +213,29 @@ export class App {
     this.saveNow();
   }
   onDeath() {
-    const g = this.game, h = g.hero;
+    // 1.5초 사이에 제목 화면으로 나갔거나 다른 게임이 시작됐으면 아무것도 하지 않는다
+    const g = this.game, h = g?.hero;
+    if (!g || !g.player?.dead) return;
     this.audio?.sting?.('death');
     if (h.data.hc) { h.data.deadHC = true; this.saveNow(); }
     const box = el('div', 'death');
     box.appendChild(el('h1', '', '당신은 죽었습니다'));
     if (h.data.hc) {
       box.appendChild(el('p', '', '하드코어 캐릭터는 되살아날 수 없습니다.\n이 영웅의 이야기는 여기서 끝납니다.'));
-      const b = el('button', 't-btn', '제목 화면으로');
-      b.onclick = () => { box.remove(); this.quitToTitle(false); };
+      const b = btn('t-btn', '제목 화면으로', () => { box.remove(); this.quitToTitle(false); });
       box.appendChild(b);
     } else {
       box.appendChild(el('p', '', `마을에서 다시 깨어납니다.\n갖고 있던 골드 일부(최대 ${Math.min(20, h.data.lvl)}%)를 잃고, 장비가 조금 닳습니다.`));
-      const b = el('button', 't-btn', '마을에서 되살아나기');
-      b.onclick = () => { box.remove(); const lost = g.respawn(); if (lost) this.toast(`${lost} 골드를 잃었습니다`, 'warn'); this.saveNow(); };
+      const b = btn('t-btn', '마을에서 되살아나기', () => { box.remove(); const lost = g.respawn(); if (lost) this.toast(`${lost} 골드를 잃었습니다`, 'warn'); this.saveNow(); });
       box.appendChild(b);
     }
     $('#app').appendChild(box);
   }
   onVictory() {
     const g = this.game;
+    if (!g || g.hero.data.won) return;
     this.audio?.sting?.('victory');
-    g.hero.data.won = true;
+    g.hero.data.won = true; delete g.hero.data.wonPending;
     this.saveNow();
     this.dialog.story(LORE.victory, '끝', () => this.toast('축하합니다! 계속해서 던전을 탐험할 수 있습니다.', 'big'));
   }
@@ -248,6 +258,8 @@ export class App {
     this.title.show();
     this.audio?.setMusic('title');
     this.audio?.setAmbience(null);
+    // 남은 반복음(회오리·눈보라 등)도 끈다
+    for (const l of [...(this.audio?.loops || [])]) l.stop?.(0.2);
   }
 
   // ───────── 프레임 ─────────
@@ -255,7 +267,7 @@ export class App {
     requestAnimationFrame((tt) => this.frame(tt));
     const dt = Math.min(0.1, (t - (this.last || t)) / 1000);
     this.last = t;
-    if (!this.running || !this.game) { this.title.frame?.(dt); return; }
+    if (!this.running || !this.game) { this.title.frame?.(dt); if (!document.hidden) this.renderer.warmTown(8); return; }
     const g = this.game;
     // 크기 알림을 놓쳤을 때를 위해 가끔 직접 잰다
     if ((this.sizeN = (this.sizeN || 0) + 1) % 30 === 0) this.checkSize();
@@ -269,13 +281,46 @@ export class App {
       while (this.acc >= STEP && n < 6) { g.update(STEP); this.renderer.fx.update(STEP, g); this.acc -= STEP; n++; }
       if (n >= 6) this.acc = 0;
     }
-    // 카메라: 플레이어를 부드럽게 따라간다
-    const P = g.player, cam = this.renderer.cam;
-    const k = 1 - Math.pow(0.0015, dt);
-    cam.x += (P.x - cam.x) * k; cam.y += (P.y - cam.y) * k;
-    this.renderer.draw(g, pause ? 0 : dt);
+    // 창·대화로 멈춰 있는 동안 세상은 그대로이니 다시 그리지 않는다(폰 부하·배터리). 멈춘 첫 장면과 크기가 바뀐 뒤에만 그린다
+    const still = pause && this.stillDrawn && !this.renderer.dirty;
+    this.stillDrawn = pause;
+    // 화면이 잔잔할 때(가만히 서 있고, 보이는 괴물·투사체·효과가 움직이지 않을 때)가 0.5초 넘게 이어지면 한 장면 걸러 그린다.
+    // 조이스틱·단추를 누르면 바로 다음 장면부터 매번 그린다
+    this.calmN = !pause && this.isCalm(g) ? (this.calmN || 0) + 1 : 0;
+    const skip = this.calmN > 30 && this.calmN % 2 === 1 && !this.renderer.dirty;
+    this.drawDt = (this.drawDt || 0) + (pause ? 0 : dt);
+    if (!still && !skip) {
+      // 카메라: 플레이어를 부드럽게 따라간다
+      const P = g.player, cam = this.renderer.cam;
+      const k = 1 - Math.pow(0.0015, this.drawDt || dt);
+      cam.x += (P.x - cam.x) * k; cam.y += (P.y - cam.y) * k;
+      this.renderer.draw(g, this.drawDt);
+      this.renderer.dirty = false;
+      this.drawDt = 0;
+    }
     this.hud.update(dt);
     this.adapt(dt);
+  }
+  // 잔잔한 화면인가(isCalm): 입력 없음, 플레이어가 서 있음, 카메라가 멈춤, 투사체·고리·글자 효과 없음, 가까운 괴물이 움직이지 않음
+  isCalm(g) {
+    const P = g.player, fx = this.renderer.fx, cam = this.renderer.cam;
+    if (g.stick || g.cmd || P.mv || P.moving || P.anim.name !== 'idle' || P.leap || P.whirl || this.hud.aim) return false;
+    if (Math.abs(cam.x - P.x) + Math.abs(cam.y - P.y) > 0.01) return false;
+    const L = g.level;
+    if (L.missiles.length || fx.rings.length || fx.flashes.length || fx.bolts.length || fx.texts.length || fx.ps.length > 40) return false;
+    const r = this.renderer;
+    for (const a of L.actors) {
+      if (a === P) continue;
+      // 먼 괴물은 화면 안에 보이는 것만(빛나거나 밝은 곳에 있는 것: 어둠 속에서 돌아다니는 것은 보이지 않는다)
+      if (Math.abs(a.x - P.x) + Math.abs(a.y - P.y) > 16) {
+        const s = r.toScreen(a.x, a.y);
+        if (s.x < -48 || s.x > r.W + 48 || s.y < -16 || s.y > r.H + 160) continue;
+        if (L.theme !== 'town' && !a.boss && !a.glowCol && !r.isLit?.(Math.round(a.x), Math.round(a.y))) continue;
+      }
+      if (a.dead) { if (a.anim.t < a.anim.dur) return false; continue; } // 쓰러지는 중
+      if (a.mv || a.moving || (a.anim.name !== 'idle' && a.anim.name !== 'stone')) return false;
+    }
+    return true;
   }
   // 느린 기기에서는 해상도를 자동으로 낮춘다
   adapt(dt) {

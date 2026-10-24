@@ -7,12 +7,12 @@ import { F_VIS, F_SOLID } from './level.js';
 import { buildLevel, LEVELS, levelName } from './world.js';
 import { Hero } from './hero.js';
 import { updateMonster } from './ai.js';
-import { updateMissiles, updateAreas, meleeAttack, rangedAttack, damageActor, MELEE_HIT, MELEE_ARC } from './combat.js';
-import { castSkill, skillDef, updateWhirl } from './skills.js';
+import { updateMissiles, updateAreas, meleeAttack, rangedAttack, damageActor, MELEE_HIT, MELEE_ARC, endWhirl } from './combat.js';
+import { castSkill, skillDef, updateWhirl, stepVolley } from './skills.js';
 import { updateBuffs, tickRegen, addBuff } from './buffs.js';
 import { useObject, objectVerb, SHRINES } from './objects.js';
 import { groundItem, pickupItem, autoGold } from './loot.js';
-import { itemName, itemColor, makeItem } from './items.js';
+import { itemName, itemColor, makeItem, isBeltable } from './items.js';
 import { BASE } from '../data/items.js';
 import { setQuest, questState, questsOnEnter } from './quests.js';
 import { restock } from './shop.js';
@@ -37,7 +37,8 @@ export class Game {
     this.levels = new Map();
     this.level = null; this.depth = -1;
     this.hero = null; this.player = null;
-    this.dmap = new DistMap();
+    this.dmap = new DistMap(); // 문을 여는 괴물(닫힌 문도 길로 친다)
+    this.dmapW = new DistMap(false); // 문을 못 여는 괴물(닫힌 문은 벽: 열린 길로 돌아온다)
     this.showLabels = true; this.showBars = true; this.showDmg = false; this.autoGold = true;
     this.seed = (Math.random() * 2 ** 32) >>> 0;
     this.paused = false;
@@ -94,6 +95,7 @@ export class Game {
       // 떠나는 층의 투사체·장판 정리
       this.level.missiles.length = 0;
       this.level.areas = this.level.areas.filter((a) => !a.trapOf);
+      this.level.blasts = null; // 터지려던 통은 그대로 남는다
     }
     const fromTown = this.depth === 0;
     const L = this.getLevel(depth);
@@ -108,7 +110,7 @@ export class Game {
       else pos = L.start;
     }
     pos = L.nearestFree(pos.x, pos.y, 8) || L.nearestFree(L.start.x, L.start.y, 8) || L.start;
-    P.mv = null; P.moving = false; P.whirl = null; P.leap = null; P.uninterruptible = false;
+    P.mv = null; P.moving = false; P.leap = null; P.volley = null; endWhirl(this, P);
     P.place(L, pos.x, pos.y);
     if (!P.dead) P.setAnim('idle', 1);
     P.invuln = 0.6; // 층에 들어선 직후 잠깐 무적(디아블로 1)
@@ -116,7 +118,7 @@ export class Game {
     for (const s of carry) { const p2 = L.nearestFree(pos.x + 1, pos.y + 1, 6); if (p2) { s.place(L, p2.x, p2.y); L.actors.push(s); } }
     this.cmd = null; this.stick = null; this.focus = null; this.setTarget(null);
     if (L.theme === 'town') revealAll(L); else computeFOV(L, P.tx, P.ty, FOV_R);
-    this.dmap.build(L, P.tx, P.ty);
+    this.dmap.build(L, P.tx, P.ty); this.dmapW.build(L, P.tx, P.ty);
     this.lastTile = -1;
     if (depth > 0) {
       const d = this.hero.data;
@@ -144,7 +146,9 @@ export class Game {
     // 이전 차원문 지우기
     for (const lv of this.levels.values()) lv.objects = lv.objects.filter((o) => o.type !== 'portal' || o.permanent);
     for (const lv of this.levels.values()) rebuildObjAt(lv);
-    const spot = L.nearestFree(P.tx + 1, P.ty + 1, 3) || L.nearestFree(P.tx, P.ty, 3);
+    // 플레이어에게서 보이는 빈칸에(벽 너머에 열려 걸어서 돌아가야 하던 것)
+    const seen = (x, y) => L.los(P.tx, P.ty, x, y) && !L.items.some((i) => Math.round(i.x) === x && Math.round(i.y) === y);
+    const spot = L.nearestFree(P.tx + 1, P.ty + 1, 3, 0, seen) || L.nearestFree(P.tx, P.ty, 3, 0, seen) || L.nearestFree(P.tx, P.ty, 3);
     if (!spot) return false;
     const o = L.addObject({ type: 'portal', x: spot.x, y: spot.y, solid: false, age: 0 });
     this.portal = { depth: this.depth, x: spot.x, y: spot.y };
@@ -202,10 +206,11 @@ export class Game {
   attackNearest() {
     const P = this.player;
     if (!P || P.dead || this.paused || this.depth === 0) return false;
-    return this.issue({ type: 'swing' });
+    return this.issue({ type: 'swing', aim: this.stick ? this.stick.a : null });
   }
-  // 조이스틱(없으면 바라보는) 방향
-  aimDir() { const P = this.player; return this.stick ? this.stick.a : P.faceTo ?? P.face; }
+  // 조이스틱(없으면 바라보는) 방향. 공격 단추를 누른 순간 밀고 있던 방향은, 휘두르기가 늦게 나가도(맞고 움찔하는 중 등) 그대로 쓴다
+  aimDir() { const P = this.player; return this.stick ? this.stick.a : this.pressAim ?? P.faceTo ?? P.face; }
+  aimW() { return this.stick || this.pressAim != null ? 2 : 0.8; }
   // 휘두르기·쏘기: 겨누는 거리 안에 적이 있으면 그쪽으로, 없으면 조이스틱(바라보는) 쪽 빈 곳으로.
   // 근접은 내려치는 순간 앞쪽 손 닿는 곳의 적을, 화살은 날아가다 처음 닿는 적을 맞힌다
   // 겨눌 적이 없으면 손 닿는 곳의 통 쪽으로 휘두르거나 쏴서 부순다(상자·석관은 상호작용 단추로 연다)
@@ -222,7 +227,7 @@ export class Game {
   smash(o) { if (!this.smashable(o)) return false; useObject(this, o); return true; }
   // 손 닿는 곳(겨누는 거리)의 통: 조이스틱(바라보는) 쪽 것 먼저
   bestSmashable() {
-    const P = this.player, L = this.level, ref = this.aimDir(), w = this.stick ? 2 : 0.8;
+    const P = this.player, L = this.level, ref = this.aimDir(), w = this.aimW();
     let best = null, bs = 1e9;
     for (const o of L.objects) {
       if (!this.smashable(o) || !(L.flags[o.y * L.w + o.x] & F_VIS)) continue;
@@ -247,7 +252,7 @@ export class Game {
   }
   // 거리와 방향으로 고른 적(조이스틱을 밀고 있으면 그 방향을 더 따진다). 지금 대상이 크게 나쁘지 않으면 그대로 둔다(대상이 이리저리 바뀌지 않게)
   bestEnemy(range) {
-    const P = this.player, ref = this.aimDir(), w = this.stick ? 2 : 0.8;
+    const P = this.player, ref = this.aimDir(), w = this.aimW();
     const score = (a) => P.dist(a) + Math.abs(angDiff(Math.atan2(a.y - P.y, a.x - P.x), ref)) * w;
     let best = null, bs = 1e9;
     for (const a of this.level.actors) {
@@ -271,13 +276,22 @@ export class Game {
     const ref = this.stick ? this.stick.a : P.faceTo ?? P.face;
     let bs = 1e9;
     // bias: 작을수록 먼저(마을 사람·아이템 > 계단·상자 등 > 우물·책장처럼 살펴보기만 하는 것)
+    const town = L.theme === 'town';
     const consider = (kind, ref2, x, y, reach, verb, bias) => {
       const d = Math.hypot(x - P.x, y - P.y);
       if (d > reach) return;
+      // 벽 너머의 상자·계단·아이템은 잡지 않는다(대상 칸 자체가 막혀 있는 것은 괜찮다)
+      if (!town && d > 0.3 && !L.los(P.tx, P.ty, Math.round(x), Math.round(y))) return;
       const sc = d + bias + (d < 0.3 ? 0 : Math.abs(angDiff(Math.atan2(y - P.y, x - P.x), ref)) * 0.5);
       if (sc < bs) { bs = sc; this.focus = { kind, ref: ref2, x, y, verb }; }
     };
-    for (const it of L.items) consider('item', it, it.x, it.y, REACH, '줍기', 0);
+    // 가방에 들어가지 않는 아이템은 뒤로(가방이 꽉 찬 채 차원문·순간 이동 지점 위의 아이템이 단추를 가로채던 것)
+    const h = this.hero;
+    for (const it of L.items) {
+      if (Math.hypot(it.x - P.x, it.y - P.y) > REACH) continue;
+      const fits = it.gold || (isBeltable(it.item) && h.data.belt.slice(0, h.beltRows() * 4).some((b) => !b)) || h.invFind(it.item);
+      consider('item', it, it.x, it.y, REACH, '줍기', fits ? 0 : 2);
+    }
     for (const o of L.objects) { const v = objectVerb(o); if (v) consider('obj', o, o.x, o.y, REACH, v, v === '살펴보기' ? 1.2 : 0.3); }
     // 마을 사람은 조금 먼저(마을 사람끼리 가까이 모여 있으니, 더 가까운 아이템·물체를 가리지 않을 만큼만)
     for (const a of L.actors) if (a.kind === 'npc' && !a.dead) consider('npc', a, a.x, a.y, TALK, '대화', -0.15);
@@ -342,9 +356,15 @@ export class Game {
     if (pk !== this.lastTile) {
       this.lastTile = pk;
       if (L.theme !== 'town') computeFOV(L, P.tx, P.ty, FOV_R);
-      this.dmap.build(L, P.tx, P.ty);
+      this.dmap.build(L, P.tx, P.ty); this.dmapW.build(L, P.tx, P.ty);
       this.checkTriggers();
       if (this.autoGold) autoGold(this);
+      // 순간 이동 지점은 밟으면 켜진다(창의 안내대로)
+      for (const o of L.objects) if (o.type === 'waypoint' && !o.active && L.theme !== 'town' && Math.hypot(o.x - P.x, o.y - P.y) < 1.1) {
+        o.active = true;
+        if (!this.hero.data.wps.includes(this.depth)) this.hero.data.wps.push(this.depth);
+        this.sfx('waypoint', o.x, o.y); this.toast('순간 이동 지점이 활성화되었다', 'big'); this.emit('save');
+      }
     }
     for (let i = L.actors.length - 1; i >= 0; i--) {
       const a = L.actors[i];
@@ -360,8 +380,13 @@ export class Game {
       updateMonster(this, a, dt);
     }
     updateMissiles(this, dt);
+    // 연쇄 폭발하는 통(게임 시간)
+    if (L.blasts?.length) for (let i = L.blasts.length - 1; i >= 0; i--) { const b = L.blasts[i]; if (this.time >= b.at) { L.blasts.splice(i, 1); useObject(this, b.o); } }
     updateAreas(this, dt);
-    for (const it of L.items) if (it.drop > 0) it.drop = Math.max(0, it.drop - dt * 2.2);
+    // 떨어지는 중인 골드는 자동으로 줍지 않으니, 발밑에 막 내려앉은 골드는 그때 줍는다(가만히 서서 상자를 열 때)
+    let landed = false;
+    for (const it of L.items) if (it.drop > 0) { it.drop = Math.max(0, it.drop - dt * 2.2); if (!it.drop && it.gold) landed = true; }
+    if (landed && this.autoGold) autoGold(this);
     for (const o of L.objects) if (o.type === 'portal') o.age = (o.age || 0) + dt;
     for (let i = L.corpses.length - 1; i >= 0; i--) { const c = L.corpses[i]; if (c.fade != null && c.fade < 1 && c.eaten) { c.fade -= dt * 0.5; if (c.fade <= 0) L.corpses.splice(i, 1); } }
     if (L.corpses.length > 180) L.corpses.splice(0, L.corpses.length - 180);
@@ -394,11 +419,13 @@ export class Game {
       P.x = lp.sx + (lp.tx - lp.sx) * k; P.y = lp.sy + (lp.ty - lp.sy) * k;
       P.z = Math.sin(k * Math.PI) * 50;
       P.anim.t += dt;
-      if (k >= 1) { P.z = 0; const A = P.anim; if (A.onHit) { const f = A.onHit; A.onHit = null; f(); } }
+      // 내려앉기는 도약에 붙어 있다(공중에서 다른 동작으로 바뀌어도 반드시 내려앉는다)
+      if (k >= 1) { P.z = 0; const f = lp.land; P.leap = null; if (P.anim.onHit === f) P.anim.onHit = null; f?.(); }
       return;
     }
     P.z = 0;
     if (P.whirl) { updateWhirl(this, P, dt); P.moving = false; return; }
+    if (P.volley) { P.volley.t += dt * rate; stepVolley(this, P); }
     // 동작 중(공격·시전·피격)
     if (P.anim.name !== 'idle' && P.anim.name !== 'walk') {
       const A = P.anim;
@@ -407,13 +434,15 @@ export class Game {
       if (A.hitAt != null && A.onHit && prev < A.hitAt * A.dur && A.t >= A.hitAt * A.dur) { const f = A.onHit; A.onHit = null; f(); }
       // 타격 뒤에는 새 명령으로 끊을 수 있다(디아블로 1). 기본 공격은 새로 민 조이스틱으로 내려치기 전에도 끊는다(물러나며 싸우기)
       const fresh = this.stick && this.stick.seq > (this.actSeq || 0);
-      const canCancel = (A.name === 'attack' || A.name === 'cast') && (!A.onHit && (this.cmd && this.cmd.type !== 'attack' && this.cmd.type !== 'swing' || fresh) || A.basic && fresh);
+      // 연사는 화살을 다 쏠 때까지 새 기술로는 끊지 않는다(연타하면 첫 화살만 거듭 쏘아 더 빨리 쏘던 것). 조이스틱으로는 끊는다
+      const pend = A.onHit || P.volley;
+      const canCancel = (A.name === 'attack' || A.name === 'cast') && (!pend && (this.cmd && this.cmd.type !== 'attack' && this.cmd.type !== 'swing' || fresh) || (A.basic || P.volley) && fresh);
       if (A.t >= A.dur || canCancel) { P.setAnim('idle', 1); if (A.after) A.after(); }
       else if (!P.mv) return;
     }
     // 조이스틱이 더 나중 입력이면 앞선 명령(다가가 공격 등)을 버리고, 걷던 걸음도 그 자리에서 끊는다
     const st = this.stick;
-    if (st && st.seq > (this.actSeq || 0)) { if (this.cmd && (this.cmd.seq || 0) < st.seq) this.cmd = null; P.halt(L); }
+    if (st && st.seq > (this.actSeq || 0)) { if (this.cmd && (this.cmd.seq || 0) < st.seq) this.cmd = null; P.halt(L); P.volley = null; }
     if (P.mv) {
       if (!P.advance(L, dt * rate)) { P.moving = true; return; }
     }
@@ -441,7 +470,7 @@ export class Game {
         }
         break;
       }
-      case 'swing': this.cmd = null; this.freeAttack(); break;
+      case 'swing': this.cmd = null; this.pressAim = c.aim ?? null; this.freeAttack(); this.pressAim = null; break;
       case 'skill': {
         const tgt = c.target && !c.target.dead ? c.target : null;
         this.cmd = null;
@@ -525,7 +554,7 @@ export class Game {
     P.faceTo = a;
     if (x === P.x && y === P.y) return;
     P.walkPh += Math.hypot(x - P.x, y - P.y) * Math.PI * 2 / 1.25;
-    P.x = x; P.y = y; P.moving = true;
+    P.x = x; P.y = y; P.moving = true; P.volley = null; // 걸어가면 연사는 끝난다
     const ntx = Math.round(x), nty = Math.round(y);
     if (ntx !== P.tx || nty !== P.ty) {
       const k0 = P.ty * L.w + P.tx;
@@ -560,7 +589,7 @@ export class Game {
       return c.blocked < 4;
     }
     c.path.shift();
-    P.step(L, nx, ny);
+    P.step(L, nx, ny); P.volley = null; // 걸어가면 연사는 끝난다
     return true;
   }
 
@@ -657,6 +686,8 @@ export class Game {
     P.buffs = {};
     h.recalc();
     this.closePortal();
+    // 소환수는 주인과 함께 쓰러진다(마을까지 따라오지 않는다)
+    for (const a of this.level?.actors || []) if (a.kind === 'summon' && a.owner === P && !a.dead) { a.dead = true; a.noCorpse = true; a.release(this.level); }
     this.levels.forEach((L, d) => { if (d !== 0) this.levels.delete(d); });
     this.seed = (Math.random() * 2 ** 32) >>> 0;
     this.enter(0, 'respawn');

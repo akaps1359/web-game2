@@ -85,7 +85,8 @@ export function useObject(game, o) {
         game.fx.explosion(o.x, o.y, 1.4);
         areaDamage(game, o.x, o.y, 1.5, [8 + game.depth, 16 + game.depth * 2], 'fire', null, 2);
         // 옆 통도 연쇄 폭발
-        for (const b of L.objects) if (b !== o && b.type === 'barrel' && !b.broken && Math.hypot(b.x - o.x, b.y - o.y) < 1.6) setTimeout(() => useObject(game, b), 180);
+        // 게임 시간으로 이 층에서만(멈춘 동안·층을 옮긴 뒤에 실제 시간 타이머가 터지며 새 층의 칸을 망가뜨리던 것)
+        for (const b of L.objects) if (b !== o && b.type === 'barrel' && !b.broken && Math.hypot(b.x - o.x, b.y - o.y) < 1.6 && !(L.blasts || []).some((x) => x.o === b)) (L.blasts || (L.blasts = [])).push({ o: b, at: game.time + 0.18 });
         return;
       }
       game.sfx('barrel_break', o.x, o.y);

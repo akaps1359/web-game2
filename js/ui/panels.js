@@ -9,7 +9,7 @@ import { INV_W, INV_H, STASH_W, STASH_H, EQUIP_SLOTS } from '../game/hero.js';
 import { SKILLS, skillsOf, TABS, skillDef, skillManaCost } from '../game/skills.js';
 import { QUESTS, LORE, questState, questPhase, depthName } from '../game/quests.js';
 import { NPCS } from '../game/npcs.js';
-import { stock, ALWAYS, buy, sell, buyPrice, repairAll, repairOne, identify, restock } from '../game/shop.js';
+import { stock, ALWAYS, buy, sell, canSell, buyPrice, repairAll, repairOne, identify, restock } from '../game/shop.js';
 import { makeItem } from '../game/items.js';
 import { levelName, LEVELS } from '../game/world.js';
 import { EXP_TABLE } from '../data/classes.js';
@@ -35,7 +35,7 @@ const HELP = [
 작은 단추 네 개에 기술을 넣어 씁니다(기술 창에서 넣기). 탭하면 공격처럼 그 자리에서 바로 쓰고, 단추에서 손가락을 화면 쪽으로 끌면 원하는 곳을 겨눕니다.
 
 ■ 물약
-물약 띠를 탭하면 마십니다. 빨간 구슬(생명력)·파란 구슬(마나)을 탭하면 알맞은 물약을 자동으로 마십니다.
+물약 띠를 누르면 바로 마십니다(손을 떼기 전에). 빨간 구슬(생명력)·파란 구슬(마나)을 누르면 알맞은 물약을 자동으로 마십니다.
 
 ■ 화면
 두 손가락으로 오므리고 벌리면 화면을 확대·축소합니다.`],
@@ -45,8 +45,11 @@ const HELP = [
 ■ 가방
 아이템을 누르면 설명이 나오고 장착·사용·버리기를 할 수 있습니다. 끌어서 옮기거나 장비 칸에 놓아 장착할 수도 있습니다.
 
-■ 감정·내구도
-마법 이상의 아이템은 감정해야 능력을 알 수 있습니다(감정 주문서 또는 현자 알데릭, 100골드). 저주받은 아이템도 있습니다. 장비는 쓰면 닳고, 내구도가 0이 되면 효과가 없으니 대장장이에게 고치세요.
+■ 감정·내구도·요구 능력치
+마법 이상의 아이템은 감정해야 능력을 알 수 있습니다(감정 주문서 또는 현자 알데릭, 100골드). 저주받은 아이템도 있습니다. 장비는 쓰면 닳고, 내구도가 0이 되면 효과가 없으니 대장장이에게 고치세요. 힘·민첩·마력이 요구치에 모자란 장비도 낄 수는 있지만 채울 때까지 효과가 없습니다(장비 칸이 붉게 표시됩니다).
+
+■ 보관함
+마을의 보관함은 모든 캐릭터가 함께 씁니다. 퀘스트 물건은 넣을 수 없습니다.
 
 ■ 물약 띠
 허리띠를 차면 띠의 줄이 늘어납니다.`],
@@ -62,7 +65,7 @@ const HELP = [
 오른쪽 위 파란 단추(차원문)로 귀환 주문서를 읽으면 마을로 돌아갑니다. 차원문을 다시 지나면 원래 자리로 돌아갑니다.
 
 ■ 순간 이동
-홀수 층(3, 5, 7…)의 순간 이동 지점을 켜 두면 마을에서 바로 갈 수 있습니다.
+홀수 층(3, 5, 7…)의 순간 이동 지점은 밟으면 켜지고, 켜 둔 곳은 마을에서 바로 갈 수 있습니다.
 
 ■ 지도
 오른쪽 위 작은 지도를 탭하면 큰 지도가 겹쳐 보입니다. 한 번 본 곳은 빛이 닿지 않아도 어둡게 남아 보입니다.`],
@@ -95,7 +98,8 @@ export class Panels {
   pauses() { return this.cur && this.cur !== 'map'; }
   toggle(name) { if (this.cur === name) this.close(); else this.open(name); }
   open(name, opts = {}) {
-    if (!this.game) return;
+    // 쓰러진 뒤(죽는 화면이 뜨기 전 1.5초)에는 창을 열지 않는다
+    if (!this.game || this.game.player?.dead) return;
     this.game.stopAll?.();
     this.cur = name; this.opts = opts; this.sel = null; this.selBeast = null;
     this.tab = opts.tab ?? this.tab ?? 0;
@@ -112,6 +116,7 @@ export class Panels {
     this.root.innerHTML = '';
     this.game?.sfx('ui_close');
     this.app.hud.refreshBelt(); this.app.hud.refreshSkills(); this.app.hud.badges();
+    this.app.input?.resteer?.();
     this.app.saveNow();
   }
   refresh() { if (this.cur) this.render(); }
@@ -198,7 +203,7 @@ export class Panels {
         const cv = canvasFor(b, w * C - bw, hh * C - bw);
         paintItemIcon(cv, it, 1);
         b.classList.add(qualityClass(it));
-        if (!meetsReq(it, h.st) || (it.durMax && it.dur <= 0 && !it.indestr)) b.classList.add('bad');
+        if (h.off?.has(it) || (it.durMax && it.dur <= 0 && !it.indestr)) b.classList.add('bad');
         if (this.sel?.it === it) b.classList.add('sel');
         this.dragSource(b, it, 'equip', s);
       } else b.appendChild(el('span', 'lbl', SLOT_LABEL[s]));
@@ -274,13 +279,13 @@ export class Panels {
         const gh = el('div', 'drag-ghost');
         const cv = canvasFor(gh, b.w * C, b.h * C);
         paintItemIcon(cv, it, 0);
-        $('#app').appendChild(gh);
+        this.root.appendChild(gh); // 창과 함께 지워지게(끌던 중 창이 닫히거나 다시 그려져도 그림자가 남지 않게)
         st.ghost = gh; st.w = b.w * C; st.h = b.h * C;
         this.game.sfx('item_pickup', null, null, { vol: 0.5 });
       }
       if (st.drag) {
         st.ghost.style.left = e.clientX - st.w / 2 + 'px'; st.ghost.style.top = e.clientY - st.h / 2 + 'px';
-        this.showDrop(e.clientX, e.clientY, it, st);
+        this.showDrop(e.clientX, e.clientY, it, where);
       }
     });
     const end = (e) => {
@@ -308,14 +313,17 @@ export class Panels {
     }
     return null;
   }
-  showDrop(x, y, it, st) {
+  showDrop(x, y, it, from) {
     this.clearDrop();
     const t = this.dropTarget(x, y, it);
     if (!t || t.kind !== 'grid') return;
     const C = this.C || 38, b = BASE[it.b];
     const list = t.where === 'stash' ? this.app.stash.items : this.hero.data.inv;
     const W = t.where === 'stash' ? STASH_W : INV_W, H = t.where === 'stash' ? STASH_H : INV_H;
-    const ok = this.hero.invFits(it, t.x, t.y, null, W, H, list) || this.swapCandidate(it, t.x, t.y, list, W, H);
+    const fits = this.hero.invFits(it, t.x, t.y, null, W, H, list), other = fits ? null : this.swapCandidate(it, t.x, t.y, list, W, H);
+    // 퀘스트 물건이 보관함으로 가게 되는 자리는 놓을 수 없다고 보인다(dropAt이 거절하는 것과 같게)
+    const refused = (t.where === 'stash' && BASE[it.b].quest) || (other && from === 'stash' && BASE[other.b].quest);
+    const ok = !refused && (fits || other);
     const m = el('div', ok ? 'drop-ok' : 'drop-bad');
     m.style.cssText = `left:${t.x * C + 1}px;top:${t.y * C + 1}px;width:${b.w * C}px;height:${b.h * C}px`;
     t.node.appendChild(m);
@@ -344,6 +352,8 @@ export class Panels {
     }
     // 격자로
     const toStash = t.where === 'stash';
+    // 퀘스트 물건은 모든 캐릭터가 함께 쓰는 보관함에 넣지 못한다(다른 캐릭터가 꺼내 가면 퀘스트를 끝낼 수 없게 된다)
+    if (toStash && BASE[it.b].quest) { g.toast('퀘스트 물건은 보관함에 넣을 수 없습니다', 'warn'); g.sfx('ui_error'); this.render(); return; }
     const list = toStash ? this.app.stash.items : h.data.inv;
     const W = toStash ? STASH_W : INV_W, H = toStash ? STASH_H : INV_H;
     const srcList = from === 'stash' ? this.app.stash.items : from === 'inv' ? h.data.inv : null;
@@ -353,16 +363,22 @@ export class Panels {
       g.sfx(BASE[it.b].slot === 'weapon' ? 'drop_weapon' : 'item_pickup', null, null, { vol: 0.6 });
     } else {
       const other = this.swapCandidate(it, t.x, t.y, list, W, H);
+      // 맞바꾸면 가방의 퀘스트 물건이 보관함으로 가는 경우도 막는다
+      if (other && from !== 'equip' && srcList === this.app.stash.items && BASE[other.b].quest) { g.toast('퀘스트 물건은 보관함에 넣을 수 없습니다', 'warn'); g.sfx('ui_error'); this.render(); return; }
       if (other && from !== 'equip') {
         // 맞바꾸기: 다른 것을 원래 자리(또는 빈자리)로
-        const ox = it.x, oy = it.y;
+        const ox = it.x, oy = it.y, px = other.x, py = other.y;
         this.detach(it, from, fromSlot);
         const oi = list.indexOf(other); list.splice(oi, 1);
         it.x = t.x; it.y = t.y; list.push(it);
         const back = srcList || h.data.inv;
         const BW = back === this.app.stash.items ? STASH_W : INV_W, BH = back === this.app.stash.items ? STASH_H : INV_H;
         if (h.invFits(other, ox, oy, null, BW, BH, back)) { other.x = ox; other.y = oy; back.push(other); }
-        else if (!h.invAdd(other, back, BW, BH)) { list.splice(list.indexOf(it), 1); this.reattach(it, from, fromSlot); other.x = t.x; other.y = t.y; list.push(other); g.toast('자리가 없습니다', 'warn'); }
+        else if (!h.invAdd(other, back, BW, BH)) {
+          // 되돌리기: 둘 다 원래 자리로
+          list.splice(list.indexOf(it), 1); it.x = ox; it.y = oy; this.reattach(it, from, fromSlot);
+          other.x = px; other.y = py; list.push(other); g.toast('자리가 없습니다', 'warn');
+        }
       } else if (other && from === 'equip') {
         // 장착품을 가방의 같은 종류와 바꾸기
         if (this.hero.slotFor(other) && (BASE[other.b].slot === BASE[it.b].slot)) this.equipFrom(other, 'inv', fromSlot);
@@ -370,6 +386,8 @@ export class Panels {
       } else g.sfx('ui_error');
     }
     h.recalc();
+    // 허리띠를 끌어 뺐으면 넘친 물약은 가방으로(못 넣으면 바닥에)
+    for (const s of h.beltOverflow()) if (!h.invAdd(s)) g.dropItem(s);
     this.app.hud.refreshBelt();
     this.render();
   }
@@ -378,13 +396,14 @@ export class Panels {
     if (from === 'inv') h.invRemove(it);
     else if (from === 'stash') { const i = this.app.stash.items.indexOf(it); if (i >= 0) this.app.stash.items.splice(i, 1); }
     else if (from === 'equip') { delete h.data.equip[slot]; h.recalc(); }
-    else if (from === 'belt') { const k = h.data.belt.indexOf(it); if (k >= 0) h.data.belt[k] = null; }
+    else if (from === 'belt') this.game.consume(it, 'belt'); // 위 칸의 물약이 내려온다
   }
   reattach(it, from, slot) {
     const h = this.hero;
     if (from === 'inv') h.data.inv.push(it);
     else if (from === 'stash') this.app.stash.items.push(it);
     else if (from === 'equip') h.data.equip[slot] = it;
+    else if (from === 'belt' && !h.beltAdd(it) && !h.invAdd(it)) this.game.dropItem(it);
   }
   equipFrom(it, from, slot) {
     const h = this.hero, g = this.game;
@@ -423,6 +442,7 @@ export class Panels {
     tip.appendChild(nm);
     if ((it.q === 'magic' || it.q === 'rare' || it.q === 'unique') && it.id) tip.appendChild(el('div', 'tbase', BASE[it.b].name));
     for (const L of itemLines(it, h.st)) tip.appendChild(el('div', 'tl ' + (L.c || ''), L.t));
+    if (where === 'equip' && isEquip(it) && h.off?.has(it)) tip.appendChild(el('div', 'tl bad', '능력치가 모자라 효과가 없습니다'));
     // 비교
     if (isEquip(it) && where !== 'equip') {
       const s = h.slotFor(it), cur = h.data.equip[s === 'ring2' ? 'ring1' : s];
@@ -437,7 +457,7 @@ export class Panels {
     // 가격
     const shop = this.cur === 'shop' ? this.opts.shop : null;
     if (where === 'shop') tip.appendChild(el('div', 'tl price', `가격: ${buyPrice(it, shop).toLocaleString('ko-KR')} 골드`));
-    else if (shop && where === 'inv' && shop !== 'healer' && shop !== 'boy') tip.appendChild(el('div', 'tl price', `팔면: ${sellPrice(it).toLocaleString('ko-KR')} 골드`));
+    else if (shop && where === 'inv' && canSell(it, shop).ok) tip.appendChild(el('div', 'tl price', `팔면: ${sellPrice(it).toLocaleString('ko-KR')} 골드`));
     const rc = repairCost(it);
     if (this.cur === 'shop' && shop === 'smith' && rc) tip.appendChild(el('div', 'tl price', `수리비: ${rc} 골드`));
     const row = el('div', 'tbtns');
@@ -457,13 +477,13 @@ export class Panels {
         if (isEquip(it)) B('장착', () => this.equipFrom(it, where));
         if (b.use && where === 'inv') B(b.use === 'identify' ? '감정에 쓰기' : '사용', () => { const ok = g.useItem(it, 'inv'); this.sel = null; if (b.use === 'portal' && ok) this.close(); else this.render(); });
         if (isBeltable(it) && where === 'inv') B('띠에 넣기', () => { if (h.beltAdd(it)) { h.invRemove(it); this.app.hud.refreshBelt(); } else g.toast('띠에 빈칸이 없습니다'); this.sel = null; this.render(); });
-        if (this.cur === 'stash') B(where === 'stash' ? '가방으로' : '보관함으로', () => this.moveStash(it, where));
-        if (shop && where === 'inv' && shop !== 'healer' && shop !== 'boy') B(`팔기 ${sellPrice(it)}`, () => { const p = sell(g, it, shop); if (p) { this.sel = null; this.render(); } }, 'red');
+        if (this.cur === 'stash' && (where === 'stash' || !b.quest)) B(where === 'stash' ? '가방으로' : '보관함으로', () => this.moveStash(it, where));
+        if (shop && where === 'inv' && canSell(it, shop).ok) B(`팔기 ${sellPrice(it)}`, () => { const p = sell(g, it, shop); if (p) { this.sel = null; this.render(); } }, 'red');
         if (shop === 'smith' && where === 'inv' && rc) B(`수리 ${rc}`, () => { repairOne(g, it); this.render(); this.tooltip(it, where, slot); });
         if (!shop && where === 'inv' && !b.quest) B('버리기', () => { h.invRemove(it); g.dropItem(it); this.sel = null; this.render(); }, 'red');
       } else if (where === 'belt') {
         B('사용', () => { g.useItem(it, 'belt'); this.sel = null; this.app.hud.refreshBelt(); this.render(); });
-        B('가방으로', () => { if (h.invAdd(it)) { const k = h.data.belt.indexOf(it); h.data.belt[k] = null; this.app.hud.refreshBelt(); } this.sel = null; this.render(); });
+        B('가방으로', () => { if (h.invAdd(it)) { g.consume(it, 'belt'); this.app.hud.refreshBelt(); } this.sel = null; this.render(); });
       }
     }
     B('닫기', () => { this.sel = null; this.render(); }, 'dim');

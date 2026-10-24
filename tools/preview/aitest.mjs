@@ -35,10 +35,17 @@ export default async function (page, { log }) {
       if (!sp) { out.push({ id, err: 'no spot' }); continue; }
       const m = AI.spawnMonster(g, L, id, sp.x, sp.y);
       m.aware = !garg;
+      // 가고일이 먼 자리(대신 고른 자리)에 섰으면 플레이어를 2~3칸 앞 보이는 곳으로(한 칸씩 다가가다 벽에 막혀 깨우지 못하던 것)
+      if (garg && Math.hypot(m.tx - P.tx, m.ty - P.ty) > 3.5) {
+        const p = L.nearestFree(m.tx, m.ty + 2, 3, P.id, (x, y) => L.los(x, y, m.tx, m.ty) && Math.hypot(x - m.tx, y - m.ty) >= 2 && Math.hypot(x - m.tx, y - m.ty) <= 3.5);
+        if (p) { P.place(L, p.x, p.y); g.dmap.build(L, p.x, p.y); g.lastTile = -1; }
+      }
       const r = { id, ai: def.F.ai, depth, firstHit: null, hits: 0, dmg: 0, attacks: 0, missiles: 0, moved: 0, bad: 0, err: null, stuck: 0, teleports: 0, invis: false };
       let last = { x: m.x, y: m.y }, lastAnim = 'idle', seenMs = new Set(), stillT = 0;
       const dt = 1 / 30;
-      for (let i = 0; i < 600; i++) {
+      // 20초. 공격은 했는데 주사위 운으로 한 번도 못 맞혔으면 20초 더(명중률 낮은 박쥐 등이 6번 다 빗나가 실패로 나오던 것)
+      for (let i = 0; i < 1200; i++) {
+        if (i >= 600 && (r.hits > 0 || !r.attacks)) break;
         P.hpMax = 1e5; P.hp = 1e5; P.mp = P.mpMax;
         // 돌로 서 있는 가고일: 플레이어가 한 칸씩 다가간다(4칸 안에서 깨어나야 한다)
         if (m.stone && i % 15 === 14 && Math.hypot(m.tx - P.tx, m.ty - P.ty) > 2) { const dx = Math.sign(m.tx - P.tx), dy = Math.sign(m.ty - P.ty); for (const [ax, ay] of [[dx, dy], [dx, 0], [0, dy]]) if ((ax || ay) && L.free(P.tx + ax, P.ty + ay)) { P.place(L, P.tx + ax, P.ty + ay); break; } }

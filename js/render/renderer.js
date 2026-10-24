@@ -2,8 +2,11 @@
 // 어둠 → 빛 번짐 순으로 그려 각진 그대로 키우고, 글자·체력 막대·이름표만 원래 해상도로 또렷하게 그린다
 import { TW, TH, isoX, isoY, clamp } from '../core/util.js';
 import { F_SEEN, F_VIS, F_LAVA } from '../game/level.js';
-import { buildTileset, WALL_H, glowSprite, townFloorKeys, townFloorSprite } from './tiles.js';
-import { townSprite, nearestSprite, cachedSprite, queueSprite, pumpBakes } from './townart.js';
+import { buildTileset, tilesetJob, WALL_H, glowSprite, townFloorKeys, townFloorSprite } from './tiles.js';
+import { townSprite, nearestSprite, cachedSprite, queueSprite, pumpBakes, bakesPending } from './townart.js';
+import { generateTown } from '../game/gen/town.js';
+import { RNG } from '../core/rng.js';
+import { NPCS } from '../game/npcs.js';
 import { npcMark } from '../game/quests.js';
 import { makeCanvas } from './noise.js';
 import { drawActor, drawCorpse, actorAlpha, figBox } from './figures.js';
@@ -33,10 +36,12 @@ export class Renderer {
     this.labels = []; // 화면에 찍힌 바닥 아이템 이름표(터치 판정용)
     this.lo = makeCanvas(8, 8); this.lc = this.lo.getContext('2d', { alpha: false }); // 세상을 그리는 작은 판
     this.atlas = new SpriteAtlas(); this.sp = new SpritePass(); this.corpseSpr = new WeakMap();
+    this.lookQ = []; this.warmed = new Set(); // 미리 그려 둘 모습(warmLook)
     this.resize();
   }
   setQuality(hi) { this.dpr = Math.min(window.devicePixelRatio || 1, hi ? 3 : 2); this.resize(); }
   resize() {
+    this.dirty = true; // 판 크기가 바뀌면 지워지므로 멈춰 있어도 다시 그린다
     const r = this.cv.getBoundingClientRect();
     this.W = Math.max(1, r.width); this.H = Math.max(1, r.height);
     this.cv.width = Math.round(this.W * this.dpr); this.cv.height = Math.round(this.H * this.dpr);
@@ -56,12 +61,27 @@ export class Renderer {
     this.zoom = this.sl * this.P / this.dpr;
   }
   setUserZoom(z) { this.userZoom = clamp(z, 0.75, 2.2); this.applyZoom(); }
+  // 두 손가락 확대·축소 중(시체 그림은 늘려 쓰고 손을 뗀 뒤 다시 굽는다)
+  gestureStart() { this.gesture = true; }
+  gestureEnd() { this.gesture = false; this.dirty = true; }
   // 타일 묶음은 배율(도트 단위)마다 따로 굽는다
-  tileset(theme) {
+  // 이 배율 것이 없으면: 같은 테마의 다른 배율 것이 있으면 그것을 늘려 쓰고 이 배율 것은 장면마다 조금씩 굽는다(배율을 바꿀 때
+  // 0.1초 남짓 멈추던 것). 처음 보는 테마나 now(층을 옮길 때 — 화면이 어두워진 사이)면 바로 굽는다
+  tileset(theme, now = false) {
     const key = theme + ':' + this.sl;
     let t = this.tilesets.get(key);
-    if (!t) { t = buildTileset(theme, this.sl); this.tilesets.set(key, t); }
-    return t;
+    if (t) return t;
+    let near = null;
+    for (const T of this.tilesets.values()) if (T.theme === theme && (!near || Math.abs(T.RS - this.sl) < Math.abs(near.RS - this.sl))) near = T;
+    if (!near || now || theme === 'town') { t = buildTileset(theme, this.sl); this.tilesets.set(key, t); if (this.tsJob?.key === key) this.tsJob = null; return t; }
+    if (this.tsJob?.key !== key) this.tsJob = { key, it: tilesetJob(theme, this.sl) }; // 지금 배율 것 하나만 굽는다
+    return near;
+  }
+  pumpTilesets(ms) {
+    const J = this.tsJob;
+    if (!J) return;
+    const t0 = performance.now();
+    while (performance.now() - t0 < ms) if (J.it.next().done) { this.tilesets.set(J.key, J.it.T); this.tsJob = null; this.dirty = true; return; }
   }
   get scale() { return this.zoom * this.dpr; }
   // 타일 좌표 → 기기 픽셀
@@ -94,6 +114,7 @@ export class Renderer {
     if (!L) { this.present(); return; }
     const town = L.theme === 'town';
     const T = this.tileset(L.theme);
+    this.pumpTilesets(4);
     // 보이는 타일 범위
     const corners = [this.toWorld(0, 0), this.toWorld(this.W, 0), this.toWorld(0, this.H), this.toWorld(this.W, this.H)];
     const pad = 3;
@@ -104,7 +125,7 @@ export class Renderer {
     // 벽 그림의 위쪽 끝(타일 중심에서). 그림은 제 크기 그대로 정수 도트 자리에
     const wTop = Math.round((WALL_H + TH / 2) * s);
     const camIX = isoX(this.cam.x, this.cam.y), camIY = isoY(this.cam.x, this.cam.y);
-    const [shx, shy] = this.fx.shakeOffset();
+    const [shx, shy] = dt > 0 ? this.fx.shakeOffset() : [0, 0]; // 멈춰 있는 동안은 흔들지 않는다(흔들림 시간도 멈춰 끝없이 떨던 것)
     // 카메라를 도트 단위로 맞춰 타일 무늬가 움직일 때 일렁이지 않게
     const ox = Math.round(this.cv.width / 2 / K - camIX * s + shx * this.dpr / K), oy = Math.round(this.cv.height * this.anchorY / K - camIY * s + shy * this.dpr / K);
     const W = L.w, flags = L.flags, floor = L.floor, wall = L.wall;
@@ -120,12 +141,31 @@ export class Renderer {
     let T0 = PF ? performance.now() : 0;
     const mark = (k) => { if (!PF) return; const n = performance.now(); PF[k] = (PF[k] || 0) + n - T0; T0 = n; };
     mark('setup');
+    // 층이 바뀌면 떠난 층의 시체·인물 그림을 놓아준다(다녀간 층마다 쌓여 수십 MB가 되던 것; 돌아오면 다시 굽는다).
+    // 이 장면의 시체를 굽기 전에 비워야 새 층 첫 장면에 시체를 두 번 굽지 않는다
+    if (this.fadeL !== L) {
+      if (this.fadeL) for (const a of this.fadeL.actors) a._spr = null;
+      this.corpseSpr = new WeakMap();
+      this.fadeL = L; this.fadeA = new Float32Array(L.w * L.h).fill(1);
+    }
     // 구운 모형(마을 건물·소품): 처음 들어온 층이면 한꺼번에, 배율이 바뀐 뒤에는 장면마다 조금씩 굽는다
     this.bakeAll = this.bakeL !== L; this.bakeL = L;
-    if (town && !this.bakeAll) pumpBakes(6);
+    // 새 층: 이 층 괴물·사람의 모습을 놀고 있는 시간에 미리 그려 둔다(처음 보일 때 멈칫하지 않게)
+    if (this.bakeAll) for (const a of L.actors) if (!a.isPlayer && a.look) this.warmLook(a.bossId || a.mdef?.id || a.name, a.look, a.kind);
+    this.pumpLooks(2);
+    if (town && !this.bakeAll && !this.gesture) pumpBakes(6); // 두 손가락 확대·축소 중에는 쉰다
     const fkeys = town ? (L.fkeys || (L.fkeys = townFloorKeys(L))) : null;
-    // 1) 바닥
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    // 1) 바닥(마을은 다 구운 바닥판이 있으면 그것 한 장으로)
+    const tg = town ? this.townGround(L, s, T, fkeys) : null;
+    if (tg && tg.s === s) {
+      const dx = ox - tg.LX, dy = oy - tg.LY;
+      const sx0 = Math.max(0, -dx), sy0 = Math.max(0, -dy), sx1 = Math.min(tg.cv.width, cw - dx), sy1 = Math.min(tg.cv.height, ch - dy);
+      if (sx1 > sx0 && sy1 > sy0) g.drawImage(tg.cv, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0 + dx, sy0 + dy, sx1 - sx0, sy1 - sy0);
+    } else if (tg) {
+      // 배율을 바꾼 직후: 새 바닥판을 굽는 동안 앞 배율의 바닥판을 늘리고 줄여 쓴다(바닥 칸 그림을 한꺼번에 만드느라 멈추지 않게)
+      const k = s / tg.s;
+      g.drawImage(tg.cv, Math.round(ox - tg.LX * k), Math.round(oy - tg.LY * k), Math.round(tg.cv.width * k), Math.round(tg.cv.height * k));
+    } else for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const k = y * W + x, f = floor[k];
       if (!f) continue;
       const fl = flags[k];
@@ -140,7 +180,7 @@ export class Renderer {
     }
     mark('floor');
     // 마을 모형의 바닥 그림자
-    if (town) for (const o of L.objects) {
+    if (town && !tg) for (const o of L.objects) {
       if (!o.model) continue;
       const sp = this.modelSprite(o, s);
       if (!sp.sh) continue;
@@ -150,7 +190,7 @@ export class Renderer {
       g.drawImage(sh.cv, dx, dy, dw, dh);
     }
     // 마을 바닥 장식(풀포기·들꽃·돌): 정수 도트 자리에 찍는다
-    if (town && L.decor) for (const d of L.decor) {
+    if (town && !tg && L.decor) for (const d of L.decor) {
       const px = Math.round(ox + (d.x - d.y) * (TW / 2) * s), py = Math.round(oy + (d.x + d.y) * (TH / 2) * s);
       if (px < -40 || py < -40 || px > cw + 40 || py > ch + 40) continue;
       const sp = this.modelSprite(d, s), k = s / sp.sl;
@@ -223,7 +263,6 @@ export class Renderer {
     mark('collect');
     // 플레이어를 실제로 가리는 앞쪽 벽·문·횃불만 반투명하게(디아블로 2처럼). 칸마다 투명도를 서서히 바꿔
     // 걸을 때 벽이 덜컥 사라졌다 생기지 않는다
-    if (this.fadeL !== L) { this.fadeL = L; this.fadeA = new Float32Array(L.w * L.h).fill(1); }
     const FA = this.fadeA;
     const see = (k, d, px, py) => {
       const want = d > pd + 0.4 && px + fw / 2 > bx0 && px - fw / 2 < bx1 && py - wTop < by1 && py + fh / 2 > by0 ? SEE_THRU : 1;
@@ -239,7 +278,9 @@ export class Renderer {
           if (px < -fw || px > cw + fw || py < -fh || py > ch + wh + fh) break;
           const vis = town || flags[k] & F_VIS;
           g.globalAlpha = see(k, x + y, px, py);
-          g.drawImage(vis ? T.walls[wall[k]] : T.wallsDim[wall[k]], px - fw / 2, py - wTop);
+          const wimg = vis ? T.walls[wall[k]] : T.wallsDim[wall[k]];
+          if (T.RS === s) g.drawImage(wimg, px - fw / 2, py - wTop);
+          else g.drawImage(wimg, px - fw / 2, py - wTop, fw, (wimg.height * s) / T.RS); // 가까운 배율 것을 늘려 쓰는 중
           g.globalAlpha = 1;
           break;
         }
@@ -304,6 +345,52 @@ export class Renderer {
     this.drawLabels(game, L, ox * K, oy * K, s * K, x0, y0, x1, y1, town);
     mark('top');
   }
+  // 마을 바닥판: 바닥 칸·모형 그림자·풀포기는 움직이지 않으니 배율마다 한 장으로 구워 둔다(장면마다 칸마다 수백 번 찍던 것을
+  // 한 번에). 마을에 들어오거나 배율이 바뀌면 그 배율이 잠깐(0.25초) 이어진 뒤 장면마다 4ms씩 나눠 굽고, 다 될 때까지는 칸마다 찍는다
+  townGround(L, s, T, fkeys) {
+    let G = this.tg;
+    if (!G || G.L !== L || G.s !== s) {
+      // 같은 마을의 다 구운 앞 배율 판은 새 판이 될 때까지 늘려 쓴다
+      if (G?.ready && G.L === L) this.tgPrev = G; else if (G?.L !== L) this.tgPrev = null;
+      G = this.tg = { L, s, t0: performance.now(), it: null, cv: null, ready: false, dead: false };
+    }
+    if (G.ready) { this.tgPrev = null; return G; }
+    const prev = this.tgPrev?.L === L ? this.tgPrev : null;
+    if (G.dead) return null; // 너무 크게 확대해 판을 못 만들면 칸마다 찍는다(앞 판은 다음 확대·축소 때 늘려 쓰도록 남긴다)
+    if (performance.now() - G.t0 < 250) return prev;
+    if (!G.it) G.it = groundJob(G, L, s, T, fkeys);
+    const t0 = performance.now();
+    while (performance.now() - t0 < 4) {
+      const st = G.it.next();
+      if (st.done) { G.ready = !!G.cv; G.dead = !G.cv; G.it = null; break; }
+      if (st.value === 'wait') break; // 모형은 pumpBakes가 굽는다: 같은 장면에서 다시 볼 것 없다
+    }
+    return G.ready ? G : prev;
+  }
+  // 제목 화면에서 노는 시간에 마을 그림(바닥 칸·건물·소품)을 조금씩 미리 굽는다(처음 마을에 들어갈 때 멈칫하지 않게)
+  warmTown(ms) {
+    if (this.warmSl === this.sl && !this.warmIt) return;
+    if (this.warmSl !== this.sl) { this.warmSl = this.sl; this.warmIt = warmJob(this, this.sl); }
+    const t0 = performance.now();
+    while (performance.now() - t0 < ms) if (this.warmIt.next().done) { this.warmIt = null; return; }
+  }
+  // 처음 그리는 모습은 재질 타일(색·재질·방향마다)을 새로 만드느라 그 장면이 무겁다. 여러 방향·걸음·맞아 번쩍임으로 한 번씩
+  // 보이지 않는 판에 그려 타일을 미리 만들어 둔다(장면마다 ms 안에서 조금씩)
+  warmLook(id, look, kind) {
+    if (!id || this.warmed.has(id)) return;
+    this.warmed.add(id); this.lookQ.push({ look, kind, i: 0 });
+  }
+  pumpLooks(ms) {
+    if (!this.lookQ.length) return;
+    const t0 = performance.now(), c = this.warmCv || (this.warmCv = makeCanvas(200, 240)), g = c.getContext('2d');
+    while (this.lookQ.length && performance.now() - t0 < ms) {
+      const j = this.lookQ[0], i = j.i++, walk = i % 16 >= 8;
+      const a = { id: 1, look: j.look, kind: j.kind, face: (i % 8) * Math.PI / 4 + 0.2, anim: { name: walk ? 'walk' : 'idle', t: 0, dur: 1 }, moving: walk, gph: (i % 4) / 4, flash: i >= 16 ? 1 : 0 };
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, 200, 240);
+      drawActor(g, a, 100, 180, this.sl, 0.3, 2);
+      if (j.i >= 24) this.lookQ.shift();
+    }
+  }
   // 구운 모형 그림: 이 배율로 구운 것이 없으면(배율이 바뀌는 중) 시간 예산 안에서 굽고, 넘치면 가까운 배율 것을 키워 쓴다
   modelSprite(o, s) {
     if (o._sl === s) return o._sp;
@@ -311,7 +398,8 @@ export class Renderer {
     let sp = cachedSprite(o.model, v, s);
     if (!sp) {
       if (this.bakeAll) sp = townSprite(o.model, v, s);
-      else { queueSprite(o.model, v, s); sp = nearestSprite(o.model, v, s) || townSprite(o.model, v, s); }
+      else if (o._nearS === s && o._sp) sp = o._sp; // 앞 장면에 찾아 둔 가까운 배율 그림(장면마다 굽기 저장소를 다 뒤지지 않게)
+      else { queueSprite(o.model, v, s); sp = nearestSprite(o.model, v, s) || townSprite(o.model, v, s); o._nearS = s; }
     }
     o._sp = sp; o._sl = sp.sl === s ? s : -1;
     return sp;
@@ -352,8 +440,10 @@ export class Renderer {
     if (!look || actorAlpha(a) <= 0.02) return null;
     const key = poseKey(a, s, t), c = a._spr;
     if (c && c.key === key && c.look === look) return c;
+    // 두 손가락으로 배율을 바꾸는 중에는 플레이어가 아닌 인물은 앞 배율 그림을 늘려 쓴다(배율마다 모두 다시 그리느라 멈추지 않게)
+    if (this.gesture && c && c.look === look && c.s && c.s !== s && !a.isPlayer) return { ...c, k: s / c.s };
     const { hw, up, dn } = figBox(look, s * (look.scale || 1));
-    return { hw, up, cell: this.atlas.add(hw * 2, up + dn, (g, cx, cy) => drawActor(g, a, cx + hw, cy + up, s, t, 2)), key, look, a };
+    return { hw, up, s, cell: this.atlas.add(hw * 2, up + dn, (g, cx, cy) => drawActor(g, a, cx + hw, cy + up, s, t, 2)), key, look, a };
   }
   // 판에서 다듬은 칸을 액터의 그림으로 옮겨 둔다
   keepSprite(pr) {
@@ -365,7 +455,7 @@ export class Renderer {
     cg.clearRect(0, 0, cell.w, cell.h);
     cg.drawImage(this.atlas.b, cell.x, cell.y, cell.w, cell.h, 0, 0, cell.w, cell.h);
     cg.drawImage(this.atlas.a, cell.x, cell.y, cell.w, cell.h, 0, 0, cell.w, cell.h);
-    c.key = pr.key; c.look = pr.look; c.hw = pr.hw; c.up = pr.up;
+    c.key = pr.key; c.look = pr.look; c.hw = pr.hw; c.up = pr.up; c.s = pr.s;
     return c;
   }
   // 바닥에 깔리는 것(그림자·대상 고리)은 바로, 다듬은 몸은 정수 도트 자리에
@@ -374,7 +464,8 @@ export class Renderer {
     drawActor(g, a, x, y, s, t, 3);
     if (!pr) return;
     g.globalAlpha = actorAlpha(a);
-    g.drawImage(pr.cv, x - pr.hw, y - pr.up);
+    if (pr.k) g.drawImage(pr.cv, Math.round(x - pr.hw * pr.k), Math.round(y - pr.up * pr.k), Math.round(pr.cv.width * pr.k), Math.round(pr.cv.height * pr.k));
+    else g.drawImage(pr.cv, x - pr.hw, y - pr.up);
     g.globalAlpha = 1;
   }
   // 시체는 움직이지 않으니 한 번 다듬어 둔다
@@ -382,13 +473,20 @@ export class Renderer {
     const look = c.look;
     if (!look) return;
     let k = this.corpseSpr.get(c);
+    g.globalAlpha = c.fade ?? 1;
+    // 두 손가락으로 배율을 바꾸는 중에는 앞 배율 그림을 늘려 쓴다(시체마다 다시 굽느라 멈추지 않게)
+    if (k && k.s !== s && this.gesture) {
+      const r = s / k.s;
+      g.drawImage(k.cv, Math.round(px - k.hw * r), Math.round(py - k.up * r), Math.round(k.cv.width * r), Math.round(k.cv.height * r));
+      g.globalAlpha = 1;
+      return;
+    }
     if (!k || k.s !== s) {
       const sc = s * (look.scale || 1), hw = Math.ceil(80 * sc * Math.max(1, look.bulk || 1)) + 2, up = Math.ceil(70 * sc * (look.h || 1)) + 2, dn = Math.ceil(36 * sc) + 2;
       const one = { ...c, fade: 1 };
       k = { s, hw, up, cv: this.sp.bake(hw * 2, up + dn, (sg) => drawCorpse(sg, one, hw, up, s)) };
       this.corpseSpr.set(c, k);
     }
-    g.globalAlpha = c.fade ?? 1;
     g.drawImage(k.cv, Math.round(px) - k.hw, Math.round(py) - k.up);
     g.globalAlpha = 1;
   }
@@ -616,6 +714,56 @@ function holeSprite(R, power) {
   return c;
 }
 const ONE = [[0, 0, 0, 0]];
+// 마을 바닥판 굽기(townGround): 그리는 순서는 칸마다 찍을 때와 같다(바닥 → 그림자 → 풀포기)
+function* groundJob(G, L, s, T, fkeys) {
+  const hw = (TW / 2) * s, hh = (TH / 2) * s, fw = TW * s, fh = TH * s, M = 64;
+  const LX = Math.round(L.h * hw + fw / 2 + M), LY = Math.round(fh / 2 + M);
+  const w = Math.ceil((L.w + L.h) * hw + fw + 2 * M), h = Math.ceil((L.w + L.h) * hh + fh + 2 * M);
+  if (w * h > 6e6) return; // 아주 크게 확대했을 때는 칸마다 찍는다
+  // 그림자·풀포기는 이 배율로 구운 그림이 다 있어야 칸마다 찍을 때와 같다
+  for (const o of [...L.objects, ...(L.decor || [])]) {
+    if (!o.model) continue;
+    while (!cachedSprite(o.model, o.v || 0, s)) { queueSprite(o.model, o.v || 0, s); yield 'wait'; }
+  }
+  const cv = makeCanvas(w, h), g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  for (let y = 0; y < L.h; y++) {
+    for (let x = 0; x < L.w; x++) {
+      const k = y * L.w + x;
+      if (!L.floor[k]) continue;
+      const fresh = !T.townFloors.has(fkeys[k]); // 이 배율에서 처음 만드는 바닥 칸 그림이면 만든 뒤 쉰다
+      g.drawImage(townFloorSprite(T, fkeys[k]), LX + (x - y) * hw - fw / 2, LY + (x + y) * hh - fh / 2, fw, fh);
+      if (fresh) yield;
+    }
+    yield;
+  }
+  for (const o of L.objects) {
+    if (!o.model) continue;
+    const sh = cachedSprite(o.model, o.v || 0, s).sh;
+    if (sh) g.drawImage(sh.cv, LX + (o.x - o.y) * hw - sh.ax, LY + (o.x + o.y) * hh - sh.ay, sh.cv.width, sh.cv.height);
+  }
+  yield;
+  for (const d of L.decor || []) {
+    const sp = cachedSprite(d.model, d.v || 0, s);
+    g.drawImage(sp.cv, Math.round(LX + (d.x - d.y) * hw) - sp.ax, Math.round(LY + (d.x + d.y) * hh) - sp.ay, sp.w, sp.h);
+  }
+  G.cv = cv; G.LX = LX; G.LY = LY;
+}
+// 제목 화면에서 미리 굽기(warmTown): 건물·소품 모형(처음 장면에 굽지 못하면 그 자리에서 한꺼번에 굽느라 멈춘다)을 먼저,
+// 그다음 마을 바닥 칸 그림(광장에서 가까운 것부터)
+function* warmJob(r, sl) {
+  const T = r.tileset('town');
+  yield;
+  const L = generateTown(new RNG(7)), keys = townFloorKeys(L), first = new Map();
+  yield;
+  for (const o of [...L.objects, ...(L.decor || [])]) if (o.model) queueSprite(o.model, o.v || 0, sl);
+  while (bakesPending()) { pumpBakes(3); yield; }
+  for (let i = 0; i < keys.length; i++) if (keys[i] && !first.has(keys[i])) first.set(keys[i], Math.hypot((i % L.w) - L.w / 2, Math.floor(i / L.w) - L.h / 2));
+  for (const k of [...first.keys()].sort((a, b) => first.get(a) - first.get(b))) { townFloorSprite(T, k); yield; }
+  // 마을 사람 모습
+  for (const id in NPCS) if (NPCS[id].look) r.warmLook(NPCS[id].name, NPCS[id].look, 'npc');
+  while (r.lookQ.length) { r.pumpLooks(3); yield; }
+}
 function stripsOf(sp, fp) {
   if (sp.strips) return sp.strips;
   const tiles = [];

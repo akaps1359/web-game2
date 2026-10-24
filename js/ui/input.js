@@ -32,14 +32,22 @@ export class TouchInput {
     // 화면 왼쪽(위쪽 단추 줄 아래)을 누르면 그 자리에 조이스틱이 생긴다
     if (!this.stick && e.clientX < window.innerWidth * 0.45 && e.clientY > window.innerHeight * 0.18) {
       const x = e.clientX, y = e.clientY;
-      this.stick = { id: e.pointerId, bx: x, by: y };
+      this.stick = { id: e.pointerId, bx: x, by: y, x, y, t0: performance.now(), moved: false };
       this.app.hud.stickShow?.(x, y, 0, 0);
       return;
+    }
+    // 조이스틱을 막 짚은 손가락(아직 밀지 않음) 곁에 두 번째 손가락이 오면 두 손가락 확대로 바꾼다(화면 가운데에서 오므리고 벌릴 때)
+    // (두 손가락이 가까울 때만: 공격 단추를 살짝 비껴 누른 오른손 엄지는 확대가 아니다)
+    const S = this.stick;
+    if (S && !S.moved && performance.now() - S.t0 < 300 && Math.hypot(e.clientX - S.x, e.clientY - S.y) < window.innerWidth * 0.35) {
+      this.stickEnd();
+      this.pts.set(S.id, { x: S.x, y: S.y, x0: S.x, y0: S.y, wasStick: true });
     }
     this.pts.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
     if (this.pts.size === 2) {
       const [a, b] = [...this.pts.values()];
-      this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: this.app.renderer.userZoom || 1 };
+      this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: this.app.renderer.userZoom || 1, t0: performance.now() };
+      this.app.renderer.gestureStart?.();
     }
   }
   move(e) {
@@ -58,7 +66,21 @@ export class TouchInput {
     const p = this.pts.get(e.pointerId);
     this.pts.delete(e.pointerId);
     if (!p) return;
-    if (this.pinch) { if (this.pts.size < 2) this.pinch = null; return; }
+    if (this.pinch) {
+      if (this.pts.size < 2) {
+        const short = performance.now() - this.pinch.t0 < 400 && Math.hypot(p.x - p.x0, p.y - p.y0) < 14;
+        this.pinch = null; this.app.renderer.gestureEnd?.();
+        // 다른 손가락이 잠깐 닿았다 떨어져 조이스틱이던 손가락만 남았으면 그 자리에서 다시 조이스틱으로(엄지가 먹통이 되지 않게).
+        // 진짜 확대·축소를 마치며 한 손가락을 먼저 뗀 것이면 되살리지 않는다(남은 손가락이 미끄러지며 걷지 않게)
+        const [id, q] = [...this.pts.entries()][0] || [];
+        if (short && q?.wasStick && !this.stick) {
+          this.pts.delete(id);
+          this.stick = { id, bx: q.x, by: q.y, x: q.x, y: q.y, t0: performance.now(), moved: false };
+          this.app.hud.stickShow?.(q.x, q.y, 0, 0);
+        }
+      }
+      return;
+    }
     // 게임 화면을 눌러서는 아무것도 하지 않는다. 처음 몇 번만 단추를 알려 준다
     if (!cancel && Math.hypot(p.x - p.x0, p.y - p.y0) < 14) this.hint();
   }
@@ -70,10 +92,19 @@ export class TouchInput {
   // 조이스틱: 받침에서 손가락까지가 방향. 반지름을 넘어 끌면 받침이 따라온다
   stickMove(x, y) {
     const S = this.stick;
+    S.x = x; S.y = y;
     let dx = x - S.bx, dy = y - S.by;
     const d = Math.hypot(dx, dy);
+    if (d >= STICK_DEAD) S.moved = true;
     if (d > STICK_R) { S.bx = x - dx / d * STICK_R; S.by = y - dy / d * STICK_R; dx = x - S.bx; dy = y - S.by; }
     this.app.hud.stickShow?.(S.bx, S.by, dx, dy);
+    this.steer(d < STICK_DEAD ? 0 : dx, d < STICK_DEAD ? 0 : dy);
+  }
+  // 창·대화가 닫힐 때: 쥐고 있던 조이스틱을 다시 적용한다(창이 열리며 게임의 이동 입력을 지웠으니, 손가락을 움직이지 않아도 다시 걷게)
+  resteer() {
+    const S = this.stick;
+    if (!S) return;
+    const dx = S.x - S.bx, dy = S.y - S.by, d = Math.hypot(dx, dy);
     this.steer(d < STICK_DEAD ? 0 : dx, d < STICK_DEAD ? 0 : dy);
   }
   stickEnd() {
@@ -84,14 +115,14 @@ export class TouchInput {
   // 손가락 상태를 모두 지운다(앱 전환 등으로 손 뗌을 못 받았을 때)
   reset() {
     if (this.stick) this.stickEnd();
-    this.pts.clear(); this.pinch = null;
+    this.pts.clear(); this.pinch = null; this.app.renderer.gestureEnd?.();
   }
   // 화면 방향(dx, dy) → 게임의 월드 방향
   steer(dx, dy) {
     const g = this.game;
     if (!g) return;
     if (!dx && !dy) { g.setStick(null); return; }
-    const r = this.app.renderer, cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    const r = this.app.renderer, cx = r.W / 2, cy = r.H / 2; // 그림판(=화면) 크기는 렌더러가 재 둔 것을 쓴다
     const a = r.toWorld(cx, cy), b = r.toWorld(cx + dx, cy + dy);
     g.setStick(b.x - a.x, b.y - a.y);
   }

@@ -1,5 +1,5 @@
 // HUD: 생명력·마나 구슬, 물약 띠, 기술 단추(탭 = 자동 조준, 끌기 = 조준), 상호작용 단추, 이동 조이스틱, 메뉴 단추, 작은 지도, 대상 정보
-import { $, el, onTap, canvasFor } from './dom.js';
+import { $, el, onTap, onPress, canvasFor } from './dom.js';
 import { paintItemIcon } from '../render/icons.js';
 import { paintSkillIcon } from '../render/skillicons.js';
 import { skillDef, skillManaCost } from '../game/skills.js';
@@ -26,11 +26,12 @@ export class HUD {
   }
   get game() { return this.app.game; }
   show() { this.root.classList.remove('hidden'); }
-  hide() { this.root.classList.add('hidden'); this.root.innerHTML = ''; }
+  hide() { this.root.classList.add('hidden'); this.root.innerHTML = ''; this.showMap = false; }
 
   build() {
     const r = this.root;
     r.innerHTML = '';
+    this.tShown = null; this.lastTw = this.lastXw = this.lastFlt = null; // 새 DOM이니 '바뀔 때만 쓰기' 기억을 비운다
     // ── 위쪽 ──
     const top = el('div', 'hud-top');
     const menu = el('div', 'menu-btns');
@@ -71,8 +72,8 @@ export class HUD {
     const bot = el('div', 'hud-bottom');
     this.lifeOrb = this.makeOrb(bot, 'life');
     this.manaOrb = this.makeOrb(bot, 'mana');
-    onTap(this.lifeOrb.node, () => this.game?.quickPotion('hp'));
-    onTap(this.manaOrb.node, () => this.game?.quickPotion('mp'));
+    onPress(this.lifeOrb.node, () => this.game?.quickPotion('hp'));
+    onPress(this.manaOrb.node, () => this.game?.quickPotion('mp'));
     this.xp = el('div', 'xpbar'); this.xpi = el('i'); this.xp.appendChild(this.xpi); bot.appendChild(this.xp);
     this.lvl = el('div', 'lvl-badge'); bot.appendChild(this.lvl);
     this.belt = el('div', 'belt'); bot.appendChild(this.belt);
@@ -81,7 +82,7 @@ export class HUD {
       const s = el('button', 'bslot');
       const cv = canvasFor(s, 36, 36); // 칸(42) 안쪽, 테두리를 뺀 크기
       const k = el('span', 'k', ''); s.appendChild(k);
-      onTap(s, () => { this.game?.useBelt(i); this.refreshBelt(); });
+      onPress(s, () => { this.game?.useBelt(i); this.refreshBelt(); });
       this.belt.appendChild(s);
       this.beltSlots.push({ node: s, cv, k });
     }
@@ -123,10 +124,12 @@ export class HUD {
     this.aimCv = canvasFor(null, window.innerWidth, window.innerHeight);
     this.aimCv.c.className = 'aimline'; r.appendChild(this.aimCv.c);
     this.mapCv = canvasFor(null, window.innerWidth, window.innerHeight);
-    this.mapCv.c.className = 'automap'; this.mapCv.c.style.display = 'none'; r.appendChild(this.mapCv.c);
+    // 크기가 바뀌어 다시 만들 때도 큰 지도를 보던 중이면 그대로 보인다
+    this.mapCv.c.className = 'automap'; this.mapCv.c.style.display = this.showMap ? '' : 'none'; this.mapT = 0; this.lastBuffs = null; r.appendChild(this.mapCv.c);
     this.vign = el('div'); this.vign.style.cssText = 'position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 90px rgba(200,0,0,0.0);transition:box-shadow .25s;z-index:14';
     r.appendChild(this.vign);
     this.refreshBelt(); this.refreshSkills(); this.badges(); this.onLevel();
+    this.narrowChecked = false;
   }
   layout() { if (this.game) this.build(); }
   // 눌린 채로 남은 단추·계속 공격·겨눔 선을 지운다(앱 전환 등으로 손 뗌을 못 받았을 때)
@@ -147,32 +150,60 @@ export class HUD {
   // 구슬: 칸마다 직접 칠한다(물결진 수면 한 줄은 밝게, 아래쪽은 어둡게, 가장자리 그늘, 왼쪽 위에 딱 끊긴 반사) + 도트 테두리
   drawOrb(o, frac, t) {
     const cv = o.cv, N = cv.c.width, g = cv.g;
-    if (!o.img || o.img.width !== N) o.img = g.createImageData(N, N);
-    const d = o.img.data;
-    d.fill(0);
-    const C = N / 2, r = C - 4, red = o.kind === 'life', poison = red && this.game?.player?.buffs?.poison;
-    const base = red ? (poison ? [58, 154, 32] : [184, 24, 22]) : [30, 62, 206];
-    const dark = red ? (poison ? [18, 60, 10] : [86, 6, 6]) : [10, 18, 92];
-    const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
-    const light = mix(base, [255, 255, 255], 0.35), glass = [10, 6, 6];
-    const lv = C + r - frac * r * 2;
+    const red = o.kind === 'life', poison = !!(red && this.game?.player?.buffs?.poison);
+    // 칸마다 변하지 않는 것(구슬 안인지·가장자리 그늘·반사)과 색 16가지는 한 번만 계산해 둔다(장면마다 배열을 만들지 않게)
+    if (!o.img || o.img.width !== N || o.poison !== poison) this.orbPrep(o, N, red, poison);
+    const C = N / 2, r = C - 4, lv = C + r - frac * r * 2, u32 = o.u32, M = o.mask, COL = o.cols;
+    // 물결은 한 칸 단위로만 움직이니, 수위와 줄마다의 물결 높이가 지난번과 같으면 그림도 같다 → 다시 칠하지 않는다
+    if (o.lt === t && o.lv === lv && !o.dirty) return;
+    o.lt = t;
+    const offs = o.offs || (o.offs = new Int8Array(N));
+    let same = o.lv === lv && !o.dirty;
     for (let x = 0; x < N; x++) {
-      const surf = lv + Math.round(Math.sin(x * 0.4 + t * 2.4) * 0.7 + Math.sin(x * 0.17 - t * 1.3) * 0.6);
+      const w = Math.round(Math.sin(x * 0.4 + t * 2.4) * 0.7 + Math.sin(x * 0.17 - t * 1.3) * 0.6);
+      if (offs[x] !== w) { offs[x] = w; same = false; }
+    }
+    if (same) return;
+    o.lv = lv; o.dirty = false;
+    u32.fill(0);
+    for (let x = 0; x < N; x++) {
+      const surf = lv + offs[x];
       for (let y = 0; y < N; y++) {
-        const dx = x + 0.5 - C, dy = y + 0.5 - C, dist = Math.hypot(dx, dy);
-        if (dist > r + 0.5) continue;
-        let col;
-        const empty = y + 0.5 < surf;
-        if (empty) col = glass;
-        else col = y < surf + 1 ? light : (y - surf) / (r * 2) > 0.5 ? dark : base;
-        if (dist > r - 2) col = mix(col, [0, 0, 0], 0.4);
-        if ((dx + r * 0.32) ** 2 / (r * r * 0.03) + (dy + r * 0.42) ** 2 / (r * r * 0.06) < 1) col = mix(col, [255, 255, 255], empty ? 0.12 : 0.5);
-        const i = (y * N + x) * 4;
-        d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+        const i = y * N + x, m = M[i];
+        if (!m) continue;
+        // 0 빈 유리, 1 수면, 2 액체, 3 아래쪽 어두운 액체 / 가장자리·반사는 m의 비트
+        const cat = y + 0.5 < surf ? 0 : y < surf + 1 ? 1 : (y - surf) / (r * 2) > 0.5 ? 3 : 2;
+        u32[i] = COL[cat * 4 + (m >> 1)];
       }
     }
     g.putImageData(o.img, 0, 0);
     stamp(cv, pixRingCanvas(N, ORB_RING));
+  }
+  orbPrep(o, N, red, poison) {
+    o.img = o.cv.g.createImageData(N, N); o.u32 = new Uint32Array(o.img.data.buffer); o.poison = poison; o.dirty = true; o.offs = null;
+    const C = N / 2, r = C - 4, mask = o.mask = new Uint8Array(N * N);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const dx = x + 0.5 - C, dy = y + 0.5 - C, dist = Math.hypot(dx, dy);
+      if (dist > r + 0.5) continue;
+      const rim = dist > r - 2 ? 1 : 0, hl = (dx + r * 0.32) ** 2 / (r * r * 0.03) + (dy + r * 0.42) ** 2 / (r * r * 0.06) < 1 ? 1 : 0;
+      mask[y * N + x] = 1 | (rim << 1) | (hl << 2);
+    }
+    const base = red ? (poison ? [58, 154, 32] : [184, 24, 22]) : [30, 62, 206];
+    const dark = red ? (poison ? [18, 60, 10] : [86, 6, 6]) : [10, 18, 92];
+    const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+    const light = mix(base, [255, 255, 255], 0.35), glass = [10, 6, 6];
+    // 색은 원래처럼 소수로 섞은 뒤 Uint8Clamped 반올림으로 굳힌다(그림이 전과 같게)
+    const q = new Uint8ClampedArray(4), q32 = new Uint32Array(q.buffer);
+    o.cols = new Uint32Array(16);
+    [glass, light, base, dark].forEach((c0, cat) => {
+      for (let k = 0; k < 4; k++) {
+        let col = c0;
+        if (k & 1) col = mix(col, [0, 0, 0], 0.4);
+        if (k & 2) col = mix(col, [255, 255, 255], cat === 0 ? 0.12 : 0.5);
+        q[0] = col[0]; q[1] = col[1]; q[2] = col[2]; q[3] = 255;
+        o.cols[cat * 4 + k] = q32[0];
+      }
+    });
   }
 
   // ───────── 기술 단추 ─────────
@@ -188,9 +219,11 @@ export class HUD {
       if (S.idx === 0 && (!S.id || S.id === 'attack')) {
         this.useSlot(0);
         clearInterval(this.repeat);
+        // 누르고 있는 동안 계속(창·대화가 열려 있는 동안은 쉬고, 손을 떼야 멈춘다)
         this.repeat = setInterval(() => {
           const g = this.game;
-          if (!b.isConnected || !g || this.app.dialog.isOpen() || this.app.panels.isOpen()) { clearInterval(this.repeat); return; }
+          if (!b.isConnected || !g) { clearInterval(this.repeat); return; }
+          if (this.app.dialog.isOpen() || this.app.panels.isOpen()) return;
           if (!g.cmd) g.attackNearest();
         }, 120);
       }
@@ -198,13 +231,13 @@ export class HUD {
     b.addEventListener('pointermove', (e) => {
       if (!st) return;
       st.x = e.clientX; st.y = e.clientY;
-      if (!st.aiming && Math.hypot(st.x - st.x0, st.y - st.y0) > 22 && S.id && S.id !== 'attack') { st.aiming = true; clearInterval(this.repeat); }
+      if (!st.aiming && Math.hypot(st.x - st.x0, st.y - st.y0) > 22 && S.id && S.id !== 'attack') { st.aiming = true; if (S.idx === 0) clearInterval(this.repeat); }
       if (st.aiming) this.aim = { x: st.x, y: st.y, id: S.id };
     });
     const end = (e, cancel) => {
       if (!st) return;
       b.classList.remove('pressed');
-      clearInterval(this.repeat);
+      if (S.idx === 0) clearInterval(this.repeat); // 다른 기술 단추를 눌렀다 떼도 공격 단추를 쥔 손가락의 계속 공격은 이어진다
       const s = st; st = null;
       this.aim = null; this.clearAim();
       if (cancel) return;
@@ -315,30 +348,49 @@ export class HUD {
   toggleMap() {
     this.showMap = !this.showMap;
     this.mapCv.c.style.display = this.showMap ? '' : 'none';
-    this.mapT = 1;
+    // 열자마자 그린다(1초 동안 비어 있거나 지난 층 지도가 보이던 것)
+    if (this.showMap) { this.mapT = 0.1; this.drawAutomap(); }
   }
 
+  // 네 번째 기술 단추가 마나 구슬과 겹치는 좁은 화면(SE·미니 등)이면 단추를 옮긴다. HUD를 새로 만든 뒤 보일 때 한 번만 잰다
+  checkNarrow() {
+    const r = this.root, s4 = this.sbtns?.find((S) => S.idx === 4)?.node, mo = this.manaOrb?.node;
+    if (!s4 || !mo) return;
+    r.classList.remove('narrow');
+    const a = s4.getBoundingClientRect(), b = mo.getBoundingClientRect();
+    if (!a.width || !b.width) return;
+    this.narrowChecked = true;
+    const ax = (a.left + a.right) / 2, ay = (a.top + a.bottom) / 2, bx = (b.left + b.right) / 2, by = (b.top + b.bottom) / 2;
+    if (Math.hypot(ax - bx, ay - by) < (a.width + b.width) / 2 - 2) r.classList.add('narrow');
+  }
   // ───────── 매 프레임 ─────────
   update(dt) {
     const g = this.game;
     if (!g || !this.lifeOrb) return;
+    if (!this.narrowChecked) this.checkNarrow();
     this.t += dt;
     const P = g.player, h = g.hero;
-    this.drawOrb(this.lifeOrb, Math.max(0, P.hp / P.hpMax), this.t);
-    this.drawOrb(this.manaOrb, P.mpMax ? Math.max(0, P.mp / P.mpMax) : 0, this.t + 1.3);
+    // 구슬: 출렁임은 게임이 돌 때만. 멈춰 있으면(창·대화) 양이 바뀔 때만 다시 칠한다
+    const lf = Math.max(0, P.hp / P.hpMax), mf = P.mpMax ? Math.max(0, P.mp / P.mpMax) : 0;
+    // 물결은 초당 15번만 움직인다(도트 그림이라 한 칸씩 움직이는 물결이 매 장면 다시 칠할 만큼 빠르지 않다). 양이 바뀌면 바로
+    const tq = Math.floor(this.t * 15) / 15;
+    if (!g.paused || this.lifeOrb.last !== lf) { this.drawOrb(this.lifeOrb, lf, tq); this.lifeOrb.last = lf; }
+    if (!g.paused || this.manaOrb.last !== mf) { this.drawOrb(this.manaOrb, mf, tq + 1.3); this.manaOrb.last = mf; }
     const lt = `${Math.max(0, Math.ceil(P.hp))}/${P.hpMax}`, mt = `${Math.floor(P.mp)}/${P.mpMax}`;
     if (this.lifeOrb.v.textContent !== lt) this.lifeOrb.v.textContent = lt;
     if (this.manaOrb.v.textContent !== mt) this.manaOrb.v.textContent = mt;
     // 생명력이 낮으면 경고
-    this.lifeOrb.node.style.filter = P.hp < P.hpMax * 0.25 ? `drop-shadow(0 0 ${6 + 4 * Math.sin(this.t * 8)}px #f00)` : '';
-    this.xpi.style.width = (h.expProgress() * 100).toFixed(1) + '%';
+    const flt = P.hp < P.hpMax * 0.25 ? `drop-shadow(0 0 ${Math.round(6 + 4 * Math.sin(this.t * 8))}px #f00)` : '';
+    if (flt !== this.lastFlt) { this.lastFlt = flt; this.lifeOrb.node.style.filter = flt; }
+    const xw = (h.expProgress() * 100).toFixed(1) + '%';
+    if (xw !== this.lastXw) { this.lastXw = xw; this.xpi.style.width = xw; }
     const lv = `레벨 ${h.data.lvl}`;
     if (this.lvl.textContent !== lv) this.lvl.textContent = lv;
     // 기술 단추: 마나·재사용 대기
     for (const S of this.sbtns) {
       if (!S.id) continue;
-      const lack = S.cost && P.mp < S.cost;
-      S.node.classList.toggle('nomana', !!lack);
+      const lack = !!(S.cost && P.mp < S.cost);
+      if (lack !== S.lack) { S.lack = lack; S.node.classList.toggle('nomana', lack); }
       const def = S.id !== 'attack' && skillDef(S.id);
       const cdEnd = h.cd?.[S.id] || 0;
       if (def?.cd && cdEnd > g.time) {
@@ -352,15 +404,20 @@ export class HUD {
     // 대상 정보
     const t = g.target && !g.target.dead ? g.target : null;
     if (t && g.canSee(t)) {
-      this.tbox.classList.add('on');
-      this.tname.textContent = t.name || '';
-      this.tname.className = 'tn ' + (t.rank === 'unique' ? 'unique' : t.rank === 'champion' ? 'champion' : '');
-      const mods = [];
-      if (t.umods) for (const m of t.umods) mods.push(UMOD_NAME[m] || m);
-      const res = t.res ? Object.entries(t.res).filter(([k, v]) => v >= 100).map(([k]) => RES_IMM[k]) : [];
-      this.tmods.textContent = [...mods, ...res].join(' · ');
-      this.tbar.style.width = Math.max(0, (t.hp / t.hpMax) * 100).toFixed(1) + '%';
-    } else this.tbox.classList.remove('on');
+      // 대상이 바뀔 때만 이름·속성을 새로 쓰고, 체력 막대는 값이 바뀔 때만
+      if (this.tShown !== t) {
+        this.tShown = t;
+        this.tbox.classList.add('on');
+        this.tname.textContent = t.name || '';
+        this.tname.className = 'tn ' + (t.rank === 'unique' ? 'unique' : t.rank === 'champion' ? 'champion' : '');
+        const mods = [];
+        if (t.umods) for (const m of t.umods) mods.push(UMOD_NAME[m] || m);
+        const res = t.res ? Object.entries(t.res).filter(([k, v]) => v >= 100).map(([k]) => RES_IMM[k]) : [];
+        this.tmods.textContent = [...mods, ...res].join(' · ');
+      }
+      const tw = Math.max(0, (t.hp / t.hpMax) * 100).toFixed(1) + '%';
+      if (tw !== this.lastTw) { this.lastTw = tw; this.tbar.style.width = tw; }
+    } else if (this.tShown) { this.tShown = null; this.lastTw = null; this.tbox.classList.remove('on'); }
     // 버프·작은 지도·퀘스트 목표
     this.bT = (this.bT || 0) - dt;
     if (this.bT <= 0) { this.bT = 0.25; this.drawBuffs(P); this.drawMinimap(); this.drawGoal(); }
@@ -383,8 +440,9 @@ export class HUD {
     if (s !== this.lastBuffs) { this.buffs.innerHTML = s; this.lastBuffs = s; }
   }
   drawAim() {
-    const g = this.aimCv.g, W = window.innerWidth, H = window.innerHeight;
+    // 창 크기는 겨눌 때만 읽는다(DOM을 고친 뒤 장면마다 읽으면 그때마다 배치를 다시 계산한다)
     if (!this.aim) return;
+    const g = this.aimCv.g, W = window.innerWidth, H = window.innerHeight;
     g.clearRect(0, 0, W, H);
     const P = this.game.player, r = this.app.renderer;
     const p = r.toScreen(P.x, P.y, 30);

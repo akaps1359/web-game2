@@ -4,6 +4,7 @@ import { MONSTERS, FAMILIES, BOSSES, CHAMP_TYPES, UMODS, UNAME_A, UNAME_B, monst
 import { monsterMeleeHit, monsterShoot, damageActor, areaDamage, spawnArea, spawnMissile, knockback, MISSILES } from './combat.js';
 import { addBuff } from './buffs.js';
 import { DIRS } from '../core/util.js';
+import { F_SOLID, F_OPAQUE } from './level.js';
 
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const chance = (p) => Math.random() < p;
@@ -148,6 +149,8 @@ export function updateMonster(game, a, dt) {
   const frozen = a.buffs.freeze || a.buffs.stun;
   const rate = a.buffs.chill ? 0.5 : 1;
   if (a.ttl != null) { a.ttl -= dt; if (a.ttl <= 0) { a.dead = true; a.noCorpse = true; a.release(L); a.setAnim('death', 0.3); game.fx.magic(a.x, a.y, 30, 10, [150, 150, 255]); return; } }
+  // 겁(울부짖음 등)은 시간으로 줄어든다(타락귀는 제 방식대로: 달아났다 함성)
+  if (a.fear > 0 && a.ai !== 'fallen') a.fear = Math.max(0, a.fear - dt);
   if (a.mv) {
     if (frozen) return;
     a.advance(L, dt * rate * (a.dash || 1));
@@ -171,6 +174,17 @@ export function updateMonster(game, a, dt) {
   // 멀리 있는 괴물은 잠든다
   const dP = Math.hypot(a.x - P.x, a.y - P.y);
   if (dP > 24 && a.kind === 'monster') { a.aware = false; return; }
+  // 우두머리 속성 '순간 이동': 깨어 있고 3~12칸 떨어져 있으면 몇 초에 한 번 플레이어 곁(보이는 칸)으로 건너온다
+  if (a.umods?.includes('teleport') && a.aware && dP > 3 && dP < 12 && !(a.tpAt > game.time)) {
+    a.tpAt = game.time + 3 + Math.random() * 3;
+    const p = L.nearestFree(P.tx + rnd(-2, 2), P.ty + rnd(-2, 2), 2, a.id, (x, y) => L.los(x, y, P.tx, P.ty));
+    if (p) { game.fx.magic(a.x, a.y, 30, 10, [150, 120, 255]); a.place(L, p.x, p.y); game.fx.magic(a.x, a.y, 30, 10, [150, 120, 255]); game.sfx('teleport', a.x, a.y, { vol: 0.5 }); a.wait = 0.3; return; }
+  }
+  // 겁먹은 괴물은 종류와 상관없이 달아난다(궁수·주문 쓰는 것도). 보스는 겁먹지 않는다
+  if (a.fear > 0 && a.ai !== 'fallen') {
+    if (a.boss) a.fear = 0;
+    else { const t = pickTarget(game, a); if (t) stepToward(game, a, t, true); a.wait = 0.1; return; }
+  }
   const fn = AI[a.ai] || AI.melee;
   fn(game, a, dt, dP);
 }
@@ -216,13 +230,14 @@ function stepToward(game, a, t, flee = false) {
     if (o && o.type === 'door' && !o.open && !o.locked && Math.hypot(nx - t.x, ny - t.y) < Math.hypot(a.tx - t.x, a.ty - t.y)) { game.openDoor(o); a.wait = 0.3; return true; }
   }
   let best = null, bs = flee ? -1e9 : 1e9;
-  const useMap = t === P && !flee && game.dmap.at(a.tx, a.ty) < 1e8;
+  const map = a.F?.doors || a.boss ? game.dmap : game.dmapW || game.dmap;
+  const useMap = t === P && !flee && map.at(a.tx, a.ty) < 1e8;
   for (let d = 0; d < 8; d++) {
     const nx = a.tx + DIRS[d][0], ny = a.ty + DIRS[d][1];
     if (!L.canStep(a.tx, a.ty, nx, ny, a.id)) continue;
     // 문은 열 수 있는 괴물만(닫힌 문은 막힌 칸이다)
     let s;
-    if (useMap) s = game.dmap.at(nx, ny) + Math.hypot(nx - t.x, ny - t.y) * 0.05;
+    if (useMap) s = map.at(nx, ny) + Math.hypot(nx - t.x, ny - t.y) * 0.05;
     else s = Math.hypot(nx - t.x, ny - t.y);
     if (flee) { if (s > bs) { bs = s; best = [nx, ny]; } }
     else if (s < bs) { bs = s; best = [nx, ny]; }
@@ -230,7 +245,7 @@ function stepToward(game, a, t, flee = false) {
   if (!best) return false;
   // 가까워지지 않으면(막혀서 돌아가야 하면) 지도 값이 낮을 때만
   if (!flee && !useMap && bs > Math.hypot(a.tx - t.x, a.ty - t.y) + 0.5) return false;
-  if (useMap && bs >= game.dmap.at(a.tx, a.ty) + 0.5 && Math.hypot(a.tx - t.x, a.ty - t.y) < 3) return false;
+  if (useMap && bs >= map.at(a.tx, a.ty) + 0.5 && Math.hypot(a.tx - t.x, a.ty - t.y) < 3) return false;
   a.step(L, best[0], best[1]);
   return true;
 }
@@ -242,7 +257,22 @@ function wander(game, a) {
   if (Math.hypot(nx - a.home.x, ny - a.home.y) > 5) return;
   if (L.canStep(a.tx, a.ty, nx, ny, a.id)) a.step(L, nx, ny);
 }
-function adjacent(a, t) { return Math.max(Math.abs(a.tx - t.tx), Math.abs(a.ty - t.ty)) <= 1 && Math.hypot(a.x - t.x, a.y - t.y) < 1.6; }
+// 이웃 칸이면 손 닿는 곳(조이스틱으로 칸 가운데를 벗어난 플레이어가 대각선 이웃 칸에 있어도 친다)
+function adjacent(a, t) { return Math.max(Math.abs(a.tx - t.tx), Math.abs(a.ty - t.ty)) <= 1 && Math.hypot(a.x - t.x, a.y - t.y) < 2.2; }
+// 쏴도 되는가: 칸 사이 시야만이 아니라 실제로 날아갈 줄(대상의 진짜 위치까지)이 벽 모서리에 걸리지 않는가
+function canShoot(game, a, t) {
+  const L = game.level;
+  if (!L.los(a.tx, a.ty, t.tx, t.ty)) return false;
+  // 투사체가 실제로 지나갈 줄을 0.1칸마다 짚어 본다(투사체도 벽·닫힌 문 칸에 닿으면 사라진다)
+  const n = Math.ceil(Math.hypot(t.x - a.x, t.y - a.y) * 10);
+  for (let i = 1; i < n; i++) {
+    const x = Math.round(a.x + ((t.x - a.x) * i) / n), y = Math.round(a.y + ((t.y - a.y) * i) / n);
+    if (!L.inb(x, y)) return false;
+    const k = y * L.w + x;
+    if (!L.floor[k] || (L.flags[k] & F_SOLID && L.flags[k] & F_OPAQUE)) return false;
+  }
+  return true;
+}
 
 function meleeSwing(game, a, t, mult = 1, extra = {}) {
   a.turnTo(t.x, t.y);
@@ -284,7 +314,6 @@ const AI = {
     if (!wake(game, a, dP)) { wander(game, a); return; }
     const t = pickTarget(game, a);
     if (!t) { wander(game, a); return; }
-    if (a.fear > 0) { a.fear -= 0.3; stepToward(game, a, t, true); a.wait = 0.1; return; }
     if (adjacent(a, t)) { meleeSwing(game, a, t); a.wait = Math.max(0, 0.35 - a.int * 0.08) * Math.random(); return; }
     if (!stepToward(game, a, t)) a.wait = 0.2 + Math.random() * 0.3;
   },
@@ -320,7 +349,7 @@ const AI = {
     const t = pickTarget(game, a);
     if (!t) return;
     const d = Math.hypot(a.x - t.x, a.y - t.y);
-    const los = game.level.los(a.tx, a.ty, t.tx, t.ty);
+    const los = canShoot(game, a, t);
     if (d < 3 && chance(0.7)) { if (stepToward(game, a, t, true)) return; }
     if (los && d < 11) { shoot(game, a, t, a.missile || a.F.missile || 'arrow'); a.wait = Math.random() * 0.8; return; }
     if (!stepToward(game, a, t)) a.wait = 0.3;
@@ -408,7 +437,7 @@ const AI = {
     if (!t) return;
     const d = Math.hypot(a.x - t.x, a.y - t.y);
     if (adjacent(a, t)) { meleeSwing(game, a, t, 1, { style: 'bite' }); return; }
-    if (d < 7 && game.level.los(a.tx, a.ty, t.tx, t.ty) && chance(0.6)) { shoot(game, a, t, 'acid'); a.wait = 0.3 + Math.random() * 0.6; return; }
+    if (d < 7 && canShoot(game, a, t) && chance(0.6)) { shoot(game, a, t, 'acid'); a.wait = 0.3 + Math.random() * 0.6; return; }
     if (!stepToward(game, a, t)) a.wait = 0.3;
   },
   // 마그마·폭풍 악마: 멀면 주문, 가까우면 근접
@@ -421,7 +450,7 @@ const AI = {
       meleeSwing(game, a, t, 1, { after: () => { if (chance(0.5) && adjacent(a, t)) monsterMeleeHit(game, a, t, 0.8); } });
       return;
     }
-    if (d < 9 && d > 2 && game.level.los(a.tx, a.ty, t.tx, t.ty) && chance(0.35)) {
+    if (d < 9 && d > 2 && canShoot(game, a, t) && chance(0.35)) {
       shoot(game, a, t, a.F.missile === 'fireball' ? 'magma' : a.F.missile);
       a.wait = 0.5 + Math.random();
       return;
@@ -474,7 +503,7 @@ const AI = {
     if (!t) return;
     const d = Math.hypot(a.x - t.x, a.y - t.y);
     if (d < 3 && chance(0.6) && stepToward(game, a, t, true)) return;
-    if (d < 10 && game.level.los(a.tx, a.ty, t.tx, t.ty)) { shoot(game, a, t, a.missile || 'bloodstar'); a.wait = 0.4 + Math.random() * 0.8; return; }
+    if (d < 10 && canShoot(game, a, t)) { shoot(game, a, t, a.missile || 'bloodstar'); a.wait = 0.4 + Math.random() * 0.8; return; }
     if (!stepToward(game, a, t)) a.wait = 0.3;
   },
   // 흑마법사: 사라졌다 나타나며 주문, 붙으면 섬광
@@ -493,7 +522,7 @@ const AI = {
       if (p) { game.fx.magic(a.x, a.y, 30, 10, [150, 120, 255]); a.place(L, p.x, p.y); a.invis = 0; game.fx.magic(a.x, a.y, 30, 10, [150, 120, 255]); game.sfx('teleport', a.x, a.y, { vol: 0.5 }); a.wait = 0.3; return; }
     }
     const spell = a.spell || a.mdef?.spell || 'firebolt';
-    if (d < 11) { shoot(game, a, t, spell === 'lightning' ? 'lightning' : spell); a.wait = 0.6 + Math.random() * 0.8; return; }
+    if (d < 11 && canShoot(game, a, t)) { shoot(game, a, t, spell === 'lightning' ? 'lightning' : spell); a.wait = 0.6 + Math.random() * 0.8; return; }
     stepToward(game, a, t);
   },
   // 망자의 왕: 해골을 일으킨다
@@ -501,23 +530,26 @@ const AI = {
     if (!wake(game, a, dP)) return;
     // 깨어난 지 4초 뒤부터 7초마다(판단 횟수가 아니라 시간으로)
     a.raiseAt ??= game.time + 4;
-    if (game.time >= a.raiseAt) {
+    // 살아 있는 하수인이 6을 넘지 않게(오래 싸우면 끝없이 불어나던 것). 꽉 찼으면 부르는 시늉 없이 싸우다 조금 뒤 다시 본다
+    const room = game.time >= a.raiseAt ? Math.max(0, 6 - game.level.actors.filter((o) => o.summoner === a && !o.dead).length) : 0;
+    if (game.time >= a.raiseAt && !room) a.raiseAt = game.time + 2;
+    if (room) {
       a.raiseAt = game.time + 7;
       const L = game.level;
-      const bones = L.corpses.filter((c) => !c.eaten && c.monRef && MONSTERS[c.type]?.F?.bones && Math.hypot(c.x - a.x, c.y - a.y) < 9).slice(0, 3);
+      const bones = L.corpses.filter((c) => !c.eaten && c.monRef && MONSTERS[c.type]?.F?.bones && Math.hypot(c.x - a.x, c.y - a.y) < 9).slice(0, Math.min(3, room));
       let n = 0;
       for (const c of bones) {
         const p = L.nearestFree(Math.round(c.x), Math.round(c.y), 2);
         if (!p) continue;
         const s = spawnMonster(game, L, c.type, p.x, p.y);
-        s.aware = true; c.eaten = true; c.fade = 0; L.corpses.splice(L.corpses.indexOf(c), 1);
+        s.aware = true; s.summoner = a; c.eaten = true; c.fade = 0; L.corpses.splice(L.corpses.indexOf(c), 1);
         game.fx.magic(s.x, s.y, 20, 14, [200, 255, 200]); n++;
       }
-      if (n < 2) for (let i = 0; i < 2 - n; i++) {
+      if (n < 2) for (let i = 0; i < Math.min(2 - n, room - n); i++) {
         const p = L.nearestFree(a.tx + rnd(-2, 2), a.ty + rnd(-2, 2), 3);
         if (!p) continue;
         const s = spawnMonster(game, L, game.depth >= 3 ? 'corpseaxe' : 'skeleton', p.x, p.y);
-        s.aware = true; game.fx.magic(s.x, s.y, 20, 14, [200, 255, 200]);
+        s.aware = true; s.summoner = a; game.fx.magic(s.x, s.y, 20, 14, [200, 255, 200]);
       }
       a.setAnim('special', 0.8);
       game.sfx('summon', a.x, a.y);
@@ -546,11 +578,13 @@ const AI = {
       game.sfx('boss_roar', a.x, a.y);
       return;
     }
-    if (game.time >= a.sumAt) {
+    const room = game.time >= a.sumAt ? Math.max(0, 6 - game.level.actors.filter((o) => o.summoner === a && !o.dead).length) : 0;
+    if (game.time >= a.sumAt && !room) a.sumAt = game.time + 3;
+    if (room) {
       a.sumAt = game.time + 14;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < Math.min(3, room); i++) {
         const p = game.level.nearestFree(a.tx + rnd(-3, 3), a.ty + rnd(-3, 3), 3);
-        if (p) { const s = spawnMonster(game, game.level, rnd(0, 1) ? 'blood_knight' : 'advocate', p.x, p.y); s.aware = true; game.fx.magic(s.x, s.y, 20, 16, [255, 60, 40]); }
+        if (p) { const s = spawnMonster(game, game.level, rnd(0, 1) ? 'blood_knight' : 'advocate', p.x, p.y); s.aware = true; s.summoner = a; game.fx.magic(s.x, s.y, 20, 16, [255, 60, 40]); }
       }
       a.setAnim('special', 0.8);
       return;

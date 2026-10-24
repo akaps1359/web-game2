@@ -14,12 +14,16 @@ export const TYPE_COL = { phys: '#ffffff', fire: '#ff9a40', cold: '#8ad0ff', lig
 // ───────── 플레이어 근접 공격 ─────────
 // 손 닿는 거리(액터 중심 사이, 큰 괴물은 조금 더)와 앞쪽 부채꼴 반각
 export const MELEE_HIT = 1.9, MELEE_ARC = 1.2;
+// 이웃 칸의 적은 조금 더 멀어도 닿는다(칸 가운데를 벗어나 선 채 대각선 이웃 칸의 적과 싸울 때: 괴물도 같은 거리에서 친다)
+export const meleeReach = (P, a) => Math.max(MELEE_HIT + (a.big ? 0.3 : 0), Math.max(Math.abs(a.tx - P.tx), Math.abs(a.ty - P.ty)) <= 1 ? 2.2 : 0);
 const angOff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 // 내려치는 순간 맞을 적: 겨눈 적이 아직 손 닿는 곳·앞쪽에 있으면 그 적, 아니면 앞쪽 부채꼴 안의 가장 가까운 적(없으면 헛손질)
 export function swingTarget(game, P, t) {
   const fa = P.faceTo ?? P.face;
+  // 벽 너머(시야가 막힌 칸)의 적은 손 닿는 거리여도 치지 못한다
   const ok = (a) => a && !a.dead && a.team !== P.team && a.kind !== 'npc' && !a.untargetable
-    && Math.hypot(a.x - P.x, a.y - P.y) <= MELEE_HIT + (a.big ? 0.3 : 0) && angOff(Math.atan2(a.y - P.y, a.x - P.x), fa) < MELEE_ARC;
+    && Math.hypot(a.x - P.x, a.y - P.y) <= meleeReach(P, a) && angOff(Math.atan2(a.y - P.y, a.x - P.x), fa) < MELEE_ARC
+    && game.level.los(P.tx, P.ty, a.tx, a.ty);
   if (ok(t)) return t;
   let best = null, bd = 1e9;
   for (const a of game.level.actors) { if (!ok(a)) continue; const d = Math.hypot(a.x - P.x, a.y - P.y); if (d < bd) { bd = d; best = a; } }
@@ -41,7 +45,7 @@ export function meleeAttack(game, P, t, mod = {}) {
 export function resolveMelee(game, P, t, mod = {}) {
   P.uninterruptible = false;
   if (!t || t.dead || t.team === P.team) return false;
-  if (Math.hypot(t.x - P.x, t.y - P.y) > 1.9) { game.sfx('swing_light', P.x, P.y, { vol: 0.4 }); return false; }
+  if (Math.hypot(t.x - P.x, t.y - P.y) > meleeReach(P, t) || !game.level.los(P.tx, P.ty, t.tx, t.ty)) { game.sfx('swing_light', P.x, P.y, { vol: 0.4 }); return false; }
   const st = P.hero.st;
   const ac = Math.max(0, (t.ac || 0) - st.targAc - (t.buffs?.innerSight?.k || 0) - (t.buffs?.battleCry ? (t.ac || 0) * t.buffs.battleCry.def : 0));
   const chance = clamp(st.tohitMelee * (1 + (st.tohitPct + (mod.tohitPct || 0)) / 100) - ac, 5, 95);
@@ -78,7 +82,7 @@ function elementalExtras(game, src, t, elem) {
     if (!e || t.dead) continue;
     const d = rnd(Math.min(e[0], e[1]), Math.max(e[0], e[1]));
     if (k === 'poison') addBuff(t, 'poison', { t: 2, dps: d / 2, src });
-    else damageActor(game, t, d, k, src, { noStun: true, quiet: true });
+    else damageActor(game, t, d, k, src, { noStun: true, quiet: true, noProc: true });
     if (k === 'cold') addBuff(t, 'chill', { t: 2 });
   }
 }
@@ -138,7 +142,7 @@ function arrowHit(game, m, t) {
   d = Math.max(1, Math.round(d));
   const dealt = damageActor(game, t, d, mod.type || 'phys', P, { crit, knock: st.knockback, arrow: true });
   // 활 원소 피해·기술 원소
-  for (const k of ['fire', 'light']) { const e = st.arrowElem[k]; if (e && !t.dead) damageActor(game, t, rnd(e[0], e[1]), k, P, { noStun: true, quiet: true }); }
+  for (const k of ['fire', 'light']) { const e = st.arrowElem[k]; if (e && !t.dead) damageActor(game, t, rnd(e[0], e[1]), k, P, { noStun: true, quiet: true, noProc: true }); }
   if (mod.elem && !t.dead) {
     const e = mod.elem;
     damageActor(game, t, rnd(e.d[0], e.d[1]), e.type, P, { noStun: false });
@@ -185,7 +189,8 @@ export function damageActor(game, t, amount, type, src, opts = {}) {
   else if (type === 'light') game.fx.sparks(t.x, t.y, 34, 6, [200, 220, 255]);
   else if (type === 'poison') game.fx.p(t.x, t.y, 30, { vz: 20, life: 0.5, size: 2.5, col: [100, 220, 60], glow: true });
   // 번개 강화 괴물은 맞으면 번개 불똥을 흩뿌린다
-  if (t.umods?.includes('light') && Math.random() < 0.6) spawnChargedBolts(game, t, 4, [1, Math.max(2, Math.round(t.mlvl * 0.6))], 1);
+  // 번개 강화: 직접 맞았을 때만(지속 피해·장판·덤 원소 피해마다 뿜던 것), 0.25초에 한 번
+  if (t.umods?.includes('light') && !opts.noProc && !opts.quietNum && !(t.boltAt > game.time) && Math.random() < 0.6) { t.boltAt = game.time + 0.25; spawnChargedBolts(game, t, 4, [1, Math.max(2, Math.round(t.mlvl * 0.6))], 1); }
   if (t.hp <= 0) { killActor(game, t, src, type); return d; }
   // 숨은 자: 맞으면 몇 걸음 물러나 다시 모습을 감춘다(4초에 한 번)
   if (t.ai === 'sneak' && !(t.hideAt > game.time)) { t.retreat = 3 + Math.floor(Math.random() * 2); t.hideAt = game.time + 4; }
@@ -210,7 +215,8 @@ function damagePlayer(game, P, d, type, src, opts) {
   if (type === 'phys' && st.dmgTaken) d = Math.max(1, d + st.dmgTaken);
   if (type !== 'phys' && type !== 'magic' && !opts.pure) d = d * (1 - (st.res[RES_KEY[type]] || 0) / 100);
   if (opts.trap && st.halfTrap) d /= 2;
-  if (P.buffs.shoutDef && type === 'phys') d = d;
+  // 저주(우두머리의 저주 속성): 받는 물리 피해 1.5배(괴물에게 거는 것과 같다)
+  if (P.buffs.amp && type === 'phys') d *= 1.5;
   d = Math.max(type === 'phys' ? 1 : 0, Math.round(d));
   // 에너지 보호막: 마나로 받아낸다
   const es = P.buffs.energyShield;
@@ -232,7 +238,7 @@ function damagePlayer(game, P, d, type, src, opts) {
   // 흑사 망자: 최대 생명력 영구 감소(디아블로 1)
   if (src?.mdef?.drainMax && opts.melee) { h.data.bonusLife = (h.data.bonusLife || 0) - 1; h.recalc(); game.toast('최대 생명력이 줄었습니다!', 'warn'); }
   // 경직: 피해 ≥ 레벨
-  if (!opts.noStun && d >= h.data.lvl && !P.uninterruptible && !P.whirl) {
+  if (!opts.noStun && d >= h.data.lvl && !P.uninterruptible && !P.whirl && !P.leap) {
     P.setAnim('hit', st.hitRecover);
     P.mv && finishStep(game.level, P);
     game.sfx(h.C.voice === 'female' ? 'hurt_female' : 'hurt_male', P.x, P.y, { vol: 0.8 });
@@ -308,22 +314,33 @@ export function killActor(game, t, src, type) {
   game.emit('killed', t);
 }
 
+// 회오리를 끝낸다(다 돌았을 때·죽었을 때·층을 옮길 때): 소리도 함께
+export function endWhirl(game, P) {
+  P.whirl = null; P.uninterruptible = false;
+  game.whirlSnd?.stop?.(0.2); game.whirlSnd = null;
+}
+
 function killPlayer(game, P, src) {
   if (P.dead) return;
   P.dead = true; P.hp = 0;
+  endWhirl(game, P); P.leap = null; P.volley = null;
   P.setAnim('death', 1.2);
   P.fallDir = 1;
   game.sfx(P.hero.C.voice === 'female' ? 'die_female' : 'die_male', P.x, P.y);
   game.fx.blood(P.x, P.y, 30, 0, 20);
   game.stopAll();
   P.hero.data.deaths = (P.hero.data.deaths || 0) + 1;
+  // 하드코어 죽음은 바로 기록한다(죽는 화면이 뜨기 전 1.5초 사이에 저장·종료해도 살아나지 않게)
+  if (P.hero.data.hc) P.hero.data.deadHC = true;
   setTimeout(() => game.emit('playerDied', src), 1500);
 }
 
 // ───────── 괴물 공격 ─────────
 export function monsterMeleeHit(game, m, t, mult = 1, extra = {}) {
   if (!t || t.dead) return false;
-  if (Math.hypot(t.x - m.x, t.y - m.y) > 1.9 * (m.reach || 1)) return false;
+  // 손 닿는 거리(이웃 칸이면 조금 더: 칸 가운데를 벗어난 플레이어가 대각선 이웃 칸에 있을 때). 내려치기 전에 한 칸 넘게 물러나면 빗나간다
+  const dd = Math.hypot(t.x - m.x, t.y - m.y);
+  if (dd > 1.9 * (m.reach || 1) && !(Math.max(Math.abs(t.tx - m.tx), Math.abs(t.ty - m.ty)) <= 1 && dd < 2.2)) return false;
   if (t.isPlayer) {
     const h = t.hero, st = h.st, P = t;
     const clvl = h.data.lvl, ml = m.mlvl || 1;
@@ -362,8 +379,8 @@ export function monsterMeleeHit(game, m, t, mult = 1, extra = {}) {
     }
     if (m.cold) addBuff(P, 'chill', { t: 2 });
     // 가시: 공격자도 다친다
-    if (st.thorns) damageActor(game, m, rnd(st.thorns[0] || 1, st.thorns[1] || 3), 'phys', P, { noStun: true, quiet: true });
-    if (st.lightThorns) damageActor(game, m, rnd(1, st.lightThorns), 'light', P, { noStun: true, quiet: true });
+    if (st.thorns) damageActor(game, m, rnd(st.thorns[0] || 1, st.thorns[1] || 3), 'phys', P, { noStun: true, quiet: true, noProc: true });
+    if (st.lightThorns) damageActor(game, m, rnd(1, st.lightThorns), 'light', P, { noStun: true, quiet: true, noProc: true });
     if (P.buffs.frozenArmor && !m.dead) freeze(m, 1.2);
     h.durabilityLoss('body', 4);
     game.sfx(dt === 'phys' ? 'hit_flesh' : 'hit_flesh', P.x, P.y, { vol: 0.7 });
@@ -477,7 +494,9 @@ function monsterMissileHit(game, m, a) {
       a.setAnim('block', st.blockTime + 0.08); game.sfx('block', a.x, a.y); return true;
     }
   }
-  const d = rnd(m.dmg[0], m.dmg[1]) * (1 + (m.owner?.dmgBonus || 0));
+  // 전투의 외침(적의 피해 −%)은 투사체에도
+  const cry = m.owner?.buffs?.battleCry;
+  const d = rnd(m.dmg[0], m.dmg[1]) * (1 + (m.owner?.dmgBonus || 0)) * (cry ? 1 - cry.dmg : 1);
   damageActor(game, a, Math.round(d), m.type, m.owner, { trap: m.trap, arrow: m.kind === 'arrow' });
   if (m.chill) addBuff(a, 'chill', { t: m.chill });
   if (m.kind === 'arrow') game.sfx('arrow_hit', a.x, a.y);

@@ -66,7 +66,7 @@ export class Title {
       drawPortrait(cv.g, LOOKS[c.cls](), 28, 60, 0.82, 0.4);
       const info = el('div');
       info.appendChild(el('div', 'cn', c.name));
-      const dd = el('div', 'cd', `${CLASSES[c.cls].name} · 레벨 ${c.lvl} · 최고 지하 ${c.depth}층${c.done ? ' · 공허의 군주 처치' : ''}`);
+      const dd = el('div', 'cd', `${CLASSES[c.cls].name} · 레벨 ${c.lvl}${c.depth ? ` · 최고 지하 ${c.depth}층` : ''}${c.done ? ' · 공허의 군주 처치' : ''}`);
       info.appendChild(dd);
       if (c.hc) info.appendChild(el('div', 'hc', c.dead ? '하드코어 · 사망' : '하드코어'));
       card.appendChild(info);

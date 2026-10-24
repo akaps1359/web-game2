@@ -684,6 +684,8 @@ export function pumpBakes(ms) {
     if (performance.now() - t0 >= ms) return;
   }
 }
+// 아직 굽는 중인 일감 수
+export function bakesPending() { return jobs.size; }
 // 이미 구운 것 가운데 배율이 가장 가까운 것
 export function nearestSprite(name, v, sl) {
   let best = null, bd = 1e9;

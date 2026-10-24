@@ -34,7 +34,6 @@ export class Actor {
   }
   moveSpeed() {
     let s = this.speed;
-    if (this.buffs.chill) s *= 0.5;
     if (this.buffs.slow) s *= this.buffs.slow.k ?? 0.6;
     if (this.buffs.haste) s *= 1 + (this.buffs.haste.k ?? 0.3);
     return s;

@@ -39,6 +39,7 @@ export const QUESTS = {
       for (const [x, y] of spotsIn(L, r, 0)) if (Math.random() < 0.45) L.decals.push({ x: x + Math.random() - 0.5, y: y + Math.random() - 0.5, kind: Math.random() < 0.8 ? 'blood' : 'bones', rot: Math.random() * 6, s: 0.8 + Math.random() * 0.9, keep: true });
       for (const [x, y] of spotsIn(L, r, 1).slice(0, 3)) placeSolid(L, { type: 'gibbet', x, y });
       if (game.hero.data.quests.butcher?.st !== 'done') spawnBoss(game, L, 'butcher', r.cx, r.cy);
+      else if (rewardLost(game, 'q_cleaver')) placeReward(L, r, 'q_cleaver');
     },
   },
   hollow_king: {
@@ -55,8 +56,10 @@ export const QUESTS = {
       const sp = spotsIn(L, r, 1);
       for (let i = 0; i < 5 && sp.length; i++) { const [x, y] = sp.splice(rnd(0, sp.length - 1), 1)[0]; placeSolid(L, { type: 'sarc', x, y, raise: true }); }
       for (const dx of [-3, 3]) placeSolid(L, { type: 'brazier', x: r.cx + dx, y: r.y + 1 });
-      if (game.hero.data.quests.hollow_king?.st === 'done' || game.hero.data.quests.hollow_king?.st === 'reported') return;
-      spawnBoss(game, L, 'hollow_king', r.cx, r.cy - 1);
+      if (game.hero.data.quests.hollow_king?.st === 'done' || game.hero.data.quests.hollow_king?.st === 'reported') { if (rewardLost(game, 'q_deadcrown')) placeReward(L, r, 'q_deadcrown'); return; }
+      // 왕은 석관을 피해 빈칸에
+      const kp = L.nearestFree(r.cx, r.cy - 1, 3) || { x: r.cx, y: r.cy - 1 };
+      spawnBoss(game, L, 'hollow_king', kp.x, kp.y);
       for (let i = 0; i < 6; i++) { const p = L.nearestFree(r.cx + rnd(-3, 3), r.cy + rnd(-2, 3), 3); if (p) spawnMonster(game, L, i % 3 === 0 ? 'skel_captain' : 'corpseaxe', p.x, p.y); }
     },
   },
@@ -73,7 +76,7 @@ export const QUESTS = {
     },
     build(game, L) {
       const r = roomOf(L, 'magic_rock'); if (!r) return;
-      if (game.hero.data.quests.magic_rock?.st === 'done' || game.hero.data.quests.magic_rock?.have) return;
+      if (game.hero.data.quests.magic_rock?.st === 'done' || game.hero.data.quests.magic_rock?.have && carried(game, 'q_rock')) return;
       L.addObject({ type: 'pedestal', x: r.cx, y: r.cy, solid: true, item: 'q_rock', quest: 'magic_rock' }); L.flags[L.idx(r.cx, r.cy)] |= F_SOLID;
     },
   },
@@ -88,7 +91,11 @@ export const QUESTS = {
     build(game, L) {
       const r = roomOf(L, 'blind'); if (!r) return;
       sealRoom(L, r);
-      if (game.hero.data.quests.blind?.st === 'done' || game.hero.data.quests.blind?.st === 'reported') return;
+      if (game.hero.data.quests.blind?.st === 'done' || game.hero.data.quests.blind?.st === 'reported') {
+        // 보상 상자를 열기 전에 층이 다시 만들어졌으면 상자를 다시 놓는다
+        if (rewardLost(game, 'q_seer')) { const p = L.nearestFree(r.cx, r.cy, 3); if (p) { L.addObject({ type: 'chest', x: p.x, y: p.y, solid: true, big: true, reward: 'q_seer' }); L.flags[L.idx(p.x, p.y)] |= F_SOLID; } }
+        return;
+      }
       L.blindRoom = r;
       for (let i = 0; i < 7; i++) { const p = L.nearestFree(r.cx + rnd(-3, 3), r.cy + rnd(-3, 3), 3); if (p) { const m = spawnMonster(game, L, i < 4 ? 'weaver' : 'unseen', p.x, p.y); m.questTag = 'blind'; } }
     },
@@ -113,7 +120,7 @@ export const QUESTS = {
     },
     build(game, L) {
       const r = roomOf(L, 'mushroom'); if (!r) return;
-      if (game.hero.data.quests.mushroom?.st === 'done' || game.hero.data.quests.mushroom?.have) return;
+      if (game.hero.data.quests.mushroom?.st === 'done' || game.hero.data.quests.mushroom?.have && carried(game, 'q_mushroom')) return;
       L.addObject({ type: 'fungus', x: r.cx, y: r.cy, solid: true, item: 'q_mushroom', quest: 'mushroom' }); L.flags[L.idx(r.cx, r.cy)] |= F_SOLID;
       for (const [x, y] of spotsIn(L, r, 0)) if (Math.random() < 0.3) L.decals.push({ x, y, kind: 'acid', rot: 0, s: 0.6, keep: true });
     },
@@ -132,7 +139,7 @@ export const QUESTS = {
         const ring = Math.max(Math.abs(x - r.cx), Math.abs(y - r.cy));
         if (ring === 2 && !(y === r.cy && x > r.cx)) L.flags[L.idx(x, y)] |= 16;
       }
-      if (game.hero.data.quests.anvil?.st === 'done' || game.hero.data.quests.anvil?.have) return;
+      if (game.hero.data.quests.anvil?.st === 'done' || game.hero.data.quests.anvil?.have && carried(game, 'q_anvil')) return;
       L.addObject({ type: 'anvil', x: r.cx, y: r.cy, solid: true, item: 'q_anvil', quest: 'anvil' }); L.flags[L.idx(r.cx, r.cy)] |= F_SOLID;
       for (let i = 0; i < 4; i++) { const p = L.nearestFree(r.cx + 3, r.cy + rnd(-1, 1), 3); if (p) spawnMonster(game, L, i % 2 ? 'hellstone' : 'storm_rider', p.x, p.y); }
     },
@@ -150,7 +157,8 @@ export const QUESTS = {
       const n = game.hero.data.quests.warlord?.st === 'done' ? 0 : 4;
       for (let i = 0; i < 4; i++) {
         const x = i < 2 ? r.x : r.x + r.w - 1, y = r.y + 1 + (i % 2) * (r.h - 3);
-        placeSolid(L, { type: 'rack', x, y, kind: i % 2 ? 'armor' : 'weapon', used: n === 0 });
+        // 카르낙이 살아 있는 동안은 잠겨 있다가 쓰러뜨리면 열린다(끝난 뒤에는 이미 챙긴 것으로)
+        placeSolid(L, { type: 'rack', x, y, kind: i % 2 ? 'armor' : 'weapon', used: true, wl: true });
       }
       if (n) { spawnBoss(game, L, 'warlord', r.cx, r.cy); for (let i = 0; i < 4; i++) { const p = L.nearestFree(r.cx + rnd(-3, 3), r.cy + rnd(-2, 2), 3); if (p) spawnMonster(game, L, 'steel_lord', p.x, p.y); } }
     },
@@ -182,6 +190,20 @@ export const QUESTS = {
     text: { active: '모든 것의 시작, 지하 16층 공허의 옥좌에서 벨가스가 기다린다.', done: '공허의 군주를 쓰러뜨렸다.' },
   },
 };
+
+// 퀘스트 물건을 지금 가방에 갖고 있나(잃어버렸으면 제자리에 다시 놓인다)
+function carried(game, id) { return game.hero.data.inv.some((i) => i.b === id); }
+// 끝낸 퀘스트의 보상(고유 아이템)을 아직 줍지 못했나: 줍기 전에 죽거나 다시 불러오면 층이 새로 만들어져 사라지던 것
+function rewardLost(game, uid) {
+  const d = game.hero.data;
+  if (d.qgot?.[uid]) return false;
+  return ![...d.inv, ...Object.values(d.equip)].some((it) => it && it.u === uid);
+}
+// 보상을 방 가운데 바닥에 다시 놓는다
+function placeReward(L, r, uid) {
+  const p = L.nearestFree(r.cx, r.cy, 3);
+  if (p) L.items.push({ x: p.x, y: p.y, item: makeUnique(uid, { identified: true }), drop: 0, gold: 0 });
+}
 
 // 퀘스트 상태
 export function questState(game, id) { return game.hero.data.quests[id]?.st || 'none'; }
@@ -255,8 +277,9 @@ export function onMonsterKilled(game, m) {
       if (down) { down.sealed = false; game.toast('봉인이 풀렸다. 아래로 가는 길이 열렸다.', 'big'); game.fx.flash(down.x, down.y, 4, [255, 60, 40], 1); }
       game.emit('lore', 'seraphine_death');
     }
-    if (m.quest === 'warlord') for (const o of game.level.objects) if (o.type === 'rack') o.used = false;
-    if (m.quest === 'velgath' && first) setTimeout(() => game.emit('victory'), 3500);
+    if (m.quest === 'warlord' && first) for (const o of game.level.objects) if (o.type === 'rack' && o.wl) o.used = false;
+    // 엔딩: 3.5초 뒤에 보여 준다. 그 사이에 나가도 다음에 이어 할 때 보여 주도록 표시해 둔다
+    if (m.quest === 'velgath' && first) { game.hero.data.wonPending = true; setTimeout(() => game.emit('victory'), 3500); }
     if (m.quest === 'scribe') game.emit('lore', 'scribe_death');
   }
   if (m.questTag === 'blind') {

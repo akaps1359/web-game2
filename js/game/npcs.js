@@ -187,7 +187,7 @@ export function questTalk(game, npcId, qid) {
   switch (qid) {
     case 'hollow_king':
       if (st === 'none') { setQuest(game, qid, 'active'); return '"오드릭 왕 말이오? 역병이 돌기 전 이 땅의 주인이었지. 왕비와 왕자를 역병에 잃고는 미쳐 버렸소. 결국 대성당 지하 무덤에 산 채로 묻히길 자청했지.\n\n그런데 요즘 지하에서 해골들이 쏟아져 나온다오. 사람들은 왕이 망자의 군대를 일으켰다고 수군대지. 부디… 그분을 다시 잠들게 해 주시오. 지하 3층의 무덤이오."'; }
-      if (st === 'done') { setQuest(game, qid, 'reported', true); h.gainExp(1500); game.toast('경험치 +1500'); return '"그랬구려… 그분도 이제 편히 쉬시겠지. 고맙소, 이방인. 이 마을은 당신에게 큰 빚을 졌소."'; }
+      if (st === 'done') { setQuest(game, qid, 'reported', true); if (h.gainExp(1500)) game.emit('levelUp', h.data.lvl); game.toast('경험치 +1500'); return '"그랬구려… 그분도 이제 편히 쉬시겠지. 고맙소, 이방인. 이 마을은 당신에게 큰 빚을 졌소."'; }
       break;
     case 'magic_rock':
       if (st === 'none') { setQuest(game, qid, 'active'); return '"카타콤에서 하늘에서 떨어진 돌을 봤다는 소문이 있어. 별의 쇠가 들어 있는 돌이지. 그걸 가져다주면 자네에게 꼭 맞는 반지를 만들어 주겠네. 지하 5층의 제단을 찾아보게."'; }
@@ -203,7 +203,7 @@ export function questTalk(game, npcId, qid) {
       break;
     case 'blind':
       if (st === 'none') { setQuest(game, qid, 'active'); return '"카타콤 3층(지하 7층)에 \'눈먼 자들의 회랑\'이라 불리는 곳이 있네. 옛 수도사들이 눈을 가리고 기도하던 곳이지. 지금은 보이지 않는 것들이 그곳을 지킨다네. 그것들을 몰아내 주게. 그곳에 투시의 부적이 잠들어 있다고 들었네."'; }
-      if (st === 'done') { setQuest(game, qid, 'reported', true); h.gainExp(4000); game.toast('경험치 +4000'); return '"해냈구먼. 그 부적이 자네 눈이 되어 줄 걸세."'; }
+      if (st === 'done') { setQuest(game, qid, 'reported', true); if (h.gainExp(4000)) game.emit('levelUp', h.data.lvl); game.toast('경험치 +4000'); return '"해냈구먼. 그 부적이 자네 눈이 되어 줄 걸세."'; }
       break;
     case 'seraphine':
       if (st === 'none') { setQuest(game, qid, 'active'); return '"자네가 가져온 일지를 읽었네… 세라핀은 성녀가 아니었어. 아니, 성녀였기에 왕관을 쓴 게지. 마을을 구하려고.\n\n하지만 공허는 역병을 삼킨 뒤 그녀를 삼켰다네. 이제 그녀는 지옥 3층(지하 15층)의 제단에서 벨가스를 위한 문을 열고 있어.\n\n그녀를 멈춰 주게. 그것이 그녀를 구하는 유일한 길일세."'; }

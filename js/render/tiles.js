@@ -26,7 +26,7 @@ function diamondPixels(RS, fn) {
     const e = 0.5 - Math.max(Math.abs(u), Math.abs(v));
     const cov = sat(e * 28.6 * RS + 1.1);
     if (cov <= 0) continue;
-    const col = fn(u + 0.5, v + 0.5, e);
+    const col = fn(u + 0.5, v + 0.5, e, py * w + px);
     const i = (py * w + px) * 4;
     d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255 * cov;
   }
@@ -191,16 +191,35 @@ function townTex(kind, U, V, seed, n, fine) {
 }
 // key: 바탕 종류, 변형, 그리고 더 높은 바닥(흙길·자갈·판석·밭)이 닿은 모서리 비트(북서·북동·남동·남서).
 // 모서리 값을 겹선형으로 잇고 주기 잡음을 더해 경계를 구불구불하게 한다(이웃 칸과 경계가 그대로 이어진다)
+// 칸마다 같은 잡음(큰 무늬·넘침 경계·잔무늬)은 배율마다 픽셀 격자 전체를 한 번만 계산해 두고 모든 바닥 그림이 나눠 쓴다
+const NOISE = new Map();
+function noiseGrid(key, RS, f) {
+  const k = RS + ':' + key;
+  let a = NOISE.get(k);
+  if (!a) {
+    const w = Math.ceil(TW * RS), h = Math.ceil(TH * RS);
+    a = new Float64Array(w * h);
+    for (let py = 0; py < h; py++) for (let px = 0; px < w; px++) {
+      const sx = (px + 0.5) / RS - TW / 2, sy = (py + 0.5) / RS - TH / 2;
+      a[py * w + px] = f(sx / TW + sy / TH + 0.5, sy / TH - sx / TW + 0.5);
+    }
+    NOISE.set(k, a);
+  }
+  return a;
+}
 export function makeTownFloor(kind, RS, variant = 0, spill = null) {
   const seed = 300 + kind * 13 + variant * 7;
-  return diamondPixels(RS, (U, V) => {
-    const n = fbm(U, V, 11, 4, 4), fine = vnoise(U * 40, V * 40, seed, 40);
+  const NN = noiseGrid('n', RS, (u, v) => fbm(u, v, 11, 4, 4)), NF = noiseGrid(seed, RS, (u, v) => vnoise(u * 40, v * 40, seed, 40));
+  const NS = spill ? spill.map(([q]) => noiseGrid('s' + q, RS, (u, v) => fbm(u, v, 23 + q, 3, 4))) : null;
+  return diamondPixels(RS, (U, V, e, i) => {
+    const n = NN[i], fine = NF[i];
     let col = townTex(kind, U, V, seed, n, fine);
-    if (spill) for (const [q, m] of spill) {
+    if (spill) for (let j = 0; j < spill.length; j++) {
+      const [q, m] = spill[j];
       const c0 = m & 1, c1 = (m >> 1) & 1, c2 = (m >> 2) & 1, c3 = (m >> 3) & 1;
       const f = (c0 * (1 - U) + c1 * U) * (1 - V) + (c3 * (1 - U) + c2 * U) * V;
       if (f <= 0) continue;
-      const g = f + (fbm(U, V, 23 + q, 3, 4) - 0.5) * 0.55;
+      const g = f + (NS[j][i] - 0.5) * 0.55;
       if (g > 0.6) {
         col = townTex(q, U, V, 300 + q * 13, n, fine);
         if (g < 0.66) col = [col[0] * 0.84, col[1] * 0.84, col[2] * 0.84];
@@ -356,18 +375,22 @@ export function glowSprite(r, g, b, size = 64) {
 
 // 테마 한 벌을 만든다: 도트 배율 RS의 3배로 크게 그려 줄인다(가장자리가 딱 끊기고 색이 줄어든다)
 export function buildTileset(theme, RS) {
+  const job = tilesetJob(theme, RS);
+  while (!job.next().done);
+  return job.T;
+}
+// 한 벌을 조각조각 만드는 일감(배율을 바꾸는 중에는 장면마다 조금씩 굽고, 그동안 가까운 배율 것을 늘려 쓴다). T는 다 되면 채워진다
+export function tilesetJob(theme, RS) {
   const T = { theme, RS, floors: [null], walls: [null], wallsDim: [null], floorsDim: [null], lava: [] };
-  const R = RS * SS, fin = (c) => shrink(c, SS);
-  if (theme === 'town') {
-    T.townFloors = new Map();
-    for (let k = 1; k <= 8; k++) { const f = fin(makeTownFloor(k, R, 0)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.5)); }
-    for (let v = 1; v <= 2; v++) { const w = fin(makeWall('crypt', v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w)); }
-    return T;
-  }
-  for (let v = 1; v <= 6; v++) { const f = fin(makeFloor(theme, v, R)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.55)); }
-  for (let v = 1; v <= 4; v++) {
-    const w = fin(makeWall(theme, v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w));
-  }
-  for (let v = 0; v < 3; v++) T.lava.push(fin(makeLava(R, v)));
-  return T;
+  const it = (function* () {
+    const R = RS * SS, fin = (c) => shrink(c, SS);
+    // 마을은 바닥을 칸마다 따로 만든 그림(townFloors)으로 깔고 벽 칸이 없으니 기본 바닥·벽은 만들지 않는다
+    // (배율을 바꿀 때마다 0.1초 남짓 들던 것)
+    if (theme === 'town') { T.townFloors = new Map(); return; }
+    for (let v = 1; v <= 6; v++) { const f = fin(makeFloor(theme, v, R)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.55)); yield; }
+    for (let v = 1; v <= 4; v++) { const w = fin(makeWall(theme, v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w)); yield; }
+    for (let v = 0; v < 3; v++) { T.lava.push(fin(makeLava(R, v))); yield; }
+  })();
+  it.T = T;
+  return it;
 }

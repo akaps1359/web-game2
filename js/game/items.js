@@ -214,7 +214,8 @@ export function itemAC(it) {
   if (it.ac == null) return 0;
   const m = itemMods(it);
   let ac = it.ac;
-  if (m.acPct) ac = Math.max(ac + (m.acPct > 0 ? 1 : 0), Math.floor((ac * (100 + m.acPct)) / 100));
+  // 방어도 %: 늘리는 것은 적어도 1, 줄이는 것(녹슨·취약한)은 그대로 줄인다
+  if (m.acPct) { const v = Math.floor((ac * (100 + m.acPct)) / 100); ac = m.acPct > 0 ? Math.max(ac + 1, v) : v; }
   if (m.acFlat) ac += m.acFlat;
   return Math.max(0, ac);
 }
@@ -235,7 +236,8 @@ export function itemPrice(it) {
   let I = b.price || 0;
   if (it.q === 'unique') {
     const U = UNIQUE[it.u];
-    return Math.round(I * 2 + (U.q || 1) * 900 + 2000);
+    // 퀘스트 보상의 q: 99는 '떨어지지 않음' 표시일 뿐이니 값은 중간 고유 아이템쯤으로
+    return Math.round(I * 2 + (U.quest ? 5 : U.q || 1) * 900 + 2000);
   }
   if ((it.q === 'magic' || it.q === 'rare') && it.id !== undefined) {
     let B = 0, M = 0;

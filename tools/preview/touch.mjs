@@ -110,7 +110,8 @@ export default async function (page, { wait, log, shot, tap }) {
     for (const a of L.actors) if (a.team === 1) a.aware = false;
     // 화면 왼쪽 = 월드 (-1,+1) 쪽, 오른쪽 = (+1,-1) 쪽
     const left = AI.spawnMonster(g, L, 'zombie', P.tx - 1, P.ty + 1), right = AI.spawnMonster(g, L, 'zombie', P.tx + 1, P.ty - 1);
-    for (const m of [left, right]) { m.aware = false; m.hp = m.hpMax = 99999; m.speed = 0.01; }
+    // 가만히 있는 과녁(깨어나 때리면 막기·움찔 동작이 끼어 겨눔이 흔들린다)
+    for (const m of [left, right]) { m.aware = false; m.ai = 'none'; m.hp = m.hpMax = 99999; m.speed = 0.01; }
     g.lastTile = -1;
     window.__mons = { left, right };
     return found;
@@ -133,7 +134,9 @@ export default async function (page, { wait, log, shot, tap }) {
   const d0 = await page.evaluate(() => {
     const g = window.__game, L = g.level, P = g.player;
     const st = L.objects.find((o) => o.type === 'stairs_down' && !o.sealed);
-    const p = L.nearestFree(st.x + 1, st.y + 1, 3);
+    // 계단이 보이는 바로 옆 칸에(벽 너머 칸이면 계단을 잡지 않는다), 근처 바닥 아이템은 치운다
+    const p = L.nearestFree(st.x + 1, st.y + 1, 3, 0, (x, y) => L.los(x, y, st.x, st.y) && Math.hypot(x - st.x, y - st.y) < 2) || L.nearestFree(st.x + 1, st.y + 1, 3);
+    L.items = L.items.filter((it) => Math.hypot(it.x - st.x, it.y - st.y) > 4);
     P.place(L, p.x, p.y); g.lastTile = -1;
     return g.depth;
   });

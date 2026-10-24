@@ -2,7 +2,7 @@
 import { $, el, btn, canvasFor } from './dom.js';
 import { drawPortrait } from '../render/figures.js';
 import { NPCS, talkTo, questTalk, loreTalk } from '../game/npcs.js';
-import { setQuest } from '../game/quests.js';
+import { setQuest, questState } from '../game/quests.js';
 import { LORE } from '../game/quests.js';
 import { restock } from '../game/shop.js';
 
@@ -16,12 +16,14 @@ export class Dialog {
   get game() { return this.app.game; }
   isOpen() { return this.root.classList.contains('on'); }
   close() {
-    if (this.isOpen()) this.closedAt = performance.now();
+    const was = this.isOpen();
+    if (was) this.closedAt = performance.now();
     this.root.classList.remove('on');
     this.root.innerHTML = '';
     this.npc = null;
     const cb = this.onClose; this.onClose = null;
     cb?.();
+    if (was) this.app.input?.resteer?.(); // 쥐고 있던 조이스틱으로 다시 걷는다
   }
 
   open(npcActor) {
@@ -80,7 +82,8 @@ export class Dialog {
         return;
       }
       case 'woundedDie': {
-        setQuest(g, 'butcher', 'active');
+        // 이미 도살자를 쓰러뜨렸으면(그 층에 먼저 내려가 시작된 경우) 다시 '진행 중'으로 되돌리지 않는다
+        if (questState(g, 'butcher') === 'none') setQuest(g, 'butcher', 'active');
         const a = this.npc;
         this.close();
         if (a) {

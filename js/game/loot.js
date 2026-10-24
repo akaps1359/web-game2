@@ -183,6 +183,8 @@ export function pickupItem(game, g) {
   if (isBeltable(it) && h.beltAdd(it)) { L.items.splice(i, 1); game.sfx('item_pickup', g.x, g.y); game.emit('inventoryChanged'); return true; }
   if (!h.invAdd(it)) { game.toast('가방에 빈자리가 없습니다', 'warn'); game.sfx('ui_error'); return false; }
   L.items.splice(i, 1);
+  // 퀘스트 보상을 주웠다는 표시(줍기 전에 죽거나 다시 불러와도 보상이 사라지지 않게, 줍지 않았으면 그 방에 다시 놓인다)
+  if (it.q === 'unique' && it.u?.startsWith('q_')) (h.data.qgot || (h.data.qgot = {}))[it.u] = true;
   game.sfx('item_pickup', g.x, g.y);
   game.emit('inventoryChanged');
   game.emit('picked', it);

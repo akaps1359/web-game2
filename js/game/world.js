@@ -42,10 +42,10 @@ export function buildLevel(game, depth, rng) {
   }
   // 마을로 가는 계단(1층은 오르는 계단이 곧 마을)
   for (const o of L.objects) if (o.type === 'stairs_up') o.toTown = depth === 1;
-  populate(game, L, depth, rng);
-  // 퀘스트 무대 꾸미기
+  // 퀘스트 무대 꾸미기(문·가구·용암이 생기므로 괴물을 채우기 전에: 괴물이 닫힌 문·책장 위에 서 있지 않게)
   for (const q of Object.values(QUESTS)) if (q.depth === depth && q.build) q.build(game, L, rng);
   if (depth === 16) buildThrone(game, L, rng);
+  populate(game, L, depth, rng);
   repairReach(L);
   return L;
 }

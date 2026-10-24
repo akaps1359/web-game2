@@ -1,5 +1,5 @@
 // 기술: 직업마다 기술 나무 세 개(디아블로 2 방식). 수치는 디아블로 1의 생명력 규모에 맞췄다
-import { meleeAttack, resolveMelee, rangedAttack, fireArrow, spawnMissile, areaDamage, damageActor, spawnArea, spawnChargedBolts, freeze, knockback, MELEE_HIT } from './combat.js';
+import { meleeAttack, resolveMelee, rangedAttack, fireArrow, spawnMissile, areaDamage, damageActor, spawnArea, spawnChargedBolts, freeze, knockback, MELEE_HIT, endWhirl } from './combat.js';
 import { addBuff } from './buffs.js';
 import { Actor } from './actor.js';
 import { clamp } from '../core/util.js';
@@ -113,7 +113,7 @@ S('natural_resistance', 'warrior', 2, [1, 3], '자연 저항', 18, ['iron_skin']
 S('magic_arrow', 'rogue', 0, [0, 0], '마법 화살', 1, [], {
   kind: 'arrow', mana: (l) => Math.max(0, 2 - 0.15 * L1(l)), icon: { g: 'arrow', c: '#a0b0ff' },
   dmgFlat: (l) => l, tohitPct: (l) => 10 + 6 * L1(l), vis: 'magic',
-  desc: (l) => [`피해 +${l}`, `명중률 +${10 + 6 * L1(l)}%`, l >= 13 ? '마나 소모 없음' : `마나 ${Math.max(0, 2 - 0.15 * L1(l)).toFixed(1)}`],
+  desc: (l) => [`피해 +${l}`, `명중률 +${10 + 6 * L1(l)}%`, Math.max(0, 2 - 0.15 * L1(l)) <= 0 ? '마나 소모 없음' : `마나 ${Math.max(0, 2 - 0.15 * L1(l)).toFixed(1)}`],
   about: '마력으로 빚은 화살. 화살통이 필요 없다.',
 });
 S('fire_arrow', 'rogue', 0, [2, 0], '화염 화살', 1, [], {
@@ -378,12 +378,12 @@ export function skillManaCost(h, id) {
 }
 
 // 패시브 기술 효과 합계
-export function passiveMods(h) {
+export function passiveMods(h, extra = h.st?.skills || 0) {
   const out = {};
   for (const id in h.data.skills) {
     const s = SK[id];
     if (!s?.passive || !h.data.skills[id]) continue;
-    const lv = h.data.skills[id] + (h.st?.skills || 0);
+    const lv = h.data.skills[id] + extra;
     const m = s.mods(lv);
     for (const k in m) out[k] = (out[k] || 0) + m[k];
   }
@@ -437,8 +437,9 @@ export function castSkill(game, P, id, target, point) {
           for (const a of game.level.actors.slice()) {
             if (a.dead || a.team === P.team || a.kind === 'npc') continue;
             const dx = a.x - P.x, dy = a.y - P.y, dd = Math.hypot(dx, dy);
-            if (dd > 1.8) continue;
-            const da = Math.abs(((Math.atan2(dy, dx) - fa + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+            if (dd > (Math.max(Math.abs(a.tx - P.tx), Math.abs(a.ty - P.ty)) <= 1 ? 2.2 : 1.8)) continue; // 이웃 칸은 조금 더(공격 단추와 같게)
+            // 바라보는 각은 돌수록 쌓이므로(감기지 않음) 차이를 -π..π로 접어서 잰다(두 바퀴쯤 돌고 나면 다 빗나가던 것)
+            const da = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - fa), Math.cos(Math.atan2(dy, dx) - fa)));
             if (da > 1.25 && dd > 0.5) continue;
             resolveMelee(game, P, a, { dmgPct: s.dmgPct(lv), sure: false });
             n++;
@@ -459,9 +460,7 @@ export function castSkill(game, P, id, target, point) {
       if (!land) { P.mp += cost; return false; }
       const sx = P.x, sy = P.y, T = 0.5;
       P.release(L);
-      P.leap = { sx, sy, tx: land.x, ty: land.y, t: 0, T };
-      L.occ[land.y * L.w + land.x] = P.id;
-      P.setAnim('special', T + 0.15, { hitAt: T / (T + 0.15), onHit: () => {
+      const onLand = () => {
         P.leap = null;
         P.place(L, land.x, land.y);
         fx.ring(P.x, P.y, 0.2, 2, 0.35, [230, 200, 150], 3); fx.shake(0.4); fx.smoke(P.x, P.y, 2, 6, [90, 80, 70]);
@@ -470,7 +469,10 @@ export function castSkill(game, P, id, target, point) {
           if (a.dead || a.team === P.team || a.kind === 'npc' || Math.hypot(a.x - P.x, a.y - P.y) > 1.9) continue;
           resolveMelee(game, P, a, { dmgPct: s.dmgPct(lv), sure: true, knock: true });
         }
-      } });
+      };
+      P.leap = { sx, sy, tx: land.x, ty: land.y, t: 0, T, land: onLand };
+      L.occ[land.y * L.w + land.x] = P.id;
+      P.setAnim('special', T + 0.15);
       game.sfx('leap', P.x, P.y);
       return true;
     }
@@ -529,13 +531,11 @@ export function castSkill(game, P, id, target, point) {
       if (!list.length && target) list.push(target);
       if (!list.length) { P.mp += cost; return false; }
       const per = Math.max(0.09, h.st.atkTime * 0.35);
+      // 화살은 게임 시간으로 쏜다(updatePlayer가 P.volley를 진행: 멈추면 같이 멈추고, 층을 옮기거나 죽거나 걸으면 끝난다.
+      // 전에는 실제 시간 타이머라 연타하면 겹쳐 쌓였다). 맞아 움찔하거나 피해도 남은 화살은 마저 쏜다
       P.setAnim('attack', per * list.length + 0.15, { style: 'bow' });
-      list.forEach((t, i) => setTimeout(() => {
-        if (P.dead || t.dead) return;
-        P.turnTo(t.x, t.y);
-        fireArrow(game, P, Math.atan2(t.y - P.y, t.x - P.x), t, { dmgPct: s.dmgPct(lv), mult: s.mult(lv), homing: true, vis: 'arrow' });
-        game.sfx('bow_shoot', P.x, P.y, { vol: 0.6 });
-      }, i * per * 1000));
+      P.volley = { list, i: 0, t: 0, per, dmgPct: s.dmgPct(lv), mult: s.mult(lv) };
+      stepVolley(game, P);
       return true;
     }
     case 'missile': {
@@ -593,7 +593,8 @@ export function castSkill(game, P, id, target, point) {
           hit.add(cur);
           from = cur;
           let best = null, bd = 4.5;
-          for (const a of game.level.actors) { if (a.dead || a.team === P.team || hit.has(a) || a.kind === 'npc') continue; const dd = Math.hypot(a.x - from.x, a.y - from.y); if (dd < bd) { bd = dd; best = a; } }
+          // 다음으로 튈 적: 벽 너머·돌이 된 것·숨은 것은 건너뛰지 않는다
+          for (const a of game.level.actors) { if (a.dead || a.team === P.team || hit.has(a) || a.kind === 'npc' || a.untargetable || a.stone || !game.level.los(from.tx, from.ty, a.tx, a.ty)) continue; const dd = Math.hypot(a.x - from.x, a.y - from.y); if (dd < bd) { bd = dd; best = a; } }
           cur = best;
         }
       });
@@ -631,8 +632,11 @@ export function castSkill(game, P, id, target, point) {
       const spot = L.nearestFree(tx, ty, 3, P.id, (x, y) => L.flags[y * L.w + x] & 8);
       if (!spot) { P.mp += cost; game.sfx('ui_error'); return false; }
       doCast(() => {
+        // 시전하는 사이 괴물이 그 칸에 들어왔으면 가까운 빈칸으로(겹쳐 서던 것)
+        const s2 = L.free(spot.x, spot.y, P.id) ? spot : L.nearestFree(spot.x, spot.y, 3, P.id, (x, y) => L.flags[y * L.w + x] & 8);
+        if (!s2) return;
         fx.magic(P.x, P.y, 30, 20, [190, 160, 255]); fx.flash(P.x, P.y, 2, [190, 160, 255], 0.3);
-        P.place(L, spot.x, spot.y);
+        P.place(L, s2.x, s2.y);
         P.invuln = 0.2;
         fx.magic(P.x, P.y, 30, 20, [190, 160, 255]); fx.flash(P.x, P.y, 2, [190, 160, 255], 0.3);
         game.cmd = null;
@@ -774,8 +778,9 @@ function castArea(game, P, s, lv, pt) {
   } else if (s.area === 'blizzard') {
     const d = sdmg(s.id, lv, h, 'dps');
     spawnArea(game, { x: pt.x, y: pt.y, r: 2.5, dur: 4, vis: 'blizzard', dps: d, type: 'cold', chill: 3, team: P.team, owner: P, light: 2 });
-    game.blizzSnd = game.hooks.loop?.('blizzard_loop');
-    setTimeout(() => { game.blizzSnd?.stop?.(0.5); }, 4000);
+    // 눈보라마다 제 소리를 끈다(연달아 쓰면 앞 소리 손잡이를 잃어 끝없이 울리던 것)
+    const snd = game.hooks.loop?.('blizzard_loop');
+    setTimeout(() => { snd?.stop?.(0.5); }, 4000);
   } else if (s.area === 'poison') {
     const d = s.dps(lv, h);
     spawnArea(game, { x: pt.x, y: pt.y, r: s.radius(lv), dur: s.dur(lv), vis: 'poison', dps: d, type: 'poison', team: P.team, owner: P });
@@ -841,9 +846,22 @@ export function updateWhirl(game, P, dt) {
     game.fx.ring(P.x, P.y, 0.5, 1.5, 0.2, [220, 220, 200], 2);
   }
   if (w.t <= 0) {
-    P.whirl = null; P.uninterruptible = false; P.setAnim('idle', 1);
-    game.whirlSnd?.stop?.(0.2);
+    endWhirl(game, P); P.setAnim('idle', 1);
     if (P.mv) { /* 걸음을 마저 간다 */ }
   }
   return true;
+}
+
+// 연사: 시간이 된 화살을 쏜다(updatePlayer가 부른다). 겨눈 적이 죽었으면 남은 적에게, 모두 죽었으면 끝낸다(빈 활질로 묶여 있지 않게)
+export function stepVolley(game, P) {
+  const V = P.volley;
+  while (V.i < V.list.length && V.t >= V.i * V.per) {
+    let t = V.list[V.i++];
+    if (t.dead) t = V.list.find((x) => !x.dead);
+    if (!t) { V.i = V.list.length; break; }
+    P.turnTo(t.x, t.y);
+    fireArrow(game, P, Math.atan2(t.y - P.y, t.x - P.x), t, { dmgPct: V.dmgPct, mult: V.mult, homing: true, vis: 'arrow' });
+    game.sfx('bow_shoot', P.x, P.y, { vol: 0.6 });
+  }
+  if (V.i >= V.list.length) P.volley = null;
 }

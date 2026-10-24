@@ -22,15 +22,19 @@ export class FX {
 
   // ───────── 생성 ─────────
   p(x, y, z, o) {
-    if (this.ps.length >= this.maxP) this.ps.shift();
     const q = { x, y, z, vx: o.vx || 0, vy: o.vy || 0, vz: o.vz || 0, life: o.life || 0.6, max: o.life || 0.6, size: o.size || 2, col: o.col || [255, 255, 255], glow: !!o.glow, grav: o.grav ?? 0, drag: o.drag ?? 0.9, kind: o.kind || 'dot', ground: o.ground || false, fade: o.fade ?? 1, grow: o.grow || 0 };
-    this.ps.push(q);
+    // 가득 차면 돌아가며 덮어쓴다(앞에서 빼내던 shift는 입자가 많을 때 매번 900개를 옮겼다)
+    if (this.ps.length >= this.maxP) this.ps[this.ovr = ((this.ovr || 0) + 1) % this.maxP] = q;
+    else this.ps.push(q);
     return q;
   }
   burst(x, y, z, n, o) {
+    const t = { ...o }; // 입자마다 새 객체를 만들지 않고 한 장을 고쳐 쓴다(p는 값만 옮겨 담는다)
     for (let i = 0; i < n; i++) {
       const a = (o.dir ?? rnd(0, PI * 2)) + rnd(-(o.spread ?? PI), o.spread ?? PI), sp = rnd(o.spd?.[0] ?? 0.5, o.spd?.[1] ?? 2.5);
-      this.p(x + rnd(-0.1, 0.1), y + rnd(-0.1, 0.1), z + rnd(-4, 4), { ...o, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: rnd(o.vz?.[0] ?? 10, o.vz?.[1] ?? 60), life: rnd((o.life ?? 0.6) * 0.6, o.life ?? 0.6), size: rnd((o.size ?? 2) * 0.6, o.size ?? 2) });
+      t.vx = Math.cos(a) * sp; t.vy = Math.sin(a) * sp; t.vz = rnd(o.vz?.[0] ?? 10, o.vz?.[1] ?? 60);
+      t.life = rnd((o.life ?? 0.6) * 0.6, o.life ?? 0.6); t.size = rnd((o.size ?? 2) * 0.6, o.size ?? 2);
+      this.p(x + rnd(-0.1, 0.1), y + rnd(-0.1, 0.1), z + rnd(-4, 4), t);
     }
   }
   blood(x, y, z, dir, n = 8, col = [150, 10, 8]) {
@@ -356,6 +360,8 @@ export class FX {
       if (a.team !== 1 || a.dead || !(a.barT > 0) || a.invis === 0) continue;
       const k = Math.round(a.y) * L.w + Math.round(a.x);
       if (!(L.flags[k] & 8) && L.theme !== 'town') continue;
+      // 몸이 어둠에 가려 안 그려진 괴물은 막대도 그리지 않는다(렌더러와 같은 조건)
+      if (L.theme !== 'town' && !a.boss && !a.glowCol && this.r?.isLit && !this.r.isLit(Math.round(a.x), Math.round(a.y))) continue;
       const px = ox + (a.x - a.y) * (TW / 2) * s, py = oy + (a.x + a.y) * (TH / 2) * s - (a.look?.barZ || 72) * s * (a.look?.scale || 1) * (a.look?.h || 1);
       const w = 30 * d, h = 3.5 * d;
       g.globalAlpha = Math.min(1, a.barT);

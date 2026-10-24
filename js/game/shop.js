@@ -130,12 +130,20 @@ export function buy(game, which, it, fromAlways = false) {
   return true;
 }
 
+// 이 가게가 사 주는 물건인가: 대장장이(고급품 포함)는 무기·방어구·장신구, 마녀는 지팡이·물약·주문서·장신구
+export function canSell(it, which) {
+  const b = BASE[it.b];
+  if (which === 'premium') which = 'smith';
+  if (b.quest) return { ok: false, why: '팔 수 없는 물건입니다' };
+  if (which === 'smith' && (b.cat === 'staff' || b.cat === 'potion' || b.cat === 'scroll' || b.cat === 'elixir')) return { ok: false, why: '"그건 마녀한테나 가져가게."' };
+  if (which === 'witch' && b.slot && b.cat !== 'staff' && !b.jewel) return { ok: false, why: '"쇠붙이는 대장장이에게 팔아."' };
+  if (which === 'healer' || which === 'boy') return { ok: false, why: '사지 않는 물건입니다' };
+  return { ok: true };
+}
 export function sell(game, it, which) {
-  const h = game.hero, b = BASE[it.b];
-  if (b.quest) { game.toast('팔 수 없는 물건입니다'); return false; }
-  // 대장장이는 무기·방어구·장신구, 마녀는 지팡이·물약·주문서·장신구
-  if (which === 'smith' && (b.cat === 'staff' || b.cat === 'potion' || b.cat === 'scroll' || b.cat === 'elixir')) { game.toast('"그건 마녀한테나 가져가게."'); return false; }
-  if (which === 'witch' && b.slot && b.cat !== 'staff' && !b.jewel) { game.toast('"쇠붙이는 대장장이에게 팔아."'); return false; }
+  const h = game.hero;
+  const c = canSell(it, which);
+  if (!c.ok) { game.toast(c.why); return false; }
   const p = sellPrice(it);
   h.invRemove(it);
   h.gold(p);
