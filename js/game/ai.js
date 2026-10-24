@@ -363,7 +363,7 @@ const AI = {
     if (!t) return;
     const d = Math.hypot(a.x - t.x, a.y - t.y);
     const showAt = 4 - a.int * 0.5;
-    a.invis = a.retreat > 0 ? Math.max(0, (a.invis ?? 0) - 0.3) : d < showAt ? Math.min(1, (a.invis ?? 0) + 0.35) : Math.max(0, (a.invis ?? 0) - 0.2);
+    a.invis = a.retreat > 0 ? Math.max(0, (a.invis ?? 0) - 0.4) : d < showAt ? Math.min(1, (a.invis ?? 0) + 0.35) : Math.max(0, (a.invis ?? 0) - 0.2);
     a.untargetable = a.invis < 0.3;
     if (a.retreat > 0) { a.retreat--; if (!stepToward(game, a, t, true)) a.retreat = 0; return; }
     AI.melee(game, a, dt, dP);

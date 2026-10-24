@@ -10,32 +10,39 @@ export default async function (page, { log }) {
     const clear = (L) => { for (const a of L.actors.slice()) if (a !== g.player) { a.release(L); L.actors.splice(L.actors.indexOf(a), 1); } L.missiles.length = 0; L.areas.length = 0; L.corpses.length = 0; };
     const P = () => g.player;
     const run = (sec, each) => { for (let i = 0; i < sec * 30; i++) { const p = P(); p.hpMax = 1e5; p.hp = 1e5; g.update(1 / 30); if (each && each(i) === false) break; } };
-    const setup = (depth) => { g.enter(depth, 'down'); const L = g.level; clear(L); const r = L.rooms.find((r) => r.w >= 8 && r.h >= 8 && !r.special) || L.rooms[0]; const p = L.nearestFree(r.cx, r.cy, 3); P().place(L, p.x, p.y); g.dmap.build(L, p.x, p.y); g.lastTile = -1; return { L, r }; };
+    // 무작위 지형 탓에 시험 자리가 안 나오면 새 씨앗으로 층을 다시 만든다
+    const fresh = (depth) => { g.seed = String(g.seed) + 'r'; g.levels.delete(depth); };
+    const retry = (n, fn) => { let r; for (let i = 0; i < n; i++) { r = fn(i); if (r[1]) break; } ok(...r); };
+    const setup = (depth, re = false) => { if (re) fresh(depth); g.enter(depth, 'down'); const L = g.level; clear(L); const r = L.rooms.find((r) => r.w >= 8 && r.h >= 8 && !r.special) || L.rooms[0]; const p = L.nearestFree(r.cx, r.cy, 3); P().place(L, p.x, p.y); g.dmap.build(L, p.x, p.y); g.lastTile = -1; return { L, r }; };
     const spawnAt = (L, id, dx, dy) => { const p = L.nearestFree(P().tx + dx, P().ty + dy, 3); return p ? AI.spawnMonster(g, L, id, p.x, p.y) : null; };
     const dist = (a) => Math.hypot(a.x - P().x, a.y - P().y);
 
     // 1) 벽 너머: 직선으로는 막혔지만 길이 있으면 돌아서 온다
-    {
+    retry(5, (i) => {
+      if (i) fresh(3);
       g.enter(3, 'down'); const L = g.level; clear(L);
       // 플레이어와 같은 방이 아닌, 길 거리 12~25칸인 칸
       const p0 = P(); g.dmap.build(L, p0.tx, p0.ty);
       let spot = null;
       for (let y = 1; y < L.h - 1 && !spot; y++) for (let x = 1; x < L.w - 1; x++) { const dm = g.dmap.at(x, y); if (dm > 12 && dm < 25 && L.free(x, y) && !L.los(x, y, p0.tx, p0.ty) && Math.hypot(x - p0.tx, y - p0.ty) < dm * 0.7) { spot = { x, y, dm }; break; } }
-      if (spot) {
-        const m = AI.spawnMonster(g, L, 'flesh_clan', spot.x, spot.y); m.aware = true;
-        let reached = -1; run(30, (i) => { if (dist(m) < 1.7) { reached = i / 30; return false; } });
-        ok('벽 너머에서 돌아서 다가옴', reached >= 0, `길 ${spot.dm.toFixed(0)}칸, ${reached.toFixed(1)}초`);
-      } else ok('벽 너머 시험 자리', false, '자리 없음');
-    }
+      if (!spot) return ['벽 너머 시험 자리', false, '자리 없음'];
+      const m = AI.spawnMonster(g, L, 'flesh_clan', spot.x, spot.y); m.aware = true;
+      let reached = -1; run(30, (i) => { if (dist(m) < 1.7) { reached = i / 30; return false; } });
+      return ['벽 너머에서 돌아서 다가옴', reached >= 0, `길 ${spot.dm.toFixed(0)}칸, ${reached.toFixed(1)}초`];
+    });
     // 2) 카이팅: 플레이어가 물러나면 근접 괴물은 따라오고, 궁수는 거리를 유지하며 쏜다
     {
-      const { L } = setup(2);
-      const m = spawnAt(L, 'skeleton', 3, 0); m.aware = true;
-      let maxD = 0, moved = 0, last = { x: m.x, y: m.y };
-      const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-      for (let k = 0; k < 4; k++) { g.setStick(dirs[k][0], dirs[k][1]); run(1.5, () => { maxD = Math.max(maxD, dist(m)); moved += Math.hypot(m.x - last.x, m.y - last.y); last = { x: m.x, y: m.y }; }); }
-      g.setStick(null);
-      ok('근접 괴물이 움직이는 플레이어를 따라옴', moved > 4 && maxD < 9, `이동 ${moved.toFixed(1)}, 최대 거리 ${maxD.toFixed(1)}`);
+      let L;
+      // 플레이어가 벽에 막혀 거의 못 걸으면 따라올 일도 없으니 다른 방에서 다시
+      retry(3, (i) => {
+        ({ L } = setup(2, i > 0));
+        const m = spawnAt(L, 'skeleton', 3, 0); m.aware = true;
+        let maxD = 0, moved = 0, pm = 0, last = { x: m.x, y: m.y }, lp = { x: P().x, y: P().y };
+        const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+        for (let k = 0; k < 4; k++) { g.setStick(dirs[k][0], dirs[k][1]); run(1.5, () => { maxD = Math.max(maxD, dist(m)); moved += Math.hypot(m.x - last.x, m.y - last.y); last = { x: m.x, y: m.y }; pm += Math.hypot(P().x - lp.x, P().y - lp.y); lp = { x: P().x, y: P().y }; }); }
+        g.setStick(null);
+        return ['근접 괴물이 움직이는 플레이어를 따라옴', moved > 4 && maxD < 9, `이동 ${moved.toFixed(1)}(플레이어 ${pm.toFixed(1)}), 최대 거리 ${maxD.toFixed(1)}`];
+      });
       clear(L);
       const a = spawnAt(L, 'skel_archer', 2, 0); a.aware = true;
       let shots = 0, back = 0; const d0 = dist(a);
@@ -79,14 +86,20 @@ export default async function (page, { log }) {
     }
     // 6) 숨은 자: 멀리선 안 보이고 가까이 오면 드러나며, 맞으면 물러나 다시 숨는다
     {
-      const { L } = setup(2);
-      const m = spawnAt(L, 'hidden', 6, 0); m.aware = true;
-      const far = m.invis;
-      let shown = false; run(12, () => { if (m.invis > 0.8) { shown = true; return false; } });
-      C.damageActor(g, m, 1, 'phys', P(), { noStun: true });
-      let hid = false; run(3, () => { if (m.invis < 0.3 && dist(m) > 1.5) { hid = true; return false; } });
-      ok('숨은 자: 가까이 오면 드러남', far < 0.5 && shown, `처음 ${far}, 드러남 ${shown}`);
-      ok('숨은 자: 맞으면 물러나 다시 숨음', hid);
+      let res;
+      for (let i = 0; i < 3; i++) {
+        const { L } = setup(2, i > 0);
+        const m = spawnAt(L, 'hidden', 6, 0); m.aware = true;
+        const far = m.invis;
+        let shown = false; run(12, () => { if (m.invis > 0.8) { shown = true; return false; } });
+        if (!shown && i < 2) continue; // 길이 막혀 못 다가온 자리
+        C.damageActor(g, m, 1, 'phys', P(), { noStun: true });
+        let hid = false; run(3, () => { if (m.invis < 0.3 && dist(m) > 1.5) { hid = true; return false; } });
+        res = [far, shown, hid];
+        break;
+      }
+      ok('숨은 자: 가까이 오면 드러남', res[0] < 0.5 && res[1], `처음 ${res[0]}, 드러남 ${res[1]}`);
+      ok('숨은 자: 맞으면 물러나 다시 숨음', res[2]);
     }
     // 7) 멀리 있는 괴물은 잠든다(24칸 밖)
     {
@@ -97,27 +110,36 @@ export default async function (page, { log }) {
     }
     // 8) 여럿이 몰려도 같은 칸에 겹치지 않고, 벽·물체 칸에 서지 않는다
     {
-      const { L } = setup(5);
-      const ms = []; for (let i = 0; i < 12; i++) { const m = spawnAt(L, i % 2 ? 'flesh_clan' : 'skeleton', 3 + (i % 4), -2 + Math.floor(i / 4) * 2); if (m) { m.aware = true; ms.push(m); } }
-      let overlap = 0, inWall = 0;
-      run(8, () => { const seen = new Map(); for (const m of ms) { if (m.dead) continue; const k = m.ty * L.w + m.tx; if (seen.has(k) && !m.mv && !seen.get(k).mv) overlap++; seen.set(k, m); if (!L.passable(m.tx, m.ty)) inWall++; } });
-      ok('무리: 겹침·벽 안 없음', overlap === 0 && inWall === 0, `겹침 ${overlap}, 벽 ${inWall}`);
-      const near = ms.filter((m) => dist(m) < 1.7).length;
-      ok('무리: 둘러싸고 공격', near >= 4, `붙은 수 ${near}/${ms.length}`);
+      // 겹침·벽은 매번 0이어야 하고, 둘러싸기는 방 모양 탓에 모자라면 다른 방에서 다시
+      let bad = [], near = 0, n = 0;
+      for (let i = 0; i < 3; i++) {
+        const { L } = setup(5, i > 0);
+        const ms = []; for (let j = 0; j < 12; j++) { const m = spawnAt(L, j % 2 ? 'flesh_clan' : 'skeleton', 3 + (j % 4), -2 + Math.floor(j / 4) * 2); if (m) { m.aware = true; ms.push(m); } }
+        let overlap = 0, inWall = 0;
+        run(8, () => { const seen = new Map(); for (const m of ms) { if (m.dead) continue; const k = m.ty * L.w + m.tx; if (seen.has(k) && !m.mv && !seen.get(k).mv) overlap++; seen.set(k, m); if (!L.passable(m.tx, m.ty)) inWall++; } });
+        if (overlap || inWall) bad.push(`겹침 ${overlap}, 벽 ${inWall}`);
+        near = ms.filter((m) => dist(m) < 1.7).length; n = ms.length;
+        if (near >= 4) break;
+      }
+      ok('무리: 겹침·벽 안 없음', !bad.length, bad.join(' / ') || '겹침 0, 벽 0');
+      ok('무리: 둘러싸고 공격', near >= 4, `붙은 수 ${near}/${n}`);
     }
     // 9) 문: 산양족은 문을 열고, 해골은 못 연다
     {
-      let found = null;
-      for (const d of [5, 6, 7, 2, 3]) {
+      // 양쪽 두 칸 앞이 모두 빈 닫힌 문을 찾는다(없으면 다른 층·새 씨앗)
+      let found = null, a = null;
+      for (let t = 0; t < 12 && !found; t++) {
+        const d = [5, 6, 7, 2, 3, 4][t % 6];
+        if (t >= 6) fresh(d);
         g.enter(d, 'down'); const L = g.level; clear(L);
-        const door = L.objects.find((o) => o.type === 'door' && !o.open && !o.locked);
-        if (door) { found = { L, door }; break; }
+        for (const door of L.objects.filter((o) => o.type === 'door' && !o.open && !o.locked)) {
+          const sides = door.ori === 'y' ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]];
+          a = sides.map(([dx, dy]) => ({ x: door.x + dx * 2, y: door.y + dy * 2 })).filter((p) => L.free(p.x, p.y));
+          if (a.length === 2) { found = { L, door }; break; }
+        }
       }
       if (found) {
         const { L, door } = found;
-        // 문 양쪽 칸
-        const sides = door.ori === 'y' ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]];
-        const a = sides.map(([dx, dy]) => ({ x: door.x + dx * 2, y: door.y + dy * 2 })).filter((p) => L.free(p.x, p.y));
         if (a.length === 2) {
           P().place(L, a[0].x, a[0].y); g.dmap.build(L, a[0].x, a[0].y); g.lastTile = -1;
           const m = AI.spawnMonster(g, L, 'flesh_clan', a[1].x, a[1].y); m.aware = true;

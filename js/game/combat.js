@@ -188,7 +188,7 @@ export function damageActor(game, t, amount, type, src, opts = {}) {
   if (t.umods?.includes('light') && Math.random() < 0.6) spawnChargedBolts(game, t, 4, [1, Math.max(2, Math.round(t.mlvl * 0.6))], 1);
   if (t.hp <= 0) { killActor(game, t, src, type); return d; }
   // 숨은 자: 맞으면 몇 걸음 물러나 다시 모습을 감춘다(4초에 한 번)
-  if (t.ai === 'sneak' && !(t.hideAt > game.time)) { t.retreat = 2 + Math.floor(Math.random() * 3); t.hideAt = game.time + 4; }
+  if (t.ai === 'sneak' && !(t.hideAt > game.time)) { t.retreat = 3 + Math.floor(Math.random() * 2); t.hideAt = game.time + 4; }
   // 경직: 피해 ≥ 레벨+3 (디아블로 1)
   const stunTh = (t.mlvl || 1) + 3;
   if (!opts.noStun && !t.boss && !t.stone && (d >= stunTh || opts.stun || t.alwaysStun) && t.anim.name !== 'death') {
