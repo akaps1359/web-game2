@@ -208,24 +208,19 @@ export class Game {
   aimDir() { const P = this.player; return this.stick ? this.stick.a : P.faceTo ?? P.face; }
   // 휘두르기·쏘기: 겨누는 거리 안에 적이 있으면 그쪽으로, 없으면 조이스틱(바라보는) 쪽 빈 곳으로.
   // 근접은 내려치는 순간 앞쪽 손 닿는 곳의 적을, 화살은 날아가다 처음 닿는 적을 맞힌다
-  // 겨눌 적이 없으면 손 닿는 곳의 상자·석관·통 쪽으로 휘둘러 열고 부순다(활을 들었으면 상자는 손으로 열고 통은 쏴서 부순다)
+  // 겨눌 적이 없으면 손 닿는 곳의 통 쪽으로 휘두르거나 쏴서 부순다(상자·석관은 상호작용 단추로 연다)
   freeAttack() {
     const P = this.player, ranged = this.hero.ranged();
     const t = this.bestEnemy(ranged ? BOW_AIM : MELEE_AIM), o = t ? null : this.bestSmashable();
     const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : o ? Math.atan2(o.y - P.y, o.x - P.x) : this.aimDir();
     if (t) this.setTarget(t);
-    if (ranged && o && o.type !== 'barrel') {
-      P.turnTo(o.x, o.y);
-      P.setAnim('special', 0.3, { hitAt: 0.5, onHit: () => this.smash(o) });
-      return;
-    }
     if (ranged) rangedAttack(this, P, t, { basic: true, point: { x: P.x + Math.cos(a) * 6, y: P.y + Math.sin(a) * 6 } });
     else meleeAttack(this, P, t, { basic: true, ang: a });
   }
-  // 공격으로 여는·부수는 것: 닫힌 상자·석관, 멀쩡한 통
-  smashable(o) { return !!o && !o.hidden && (o.type === 'barrel' ? !o.broken : (o.type === 'chest' || o.type === 'sarc') && !o.open); }
+  // 공격으로 부수는 것: 멀쩡한 통
+  smashable(o) { return !!o && !o.hidden && o.type === 'barrel' && !o.broken; }
   smash(o) { if (!this.smashable(o)) return false; useObject(this, o); return true; }
-  // 손 닿는 곳(겨누는 거리)의 상자·석관·통: 조이스틱(바라보는) 쪽 것 먼저
+  // 손 닿는 곳(겨누는 거리)의 통: 조이스틱(바라보는) 쪽 것 먼저
   bestSmashable() {
     const P = this.player, L = this.level, ref = this.aimDir(), w = this.stick ? 2 : 0.8;
     let best = null, bs = 1e9;
@@ -238,7 +233,7 @@ export class Game {
     }
     return best;
   }
-  // 휘두른 순간 앞쪽 손 닿는 곳의 상자·석관을 열고 통을 부순다
+  // 휘두른 순간 앞쪽 손 닿는 곳의 통을 부순다
   smashFront(P = this.player) {
     const fa = P.faceTo ?? P.face;
     let best = null, bd = 1e9;
