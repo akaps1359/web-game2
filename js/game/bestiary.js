@@ -49,12 +49,12 @@ export const ENTRIES = (() => {
   fams.sort((a, b) => a.d - b.d || a.i - b.i);
   const out = [];
   for (const { fid } of fams) {
-    for (const m of Object.values(MONSTERS)) if (m.fam === fid) out.push({ id: m.id, name: m.name, short: m.name, boss: false, fam: fid, def: m, depth: EXTRA_DEPTH[m.id] || m.dl, bonus: FAM_BONUS[fid] || { life: 1 } });
+    for (const m of Object.values(MONSTERS)) if (m.fam === fid) out.push({ id: m.id, name: m.name, short: m.name, boss: false, fam: fid, def: m, dl: m.dl, depth: EXTRA_DEPTH[m.id] || m.dl, bonus: FAM_BONUS[fid] || { life: 1 } });
   }
   for (const bid of Object.keys(BOSS_BONUS)) {
     const B = BOSSES[bid];
     if (!B) continue;
-    out.push({ id: bid, name: B.name, short: B.name.length > 5 ? B.name.split(' ').pop() : B.name, boss: true, fam: B.fam, def: B, depth: [BOSS_DEPTH[bid], BOSS_DEPTH[bid]], bonus: BOSS_BONUS[bid] });
+    out.push({ id: bid, name: B.name, short: B.name.length > 5 ? B.name.split(' ').pop() : B.name, boss: true, fam: B.fam, def: B, dl: [BOSS_DEPTH[bid], BOSS_DEPTH[bid]], depth: [BOSS_DEPTH[bid], BOSS_DEPTH[bid]], bonus: BOSS_BONUS[bid] });
   }
   return out;
 })();
@@ -68,14 +68,16 @@ export function entryIdOf(a) {
 }
 export const killsOf = (d, id) => d.bestiary?.[id] || 0;
 
-// 도감이 생기기 전 저장: 퀘스트를 끝낸 보스는 다시 나오지 않으므로 이미 쓰러뜨린 것으로 채운다(보너스도 받는다)
+// 도감이 생기기 전 저장(또는 채우기 전 v18로 한 번 열린 저장): 퀘스트를 끝낸 보스는 다시 나오지 않으므로
+// 이미 쓰러뜨린 것으로 채운다(보너스도 받는다). 한 번만 하도록 판 번호를 남긴다
 export function backfillBestiary(d) {
-  if (d.bestiary) return;
-  d.bestiary = {};
+  const B = d.bestiary || (d.bestiary = {});
+  if ((d.bestiaryV | 0) >= 1) return;
   for (const bid in BOSS_QUEST) {
     const st = d.quests?.[BOSS_QUEST[bid]]?.st;
-    if (st === 'done' || st === 'reported') d.bestiary[bid] = 1;
+    if ((st === 'done' || st === 'reported') && !(B[bid] > 0)) B[bid] = 1;
   }
+  d.bestiaryV = 1;
 }
 export const knownCount = (d) => ENTRIES.reduce((n, e) => n + (killsOf(d, e.id) > 0 ? 1 : 0), 0);
 

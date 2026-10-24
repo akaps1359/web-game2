@@ -287,7 +287,9 @@ canvas:not(#view), .pico { image-rendering: pixelated; }
 .bcell canvas { display: block; image-rendering: pixelated; }
 .bcell .bn { width: 100%; font-size: 12px; line-height: 13px; height: 26px; display: flex; align-items: center; justify-content: center; text-align: center; color: #d8ccb0; word-break: keep-all; overflow: hidden; }
 .bcell .bn.tight { letter-spacing: -1px; }
-.bcell .bk { position: absolute; right: 2px; top: 1px; font-size: 12px; line-height: 14px; color: #fff; text-shadow: var(--outline); }
+.bcell .bn.small { font-size: 11px; line-height: 13px; }
+.bcell .bn.clip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-all; text-overflow: ellipsis; }
+.bcell .bk { position: absolute; right: 2px; bottom: 27px; font-size: 12px; line-height: 13px; color: #fff; text-shadow: var(--outline); }
 .bcell.unk .bn { color: #6a5e50; }
 .bcell.boss { border-color: rgba(224,120,60,.55); }
 .bcell.boss .bn { color: #f0a070; }

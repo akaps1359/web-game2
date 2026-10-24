@@ -19,7 +19,7 @@ export function newHeroData(cls, name, hardcore = false) {
     skills: {}, bar: ['attack', null, null, null, null],
     gold: 100, inv: [], equip: {}, belt: new Array(16).fill(null),
     hp: null, mp: null, quests: {}, wps: [0], maxDepth: 0, deaths: 0, kills: 0,
-    bestiary: {}, bestiarySeen: 0, // 생물도감: 종류마다 처치 수, 도감 창에서 마지막으로 본 등록 수
+    bestiary: {}, bestiarySeen: 0, bestiaryV: 1, // 생물도감: 종류마다 처치 수, 도감 창에서 마지막으로 본 등록 수
     found: [], // 이미 나온 고유 아이템(디아블로 1처럼 같은 고유품은 한 번만)
     town: { seen: {} },
   };

@@ -665,7 +665,7 @@ export class Panels {
     const tabs = el('div', 'pnl-tabs');
     for (let i = 0; i < pages; i++) {
       const es = ENTRIES.slice(i * PER, (i + 1) * PER), mons = es.filter((e) => !e.boss);
-      const lo = Math.min(...mons.map((e) => e.depth[0])), hi = Math.max(...mons.map((e) => e.depth[1]));
+      const lo = Math.min(...mons.map((e) => e.dl[0])), hi = Math.max(...mons.map((e) => e.dl[1]));
       const got = es.filter((e) => killsOf(d, e.id) > 0).length;
       tabs.appendChild(btn('pnl-tab' + (this.page === i ? ' on' : ''), `${lo}~${hi}층${es.some((e) => e.boss) ? '·보스' : ''} ${got}/${es.length}`, () => { this.page = i; this.selBeast = null; this.render(); }));
     }
@@ -673,21 +673,31 @@ export class Panels {
     const body = el('div', 'pnl-body'); p.appendChild(body);
     const sp = this.space(body);
     const [L, R] = this.cols(body, 'tight');
-    // 칸 크기: 설명 칸(220)을 남긴 너비를 8칸으로, 3줄이 그림과 두 줄 이름과 함께 높이에 들어가게
-    const IW = 220, cw = Math.max(44, Math.min(80, Math.floor((sp.w - IW - 14) / 8) - 4));
-    const N = Math.max(36, Math.min(66, cw - 4, Math.floor((sp.h - 8) / 3) - 34));
+    // 칸 크기: 설명 칸(220, 좁은 화면에서는 170까지 줄임)을 남긴 너비를 8칸으로, 3줄이 그림과 두 줄 이름과 함께 높이에 들어가게
+    let IW = 220, cw = Math.floor((sp.w - IW - 14) / 8) - 4;
+    if (cw < 52) { IW = Math.max(170, sp.w - 14 - 8 * 56); cw = Math.floor((sp.w - IW - 14) / 8) - 4; }
+    cw = Math.max(34, Math.min(80, cw));
+    const N = Math.max(30, Math.min(66, cw - 4, Math.floor((sp.h - 8) / 3) - 34));
     R.style.width = Math.max(IW, sp.w - 14 - (cw + 4) * 8) + 'px';
     const grid = el('div', 'bgrid');
     grid.style.gridTemplateColumns = `repeat(8, ${cw}px)`;
     for (const e of ENTRIES.slice(this.page * PER, (this.page + 1) * PER)) {
       const k = killsOf(d, e.id), cell = el('button', 'bcell' + (k ? '' : ' unk') + (e.boss ? ' boss' : '') + (this.selBeast === e.id ? ' sel' : ''));
       cell.appendChild(beastPortrait(e, N, k > 0));
-      if (k) cell.appendChild(el('span', 'bk', k > 999 ? '999+' : String(k)));
-      cell.appendChild(el('span', 'bn' + (k && e.short.split(' ').some((w) => w.length >= 5) ? ' tight' : ''), k ? e.short : '???'));
+      if (k) cell.appendChild(el('span', 'bk', k < 1000 ? String(k) : `${(k / 1000).toFixed(k < 10000 ? 1 : 0)}k`));
+      cell.appendChild(el('span', 'bn', k ? e.short : '???'));
       onTap(cell, () => { this.selBeast = this.selBeast === e.id ? null : e.id; this.render(); });
       grid.appendChild(cell);
     }
     L.appendChild(grid);
+    // 이름이 칸을 넘치면(좁은 화면·긴 이름) 자간을 좁히고, 그래도 넘치면 글씨를 한 단계 작게(갈무리11 원래 크기),
+    // 그래도 넘치면 두 줄에서 말줄임
+    for (const cls of ['tight', 'small', 'clip']) {
+      // 마지막 단계는 글자 끝 빈칸(1~2도트)만 넘치는 것은 그대로 둔다
+      const tol = cls === 'clip' ? 3 : 1;
+      const over = [...grid.querySelectorAll('.bn')].filter((b) => b.scrollWidth > b.clientWidth + tol || b.scrollHeight > b.clientHeight + 1);
+      for (const b of over) b.classList.add(cls);
+    }
     const info = el('div', 'sinfo binfo');
     R.appendChild(info);
     const e = this.selBeast ? ENTRIES.find((x) => x.id === this.selBeast) : null;
@@ -892,34 +902,70 @@ function beastLook(e) {
   if (B.lookFrom) { const F = FAMILIES[B.lookFrom[0]], v = F.v[B.lookFrom[1]]; return F.look(v[11], {}); }
   return monsterLook(Object.values(MONSTERS).find((m) => m.fam === B.fam));
 }
-// 초상화: 한 번 그려 실제 그림 크기를 재고, 칸에 꽉 차게 배율을 다시 맞춰 그린다(도트가 고르게). 못 본 것은 검은 그림자
-const BEAST_CACHE = new Map();
-function beastPortrait(e, n, known) {
-  const key = `${e.id}|${n}|${known ? 1 : 0}`;
-  let c = BEAST_CACHE.get(key);
-  if (!c) {
-    const look = beastLook(e);
-    const m = canvasFor(null, n * 3, n * 3), fx = n * 1.5, fy = n * 2.4, s0 = n / 120;
-    drawPortrait(m.g, look, fx, fy, s0, 0.3, 'idle', Math.PI / 4);
-    const W = m.c.width, Hh = m.c.height, px = m.g.getImageData(0, 0, W, Hh).data;
+// 초상화: 종류마다 한 번 그려 실제 그림 크기(발 기준, 배율 1당)를 재 두고, 칸 크기마다 꽉 차게 한 번만 그린다(도트가 고르게).
+// 못 본 것은 그 그림을 검게 칠한 그림자. 창을 바로 열 수 있게 아직 없는 그림은 빈 칸으로 두고 장면마다 몇 개씩 채운다
+const BEAST_BOX = new Map(), BEAST_CACHE = new Map(), BEAST_WAIT = new Map();
+const beastLookNS = (e) => ({ ...beastLook(e), noShadow: true });
+function beastBox(e) {
+  let b = BEAST_BOX.get(e.id);
+  if (!b) {
+    const n = 60, S = 0.5, m = canvasFor(null, n * 3, n * 3), fx = n * 1.5, fy = n * 2.4;
+    drawPortrait(m.g, beastLookNS(e), fx, fy, S, 0.3, 'idle', Math.PI / 4);
+    const W = m.c.width, Hh = m.c.height, px = m.g.getImageData(0, 0, W, Hh).data, A = 1 / UI_DPR;
     let x0 = W, x1 = -1, y0 = Hh, y1 = -1;
     for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) if (px[(y * W + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-    const out = canvasFor(null, n, n);
-    if (x1 >= 0) {
-      const A = 1 / UI_DPR, bx0 = x0 * A, bx1 = (x1 + 1) * A, by0 = y0 * A, by1 = (y1 + 1) * A;
-      const k = Math.min(4, (n - 3) / (by1 - by0), (n - 3) / (bx1 - bx0));
-      const ax = Math.round((n / 2 - ((bx0 + bx1) / 2 - fx) * k) / A) * A, ay = Math.round((n / 2 - ((by0 + by1) / 2 - fy) * k) / A) * A;
-      drawPortrait(out.g, look, ax, ay, s0 * k, 0.3, 'idle', Math.PI / 4);
-      if (!known) { out.g.globalCompositeOperation = 'source-atop'; out.g.fillStyle = '#100c0a'; out.g.fillRect(0, 0, n, n); out.g.globalCompositeOperation = 'source-over'; }
+    b = x1 < 0 ? null : { x0: (x0 * A - fx) / S, x1: ((x1 + 1) * A - fx) / S, y0: (y0 * A - fy) / S, y1: ((y1 + 1) * A - fy) / S };
+    BEAST_BOX.set(e.id, b);
+  }
+  return b;
+}
+// 칸 크기 n의 그림(본 것). 못 본 것은 그 위에 검게
+function beastCanvas(e, n, known) {
+  const key = `${e.id}|${n}`;
+  let c = BEAST_CACHE.get(key);
+  if (!c) {
+    const out = canvasFor(null, n, n), b = beastBox(e);
+    if (b) {
+      const A = 1 / UI_DPR, s = Math.min(n / 30, (n - 3) / (b.y1 - b.y0), (n - 3) / (b.x1 - b.x0));
+      const ax = Math.round((n / 2 - ((b.x0 + b.x1) / 2) * s) / A) * A, ay = Math.round((n / 2 - ((b.y0 + b.y1) / 2) * s) / A) * A;
+      drawPortrait(out.g, beastLookNS(e), ax, ay, s, 0.3, 'idle', Math.PI / 4);
     }
-    c = out.c;
-    if (BEAST_CACHE.size > 400) BEAST_CACHE.clear();
+    c = { k: out.c, u: null };
+    if (BEAST_CACHE.size > 300) BEAST_CACHE.clear();
     BEAST_CACHE.set(key, c);
   }
-  // 같은 그림을 여러 곳에 쓰므로 복사본을 붙인다
+  if (known) return c.k;
+  if (!c.u) {
+    const u = document.createElement('canvas'); u.width = c.k.width; u.height = c.k.height;
+    const g = u.getContext('2d'); g.drawImage(c.k, 0, 0);
+    g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#100c0a'; g.fillRect(0, 0, u.width, u.height);
+    c.u = u;
+  }
+  return c.u;
+}
+function beastPortrait(e, n, known) {
   const cp = document.createElement('canvas');
-  cp.width = c.width; cp.height = c.height; cp.style.width = n + 'px'; cp.style.height = n + 'px';
-  cp.getContext('2d').drawImage(c, 0, 0);
+  cp.width = Math.round(n * UI_DPR); cp.height = cp.width; cp.style.width = n + 'px'; cp.style.height = n + 'px';
+  if (BEAST_CACHE.has(`${e.id}|${n}`)) cp.getContext('2d').drawImage(beastCanvas(e, n, known), 0, 0);
+  else {
+    const key = `${e.id}|${n}`;
+    const w = BEAST_WAIT.get(key) || { e, n, to: [] };
+    w.to.push([cp, known]);
+    BEAST_WAIT.set(key, w);
+    if (BEAST_WAIT.size === 1) window.requestAnimationFrame(pumpBeasts);
+  }
   return cp;
+}
+// 장면마다 6ms 안에서 밀린 초상화를 그린다(창에서 이미 사라진 칸은 건너뛴다)
+function pumpBeasts() {
+  const t0 = performance.now();
+  for (const [key, w] of BEAST_WAIT) {
+    BEAST_WAIT.delete(key);
+    const live = w.to.filter(([cp]) => cp.isConnected);
+    if (!live.length) continue;
+    for (const [cp, known] of live) cp.getContext('2d').drawImage(beastCanvas(w.e, w.n, known), 0, 0);
+    if (performance.now() - t0 > 6) break;
+  }
+  if (BEAST_WAIT.size) window.requestAnimationFrame(pumpBeasts);
 }
 
