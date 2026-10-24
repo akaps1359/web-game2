@@ -3,6 +3,7 @@ import { CLASSES, EXP_TABLE, MAX_LEVEL } from '../data/classes.js';
 import { BASE } from '../data/items.js';
 import { itemMods, itemAC, itemDmg, meetsReq, isTwoHanded, invalidate, makeItem, itemName } from './items.js';
 import { SKILLS, skillDef, passiveMods } from './skills.js';
+import { bestiaryMods } from './bestiary.js';
 import { clamp, josa } from '../core/util.js';
 
 export const INV_W = 10, INV_H = 4;
@@ -18,6 +19,7 @@ export function newHeroData(cls, name, hardcore = false) {
     skills: {}, bar: ['attack', null, null, null, null],
     gold: 100, inv: [], equip: {}, belt: new Array(16).fill(null),
     hp: null, mp: null, quests: {}, wps: [0], maxDepth: 0, deaths: 0, kills: 0,
+    bestiary: {}, bestiarySeen: 0, // 생물도감: 종류마다 처치 수, 도감 창에서 마지막으로 본 등록 수
     found: [], // 이미 나온 고유 아이템(디아블로 1처럼 같은 고유품은 한 번만)
     town: { seen: {} },
   };
@@ -46,6 +48,7 @@ export class Hero {
     this.actor = null;
     this.st = {};
     for (const k of ['inv', 'belt']) if (!data[k]) data[k] = k === 'belt' ? new Array(16).fill(null) : [];
+    if (!data.bestiary) data.bestiary = {};
     this.recalc();
   }
   bind(a) {
@@ -67,9 +70,11 @@ export class Hero {
     const M = {};
     const add = (k, v) => { if (Array.isArray(v)) { const o = M[k] || [0, 0]; M[k] = [o[0] + v[0], o[1] + v[1]]; } else M[k] = (M[k] || 0) + v; };
     for (const it of live) { const m = itemMods(it); for (const k in m) add(k, m[k]); }
-    // 패시브 기술·버프
+    // 패시브 기술·버프, 생물도감 보너스
     const pm = passiveMods(this);
     for (const k in pm) add(k, pm[k]);
+    const bm = bestiaryMods(d);
+    for (const k in bm) add(k, bm[k]);
     const bf = this.actor?.buffs || {};
     for (const k in bf) if (bf[k].mods) for (const m in bf[k].mods) add(m, bf[k].mods[m]);
     this.mods = M;

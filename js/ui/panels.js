@@ -1,5 +1,5 @@
 // 패널: 가방(장비창·격자·물약 띠), 캐릭터, 기술 나무, 퀘스트, 메뉴·설정, 상점, 보관함, 순간 이동
-import { $, el, btn, onTap, canvasFor } from './dom.js';
+import { $, el, btn, onTap, canvasFor, UI_DPR } from './dom.js';
 import { paintItemIcon } from '../render/icons.js';
 import { paintSkillIcon } from '../render/skillicons.js';
 import { drawPortrait } from '../render/figures.js';
@@ -13,6 +13,8 @@ import { stock, ALWAYS, buy, sell, buyPrice, repairAll, repairOne, identify, res
 import { makeItem } from '../game/items.js';
 import { levelName, LEVELS } from '../game/world.js';
 import { EXP_TABLE } from '../data/classes.js';
+import { ENTRIES, killsOf, knownCount, bestiaryMods, bonusText, summaryParts } from '../game/bestiary.js';
+import { MONSTERS, FAMILIES, monsterLook } from '../data/monsters.js';
 
 const HELP = [
   ['이동·공격', `■ 움직이기
@@ -71,7 +73,10 @@ const HELP = [
 힘은 근접 피해와 장비 요구치, 마력은 마나와 주문, 민첩은 명중·방어도·막기와 활 피해, 활력은 생명력을 올립니다.
 
 ■ 무기와 괴물
-칼은 짐승에게 강하고 해골에게 약합니다. 둔기는 그 반대입니다(디아블로 1 규칙).`],
+칼은 짐승에게 강하고 해골에게 약합니다. 둔기는 그 반대입니다(디아블로 1 규칙).
+
+■ 생물도감
+위쪽 책 단추로 엽니다. 괴물을 종류마다 처음 쓰러뜨리면 도감에 오르고, 그때 한 번만 아주 작은 보너스(생명력 +2, 방어도 +1, 저항 +1% 같은)를 영구히 받습니다. 보스는 힘·마력·민첩·활력 중 하나를 1 올려 줍니다. 새로 오른 수가 단추에 빨간 숫자로 뜹니다.`],
 ];
 
 const SLOT_LABEL = { head: '투구', amulet: '목걸이', body: '갑옷', weapon: '무기', shield: '방패', ring1: '반지', ring2: '반지', gloves: '장갑', belt: '허리띠', boots: '장화' };
@@ -92,7 +97,7 @@ export class Panels {
   open(name, opts = {}) {
     if (!this.game) return;
     this.game.stopAll?.();
-    this.cur = name; this.opts = opts; this.sel = null;
+    this.cur = name; this.opts = opts; this.sel = null; this.selBeast = null;
     this.tab = opts.tab ?? this.tab ?? 0;
     this.page = 0;
     this.root.classList.add('on');
@@ -649,6 +654,75 @@ export class Panels {
     body.appendChild(box);
   }
 
+  // ═════════ 생물도감 ═════════
+  // 왼쪽: 한 쪽에 24칸(8×3) 초상화와 이름, 오른쪽: 고른 괴물 설명(안 고르면 받은 보너스 합계). 못 쓰러뜨린 것은 검은 그림자와 ???
+  r_bestiary() {
+    const d = this.hero.data, known = knownCount(d);
+    if (d.bestiarySeen !== known) { d.bestiarySeen = known; this.app.hud.badges(); }
+    const p = this.frame('생물도감', `<b style="color:#fff;margin-right:4px">${known}</b>/ ${ENTRIES.length}`);
+    const PER = 24, pages = Math.ceil(ENTRIES.length / PER);
+    if (this.page >= pages) this.page = 0;
+    const tabs = el('div', 'pnl-tabs');
+    for (let i = 0; i < pages; i++) {
+      const es = ENTRIES.slice(i * PER, (i + 1) * PER), mons = es.filter((e) => !e.boss);
+      const lo = Math.min(...mons.map((e) => e.depth[0])), hi = Math.max(...mons.map((e) => e.depth[1]));
+      const got = es.filter((e) => killsOf(d, e.id) > 0).length;
+      tabs.appendChild(btn('pnl-tab' + (this.page === i ? ' on' : ''), `${lo}~${hi}층${es.some((e) => e.boss) ? '·보스' : ''} ${got}/${es.length}`, () => { this.page = i; this.selBeast = null; this.render(); }));
+    }
+    p.appendChild(tabs);
+    const body = el('div', 'pnl-body'); p.appendChild(body);
+    const sp = this.space(body);
+    const [L, R] = this.cols(body, 'tight');
+    // 칸 크기: 설명 칸(220)을 남긴 너비를 8칸으로, 3줄이 그림과 두 줄 이름과 함께 높이에 들어가게
+    const IW = 220, cw = Math.max(44, Math.min(80, Math.floor((sp.w - IW - 14) / 8) - 4));
+    const N = Math.max(36, Math.min(66, cw - 4, Math.floor((sp.h - 8) / 3) - 34));
+    R.style.width = Math.max(IW, sp.w - 14 - (cw + 4) * 8) + 'px';
+    const grid = el('div', 'bgrid');
+    grid.style.gridTemplateColumns = `repeat(8, ${cw}px)`;
+    for (const e of ENTRIES.slice(this.page * PER, (this.page + 1) * PER)) {
+      const k = killsOf(d, e.id), cell = el('button', 'bcell' + (k ? '' : ' unk') + (e.boss ? ' boss' : '') + (this.selBeast === e.id ? ' sel' : ''));
+      cell.appendChild(beastPortrait(e, N, k > 0));
+      if (k) cell.appendChild(el('span', 'bk', k > 999 ? '999+' : String(k)));
+      cell.appendChild(el('span', 'bn' + (k && e.short.split(' ').some((w) => w.length >= 5) ? ' tight' : ''), k ? e.short : '???'));
+      onTap(cell, () => { this.selBeast = this.selBeast === e.id ? null : e.id; this.render(); });
+      grid.appendChild(cell);
+    }
+    L.appendChild(grid);
+    const info = el('div', 'sinfo binfo');
+    R.appendChild(info);
+    const e = this.selBeast ? ENTRIES.find((x) => x.id === this.selBeast) : null;
+    if (!e) {
+      // 안 골랐을 때: 받은 보너스 합계
+      info.appendChild(el('h4', '', '받은 보너스'));
+      const parts = summaryParts(bestiaryMods(d));
+      const box = el('div', 'bsum');
+      if (parts.length) for (const t of parts) box.appendChild(el('span', '', t));
+      else box.appendChild(el('span', 'sd', '아직 없음'));
+      info.appendChild(box);
+      info.appendChild(el('div', 'sd', '괴물을 처음 쓰러뜨리면 도감에 오르고, 그때 한 번만 아주 작은 보너스를 영구히 받습니다. 우두머리·용사·졸개는 바탕 종류로 셉니다. 칸을 누르면 자세히 봅니다.'));
+      return;
+    }
+    const k = killsOf(d, e.id), D = e.def, F = FAMILIES[e.fam];
+    const head = el('div', 'bhead');
+    head.appendChild(beastPortrait(e, 44, k > 0));
+    const nm = el('div');
+    nm.appendChild(el('h4', '', k ? e.name : '???'));
+    nm.appendChild(el('div', 'sd', k ? `${e.boss ? '보스 · ' : ''}${CLS_NAME[F?.cls] || ''} · 레벨 ${D.lvl}` : '아직 쓰러뜨리지 못했다'));
+    head.appendChild(nm);
+    info.appendChild(head);
+    const line = (a, b) => { const r = el('div', 'bline'); r.appendChild(el('b', '', a)); r.appendChild(document.createTextNode(b)); info.appendChild(r); };
+    line('나오는 곳', e.depth[0] === e.depth[1] ? `지하 ${e.depth[0]}층` : `지하 ${e.depth[0]}~${e.depth[1]}층`);
+    if (k) {
+      const hp = Array.isArray(D.hp) ? (D.hp[0] === D.hp[1] ? `${D.hp[0]}` : `${D.hp[0]}~${D.hp[1]}`) : `${D.hp}`;
+      line('생명력', `${hp} · ${resText(D.res)}`);
+      if (F?.cls === 'undead') line('약점', '둔기 1.5배 · 칼 절반');
+      else if (F?.cls === 'animal') line('약점', '칼 1.5배 · 둔기 절반');
+      line('특징', AI_TEXT[D.ai || F?.ai] || AI_TEXT.melee);
+    }
+    line('첫 처치', `${bonusText(e.bonus)} ${k ? '(받음)' : '(아직)'}`);
+    if (k) line('쓰러뜨린 수', `${k}`);
+  }
+
   // ═════════ 메뉴·설정 ═════════
   r_menu() {
     const S = this.app.settings;
@@ -792,3 +866,60 @@ export class Panels {
     body.appendChild(el('div', 'shop-hint', '순간 이동 지점은 3·5·7·9·11·13·15층에 있습니다. 한 번 밟으면 켜집니다.'));
   }
 }
+
+// ───────── 생물도감 그림·글 ─────────
+const CLS_NAME = { undead: '언데드', demon: '악마', animal: '짐승' };
+const AI_TEXT = {
+  zombie: '느리지만 끈질기게 다가온다.', melee: '다가와 친다.', fallen: '동료가 죽으면 겁먹고 달아났다가 함성을 지르며 돌아온다.',
+  archer: '거리를 두고 활을 쏜다. 가까이 가면 물러난다.', scav: '다치면 시체를 먹어 회복한다.', bat: '치고 빠진다.',
+  sneak: '가까이 와야 모습을 드러내고, 맞으면 물러나 다시 숨는다.', goat: '빙 돌다가 파고들고, 다치면 휘돌며 친다.',
+  garg: '돌로 서 있다가 가까이 오면 깨어난다. 다치면 달아나 돌이 되어 회복한다.', acid: '산성 침을 뱉고, 죽으면 산성 웅덩이를 남긴다.',
+  caster_melee: '멀면 주문을, 가까우면 근접 공격을 한다.', charge: '멀리서 곧장 돌진해 들이받는다.', mega: '가까이 오면 불길을 뿜는다.',
+  snake: '두 칸 거리에서 덤벼든다.', kite: '거리를 두고 핏빛 별을 쏜다.', mage: '사라졌다 나타나며 주문을 쓰고, 붙으면 섬광을 터뜨린다.',
+  king: '쓰러진 해골들을 다시 일으킨다.', lord: '피할 수 없는 공허의 종말을 일으키고 하수인을 부른다.',
+};
+const RES_NAME = ['독', '화염', '번개', '냉기'];
+function resText(s) {
+  if (!s) return '저항 없음';
+  const imm = [], res = [];
+  for (let i = 0; i < 4; i++) { if (s[i] === 'I') imm.push(RES_NAME[i]); else if (s[i] === 'R') res.push(RES_NAME[i]); }
+  return [imm.length ? `${imm.join('·')} 면역` : '', res.length ? `${res.join('·')} 저항` : ''].filter(Boolean).join(' · ') || '저항 없음';
+}
+function beastLook(e) {
+  if (!e.boss) return monsterLook(e.def);
+  const B = e.def;
+  if (B.look) return B.look;
+  if (B.lookFrom) { const F = FAMILIES[B.lookFrom[0]], v = F.v[B.lookFrom[1]]; return F.look(v[11], {}); }
+  return monsterLook(Object.values(MONSTERS).find((m) => m.fam === B.fam));
+}
+// 초상화: 한 번 그려 실제 그림 크기를 재고, 칸에 꽉 차게 배율을 다시 맞춰 그린다(도트가 고르게). 못 본 것은 검은 그림자
+const BEAST_CACHE = new Map();
+function beastPortrait(e, n, known) {
+  const key = `${e.id}|${n}|${known ? 1 : 0}`;
+  let c = BEAST_CACHE.get(key);
+  if (!c) {
+    const look = beastLook(e);
+    const m = canvasFor(null, n * 3, n * 3), fx = n * 1.5, fy = n * 2.4, s0 = n / 120;
+    drawPortrait(m.g, look, fx, fy, s0, 0.3, 'idle', Math.PI / 4);
+    const W = m.c.width, Hh = m.c.height, px = m.g.getImageData(0, 0, W, Hh).data;
+    let x0 = W, x1 = -1, y0 = Hh, y1 = -1;
+    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) if (px[(y * W + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const out = canvasFor(null, n, n);
+    if (x1 >= 0) {
+      const A = 1 / UI_DPR, bx0 = x0 * A, bx1 = (x1 + 1) * A, by0 = y0 * A, by1 = (y1 + 1) * A;
+      const k = Math.min(4, (n - 3) / (by1 - by0), (n - 3) / (bx1 - bx0));
+      const ax = Math.round((n / 2 - ((bx0 + bx1) / 2 - fx) * k) / A) * A, ay = Math.round((n / 2 - ((by0 + by1) / 2 - fy) * k) / A) * A;
+      drawPortrait(out.g, look, ax, ay, s0 * k, 0.3, 'idle', Math.PI / 4);
+      if (!known) { out.g.globalCompositeOperation = 'source-atop'; out.g.fillStyle = '#100c0a'; out.g.fillRect(0, 0, n, n); out.g.globalCompositeOperation = 'source-over'; }
+    }
+    c = out.c;
+    if (BEAST_CACHE.size > 400) BEAST_CACHE.clear();
+    BEAST_CACHE.set(key, c);
+  }
+  // 같은 그림을 여러 곳에 쓰므로 복사본을 붙인다
+  const cp = document.createElement('canvas');
+  cp.width = c.width; cp.height = c.height; cp.style.width = n + 'px'; cp.style.height = n + 'px';
+  cp.getContext('2d').drawImage(c, 0, 0);
+  return cp;
+}
+

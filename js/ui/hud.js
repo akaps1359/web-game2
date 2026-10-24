@@ -6,6 +6,7 @@ import { skillDef, skillManaCost } from '../game/skills.js';
 import { BUFF_INFO } from '../game/buffs.js';
 import { levelName } from '../game/world.js';
 import { currentGoal, npcMark } from '../game/quests.js';
+import { knownCount } from '../game/bestiary.js';
 import { EXP_TABLE } from '../data/classes.js';
 import { F_SEEN, F_VIS, F_LAVA, F_OPAQUE } from '../game/level.js';
 import { TW, TH } from '../core/util.js';
@@ -38,6 +39,7 @@ export class HUD {
     mk('char', () => this.app.panels.toggle('character'));
     mk('skill', () => this.app.panels.toggle('skills'));
     mk('quest', () => this.app.panels.toggle('quests'));
+    mk('beast', () => this.app.panels.toggle('bestiary'));
     mk('menu', () => this.app.panels.toggle('menu'));
     top.appendChild(menu);
     const center = el('div', 'hud-center');
@@ -269,6 +271,8 @@ export class HUD {
     const set = (b, n) => { const dot = b.querySelector('.dot'); dot.classList.toggle('on', n > 0); dot.textContent = n > 0 ? n : ''; };
     set(this.btn_char, d.statPts);
     set(this.btn_skill, d.skillPts);
+    // 생물도감: 지난번 창을 연 뒤 새로 오른 종류 수
+    set(this.btn_beast, knownCount(d) - (d.bestiarySeen || 0));
   }
   onLevel() {
     const g = this.game;

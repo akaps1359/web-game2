@@ -118,6 +118,7 @@ export class App {
       inventoryChanged: () => { this.hud.refreshBelt(); this.panels.refresh(); },
       statsChanged: () => this.panels.refresh(),
       questUpdate: () => this.hud.badges(),
+      bestiary: () => { this.hud.badges(); if (this.panels.cur === 'bestiary' || this.panels.cur === 'character') this.panels.refresh(); },
       lore: (k) => this.dialog.lore(k),
       openStash: () => this.panels.open('stash'),
       waypointMenu: () => this.panels.open('waypoint'),
@@ -151,8 +152,8 @@ export class App {
     const t = el('div', 'toast' + (kind ? ' ' + kind : ''), msg);
     box.appendChild(t);
     while (box.children.length > 4) box.firstChild.remove();
-    setTimeout(() => t.classList.add('out'), kind === 'big' ? 2600 : 1800);
-    setTimeout(() => t.remove(), kind === 'big' ? 3100 : 2300);
+    setTimeout(() => t.classList.add('out'), kind === 'big' || kind === 'book' ? 2600 : 1800);
+    setTimeout(() => t.remove(), kind === 'big' || kind === 'book' ? 3100 : 2300);
   }
   banner(a, b) {
     const n = el('div', 'banner');

@@ -1,5 +1,5 @@
 // 오프라인 캐시: 온라인이면 항상 서버의 최신 파일을 쓰고(업데이트가 바로 반영되도록), 받은 파일은 저장해 두었다가 오프라인일 때 쓴다.
-const CACHE = 'hollow-crown-v17';
+const CACHE = 'hollow-crown-v18';
 const CORE = [
   './',
   'index.html',
@@ -54,6 +54,7 @@ const CORE = [
   'js/game/objects.js',
   'js/game/path.js',
   'js/game/quests.js',
+  'js/game/bestiary.js',
   'js/game/shop.js',
   'js/game/skills.js',
   'js/game/world.js',

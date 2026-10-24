@@ -1,5 +1,6 @@
 // 전투: 디아블로 1의 명중·피해·막기·경직 공식, 피해 적용, 죽음, 투사체와 장판
 import { clamp } from '../core/util.js';
+import { recordKill } from './bestiary.js';
 import { F_SOLID, F_OPAQUE } from './level.js';
 import { dropLoot } from './loot.js';
 import { addBuff } from './buffs.js';
@@ -294,6 +295,8 @@ export function killActor(game, t, src, type) {
     if (ups) game.emit('levelUp', P.hero.data.lvl);
   }
   P.hero.data.kills = (P.hero.data.kills || 0) + 1;
+  // 생물도감: 처치 수, 처음이면 등록과 작은 보너스
+  if (t.team === 1) recordKill(game, t);
   // 주변 타락귀 겁먹기
   for (const a of game.level.actors) if (a.mdef?.F?.ai === 'fallen' && !a.dead && a !== t && Math.hypot(a.x - t.x, a.y - t.y) < 5) a.fear = 1.5 + Math.random();
   // 화염 강화: 죽으면 터진다 / 냉기 강화: 서리 노바 / 산성: 웅덩이
