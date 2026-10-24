@@ -186,6 +186,8 @@ export function damageActor(game, t, amount, type, src, opts = {}) {
   // 번개 강화 괴물은 맞으면 번개 불똥을 흩뿌린다
   if (t.umods?.includes('light') && Math.random() < 0.6) spawnChargedBolts(game, t, 4, [1, Math.max(2, Math.round(t.mlvl * 0.6))], 1);
   if (t.hp <= 0) { killActor(game, t, src, type); return d; }
+  // 숨은 자: 맞으면 몇 걸음 물러나 다시 모습을 감춘다(4초에 한 번)
+  if (t.ai === 'sneak' && !(t.hideAt > game.time)) { t.retreat = 2 + Math.floor(Math.random() * 3); t.hideAt = game.time + 4; }
   // 경직: 피해 ≥ 레벨+3 (디아블로 1)
   const stunTh = (t.mlvl || 1) + 3;
   if (!opts.noStun && !t.boss && !t.stone && (d >= stunTh || opts.stun || t.alwaysStun) && t.anim.name !== 'death') {
@@ -293,7 +295,7 @@ export function killActor(game, t, src, type) {
   }
   P.hero.data.kills = (P.hero.data.kills || 0) + 1;
   // 주변 타락귀 겁먹기
-  for (const a of game.level.actors) if (a.mdef?.F?.ai === 'fallen' && !a.dead && a !== t && Math.hypot(a.x - t.x, a.y - t.y) < 5) a.fear = 2 + Math.random() * 2;
+  for (const a of game.level.actors) if (a.mdef?.F?.ai === 'fallen' && !a.dead && a !== t && Math.hypot(a.x - t.x, a.y - t.y) < 5) a.fear = 1.5 + Math.random();
   // 화염 강화: 죽으면 터진다 / 냉기 강화: 서리 노바 / 산성: 웅덩이
   if (t.umods?.includes('fire')) { game.fx.explosion(t.x, t.y, 1.5); areaDamage(game, t.x, t.y, 1.6, [Math.round(t.mlvl), Math.round(t.mlvl * 2)], 'fire', t, 1); game.sfx('fireball_explode', t.x, t.y); }
   if (t.umods?.includes('cold')) { game.fx.ring(t.x, t.y, 0.2, 3, 0.4, [150, 210, 255], 3); areaDamage(game, t.x, t.y, 3, [Math.round(t.mlvl / 2), t.mlvl], 'cold', t, 1, { chill: 3 }); game.sfx('frost_nova', t.x, t.y); }

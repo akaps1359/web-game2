@@ -27,7 +27,7 @@ const qs = (game, id) => (game.hero.data.quests[id] = game.hero.data.quests[id] 
 
 export const QUESTS = {
   butcher: {
-    id: 'butcher', name: '도살자', depth: 2, room: [8, 8], giver: 'wounded',
+    id: 'butcher', name: '도살자', depth: 2, room: [8, 8], giver: 'wounded', offer: () => true, goal: '도살자 모르그 처치',
     text: {
       none: '대성당 지하에서 기어 나온 다친 마을 사람에게 말을 걸어 보자.',
       active: '대성당 지하 2층 어딘가의 피로 물든 방에 도살자 모르그가 있다. 놈을 죽여라.',
@@ -42,7 +42,7 @@ export const QUESTS = {
     },
   },
   hollow_king: {
-    id: 'hollow_king', name: '망자의 왕', depth: 3, room: [11, 9], giver: 'inn',
+    id: 'hollow_king', name: '망자의 왕', depth: 3, room: [11, 9], giver: 'inn', report: 'inn', offer: () => true, goal: '오드릭 왕 처치',
     text: {
       none: '여관 주인 브람이 무언가 할 말이 있어 보인다.',
       active: '오드릭 왕이 대성당 지하 3층의 무덤에서 해골 군대를 이끌고 있다. 왕을 영원히 잠재워라.',
@@ -65,7 +65,7 @@ export const QUESTS = {
     build(game, L) { const r = roomOf(L, 'journal1'); if (!r) return; L.addObject({ type: 'tome', x: r.cx, y: r.cy, solid: true, lore: 'journal1' }); L.flags[L.idx(r.cx, r.cy)] |= F_SOLID; for (const [x, y] of [[r.x, r.y], [r.x + r.w - 1, r.y]]) if (L.passable(x, y)) L.addObject({ type: 'candles', x, y }); },
   },
   magic_rock: {
-    id: 'magic_rock', name: '마력의 돌', depth: 5, room: [7, 7], giver: 'smith',
+    id: 'magic_rock', name: '마력의 돌', depth: 5, room: [7, 7], giver: 'smith', report: 'smith', fetch: 'q_rock', offer: (d) => d.maxDepth >= 4, goal: '제단 위의 돌 찾기',
     text: {
       none: '대장장이 고드윈이 이상한 돌 이야기를 들었다고 한다.',
       active: '카타콤 1층(지하 5층)의 제단 위에 하늘에서 떨어진 돌이 있다고 한다. 가져다주자.',
@@ -78,7 +78,7 @@ export const QUESTS = {
     },
   },
   blind: {
-    id: 'blind', name: '눈먼 자들의 회랑', depth: 7, room: [10, 9], giver: 'sage',
+    id: 'blind', name: '눈먼 자들의 회랑', depth: 7, room: [10, 9], giver: 'sage', report: 'sage', offer: (d) => d.maxDepth >= 6, goal: '회랑의 환영 모두 처치',
     text: {
       none: '현자 알데릭이 카타콤의 어느 회랑에 대해 걱정하고 있다.',
       active: '카타콤 3층(지하 7층)에 보이지 않는 자들이 지키는 회랑이 있다. 그들을 모두 쓰러뜨려라.',
@@ -94,7 +94,7 @@ export const QUESTS = {
     },
   },
   scribe: {
-    id: 'scribe', name: '광기의 필경사', depth: 8, room: [10, 8], giver: null,
+    id: 'scribe', name: '광기의 필경사', depth: 8, room: [10, 8], giver: null, goal: '필경사 베르밀 처치',
     text: { active: '카타콤 4층(지하 8층)의 서고에서 미친 필경사가 무언가를 지키고 있다.', done: '필경사 베르밀을 쓰러뜨리고 세라핀의 두 번째 일지를 찾았다.' },
     build(game, L) {
       const r = roomOf(L, 'scribe'); if (!r) return;
@@ -105,7 +105,7 @@ export const QUESTS = {
     },
   },
   mushroom: {
-    id: 'mushroom', name: '검은 버섯', depth: 9, room: [6, 6], giver: 'witch',
+    id: 'mushroom', name: '검은 버섯', depth: 9, room: [6, 6], giver: 'witch', report: 'witch', fetch: 'q_mushroom', offer: (d) => d.maxDepth >= 8, goal: '검은 버섯 찾기',
     text: {
       none: '마녀 이졸데가 필요한 재료가 있다고 한다.',
       active: '불타는 동굴 1층(지하 9층)에 자라는 검은 버섯을 찾아 이졸데에게 가져가자.',
@@ -119,7 +119,7 @@ export const QUESTS = {
     },
   },
   anvil: {
-    id: 'anvil', name: '분노의 모루', depth: 10, room: [9, 9], giver: 'smith',
+    id: 'anvil', name: '분노의 모루', depth: 10, room: [9, 9], giver: 'smith', report: 'smith', fetch: 'q_anvil', offer: (d) => d.maxDepth >= 9, goal: '용암 섬의 모루 찾기',
     text: {
       none: '고드윈이 전설의 모루 이야기를 꺼낸다.',
       active: '불타는 동굴 2층(지하 10층)의 용암 섬에 분노의 모루가 있다. 가져오면 고드윈이 검을 벼려 준다.',
@@ -142,7 +142,7 @@ export const QUESTS = {
     build(game, L) { const r = roomOf(L, 'journal3'); if (!r) return; L.addObject({ type: 'tome', x: r.cx, y: r.cy, solid: true, lore: 'journal3' }); L.flags[L.idx(r.cx, r.cy)] |= F_SOLID; },
   },
   warlord: {
-    id: 'warlord', name: '피의 군벌', depth: 13, room: [11, 9], giver: null,
+    id: 'warlord', name: '피의 군벌', depth: 13, room: [11, 9], giver: null, goal: '피의 군벌 카르낙 처치',
     text: { active: '지옥 1층(지하 13층)에 피의 군벌 카르낙이 전리품을 쌓아 두고 있다.', done: '피의 군벌 카르낙을 쓰러뜨렸다.' },
     build(game, L) {
       const r = roomOf(L, 'warlord'); if (!r) return;
@@ -156,7 +156,7 @@ export const QUESTS = {
     },
   },
   seraphine: {
-    id: 'seraphine', name: '타락한 성녀', depth: 15, room: [11, 11], giver: 'sage',
+    id: 'seraphine', name: '타락한 성녀', depth: 15, room: [11, 11], giver: 'sage', offer: (d) => d.maxDepth >= 13, goal: '세라핀 처치',
     text: {
       none: '알데릭이 진실을 알아낸 듯하다.',
       active: '지옥 3층(지하 15층)의 제단에서 세라핀이 공허의 군주를 위한 의식을 치르고 있다. 그녀를 막아라.',
@@ -176,20 +176,72 @@ export const QUESTS = {
     },
   },
   velgath: {
-    id: 'velgath', name: '공허의 군주', depth: 16, giver: null,
+    id: 'velgath', name: '공허의 군주', depth: 16, giver: null, goal: '공허의 군주 벨가스 처치',
     text: { active: '모든 것의 시작, 지하 16층 공허의 옥좌에서 벨가스가 기다린다.', done: '공허의 군주를 쓰러뜨렸다.' },
   },
 };
 
 // 퀘스트 상태
 export function questState(game, id) { return game.hero.data.quests[id]?.st || 'none'; }
+// 의뢰인·보고받는 사람 이름(마을 사람 표는 npcs.js에 있어 이름만 따로)
+export const NPC_NAME = { wounded: '다친 마을 사람', inn: '브람', smith: '고드윈', sage: '알데릭', witch: '이졸데', healer: '마렌' };
 export function setQuest(game, id, st, silent = false) {
   const q = qs(game, id);
   const prev = q.st;
   q.st = st;
   if (silent || prev === st) return;
-  if (st === 'active') { game.toast(`새 퀘스트: ${QUESTS[id].name}`, 'big'); game.sfx('quest_new'); game.emit('questUpdate', id); }
-  if (st === 'done') { game.toast(`퀘스트 완료: ${QUESTS[id].name}`, 'big'); game.sfx('quest_done'); game.hooks.sting?.('quest'); game.emit('questUpdate', id); }
+  const Q = QUESTS[id];
+  if (st === 'active') { game.toast(`새 퀘스트: ${Q.name}${Q.goal ? ` — ${depthName(Q.depth)}: ${Q.goal}` : ''}`, 'big'); game.sfx('quest_new'); game.emit('questUpdate', id); }
+  if (st === 'done') {
+    // 보고할 사람이 있으면 어디로 가야 하는지 함께 알린다
+    const tail = Q.report && !Q.fetch ? ` — 마을의 ${NPC_NAME[Q.report]}에게 알리자` : '';
+    game.toast(`퀘스트 완료: ${Q.name}${tail}`, 'big'); game.sfx('quest_done'); game.hooks.sting?.('quest'); game.emit('questUpdate', id);
+  }
+}
+export function depthName(d) { return d <= 4 ? `대성당 지하 ${d}층` : d <= 8 ? `카타콤 ${d - 4}층(지하 ${d}층)` : d <= 12 ? `불타는 동굴 ${d - 8}층(지하 ${d}층)` : d === 16 ? '공허의 옥좌(지하 16층)' : `지옥 ${d - 12}층(지하 ${d}층)`; }
+// 마을 사람이 새로 부탁할 수 있는가
+export function questOffered(game, id) { const q = QUESTS[id]; return !!(q.offer && questState(game, id) === 'none' && q.offer(game.hero.data)); }
+// 의뢰인에게 돌아가 보고(또는 물건 건네기)만 남았는가
+export function questReady(game, id) {
+  const q = QUESTS[id], st = questState(game, id);
+  if (!q.report) return false;
+  return q.fetch ? st === 'active' && game.hero.data.inv.some((i) => i.b === q.fetch) : st === 'done';
+}
+// 단계: offer(부탁 가능) · active(진행 중) · ready(보고만 남음) · done(끝)
+export function questPhase(game, id) {
+  const st = questState(game, id);
+  if (questReady(game, id)) return 'ready';
+  if (st === 'none') return questOffered(game, id) ? 'offer' : 'none';
+  return st === 'active' ? 'active' : 'done';
+}
+// 마을 사람 머리 위 표시: '?' 보고할 것이 있음, '!' 새 부탁이 있음
+export function npcMark(game, npcId) {
+  let m = null;
+  for (const q of Object.values(QUESTS)) {
+    if (q.report === npcId && questReady(game, q.id)) return '?';
+    if (q.giver === npcId && questOffered(game, q.id)) m = '!';
+  }
+  return m;
+}
+// 지금 할 일 한 줄: 보고만 남은 것 > 지금 층 이하에서 가장 가까운 진행 중 > 가장 얕은 진행 중
+export function currentGoal(game) {
+  let best = null, bs = 1e9;
+  for (const q of Object.values(QUESTS)) {
+    if (q.lore) continue;
+    const ph = questPhase(game, q.id);
+    if (ph === 'ready') {
+      const what = q.fetch ? '물건을 건네자' : '알리자';
+      return { id: q.id, ready: true, text: `${q.name} — 마을의 ${NPC_NAME[q.report]}에게 ${what}` };
+    }
+    if (ph !== 'active') continue;
+    const d = q.depth, sc = d >= game.depth ? d - game.depth : 100 + d;
+    if (sc < bs) { bs = sc; best = { id: q.id, text: `${q.name} — ${depthName(d)}: ${q.goal}` }; }
+  }
+  return best;
+}
+// 의뢰인이 없는 퀘스트(그 층에서 마주치는 것)는 처음 그 층에 들어서면 시작된다
+export function questsOnEnter(game, depth) {
+  for (const q of Object.values(QUESTS)) if (!q.lore && q.depth === depth && (!q.giver || q.giver === 'wounded') && questState(game, q.id) === 'none') setQuest(game, q.id, 'active');
 }
 
 export function onMonsterKilled(game, m) {

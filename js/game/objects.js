@@ -5,7 +5,7 @@ import { makeItem, makeUnique, itemName } from './items.js';
 import { spawnMonster } from './ai.js';
 import { areaDamage, spawnChargedBolts, damageActor } from './combat.js';
 import { addBuff } from './buffs.js';
-import { setQuest, questState, LORE } from './quests.js';
+import { setQuest, questState, LORE, QUESTS, NPC_NAME } from './quests.js';
 import { revealAll } from './fov.js';
 import { BASE } from '../data/items.js';
 import { josa } from '../core/util.js';
@@ -168,8 +168,11 @@ export function useObject(game, o) {
       o.taken = true; o.item = null;
       if (o.quest) { const q = h.data.quests[o.quest] = h.data.quests[o.quest] || { st: 'active' }; q.have = true; if (q.st === 'none') q.st = 'active'; }
       game.sfx('item_pickup', o.x, o.y);
-      game.toast(`${itemName(it)}${josa(itemName(it), '을', '를')} 얻었다`, 'big');
+      // 가져갈 사람을 함께 알린다
+      const Q = o.quest && QUESTS[o.quest], to = Q?.report ? ` — 마을의 ${NPC_NAME[Q.report]}에게 가져가자` : '';
+      game.toast(`${itemName(it)}${josa(itemName(it), '을', '를')} 얻었다${to}`, 'big');
       game.emit('inventoryChanged');
+      game.emit('questUpdate', o.quest);
       return;
     }
     case 'well': game.toast('깊은 우물이다. 바닥에서 찬 기운이 올라온다.'); return;

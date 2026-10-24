@@ -96,6 +96,12 @@ canvas:not(#view), .pico { image-rendering: pixelated; }
 .mbtn .dot.on { display: flex; }
 .hud-center { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; min-width: 0; }
 .area-name { font-size: 12px; color: var(--gold-hi); text-shadow: var(--outline); white-space: nowrap; }
+/* 지금 할 일(퀘스트): 보고만 남으면 금빛으로 */
+.quest-goal { display: none; font-size: 12px; color: #d8ccb0; text-shadow: var(--outline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50vw; pointer-events: auto; margin-top: -2px; }
+.quest-goal.on { display: block; }
+.quest-goal::before { content: '◆ '; color: #c8a050; }
+.quest-goal.ready { color: #ffd84a; }
+.quest-goal.ready::before { content: '? '; color: #ffd84a; }
 .target-box { display: none; flex-direction: column; align-items: center; min-width: 150px; max-width: 220px; padding: 2px 8px 3px; }
 .target-box.on { display: flex; }
 .target-box .tn { font-size: 12px; font-weight: 700; color: #e8dcc4; white-space: nowrap; text-shadow: var(--outline); }
@@ -356,6 +362,12 @@ canvas:not(#view), .pico { image-rendering: pixelated; }
 .qitem.done h4 { color: var(--dim); text-decoration: line-through; }
 .qitem p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text); }
 .qitem .qs { font-size: 12px; color: #ffb070; margin-bottom: 3px; }
+.qitem.ready { box-shadow: inset 0 0 0 1.5px #c8a040; }
+.qitem.ready .qs, .qitem .qgo { color: #ffd84a; }
+.qitem.offer .qs { color: #fff27a; }
+.qitem .qgo { font-size: 12px; margin: 0 0 4px; }
+.qitem .qline { font-size: 12px; color: #d8ccb0; margin: 0 0 3px; line-height: 1.4; }
+.qitem .qline b { color: #a89a78; font-weight: 400; margin-right: 6px; }
 
 /* 죽음 */
 .death { position: absolute; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(28,0,0,.78); animation: fadeIn 1.2s ease-out; }

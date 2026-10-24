@@ -23,10 +23,11 @@ export default async function (page, { wait, log, shot, tap }) {
   check('게임 시작', await page.evaluate(() => !!window.__app.running && !window.__app.dialog.isOpen()));
   check('게임 화면 위를 가리는 것 없음', await page.evaluate(() => document.elementFromPoint(innerWidth / 2, innerHeight * 0.65) === document.querySelector('#view')));
   // 사방이 트인 곳으로
+  // 사방이 트이고 마을 사람과 떨어진 곳(마을이 촘촘하니 넓은 자리부터 찾고 없으면 좁혀 간다)
   const openSpot = () => page.evaluate(() => {
     const g = window.__game, L = g.level, P = g.player;
-    const open = (x, y) => { for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (!L.free(x + dx, y + dy, P.id) || L.obj(x + dx, y + dy)) return false; return true; };
-    for (let r = 0; r < 25; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (open(P.tx + dx, P.ty + dy)) { P.place(L, P.tx + dx, P.ty + dy); return true; }
+    const open = (x, y, R, nd) => { for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) if (!L.free(x + dx, y + dy, P.id) || L.obj(x + dx, y + dy)) return false; return !L.actors.some((a) => a.kind === 'npc' && Math.hypot(a.x - x, a.y - y) < nd); };
+    for (const [R, nd] of [[3, 5], [3, 4], [2, 4]]) for (let r = 0; r < 25; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (open(P.tx + dx, P.ty + dy, R, nd)) { P.place(L, P.tx + dx, P.ty + dy); return true; }
     return false;
   });
   await openSpot(); await wait(500);

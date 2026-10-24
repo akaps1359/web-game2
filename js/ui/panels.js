@@ -7,7 +7,8 @@ import { BASE } from '../data/items.js';
 import { itemName, itemColor, itemLines, qualityClass, meetsReq, isEquip, itemDmg, itemAC, sellPrice, repairCost, isBeltable, itemMods } from '../game/items.js';
 import { INV_W, INV_H, STASH_W, STASH_H, EQUIP_SLOTS } from '../game/hero.js';
 import { SKILLS, skillsOf, TABS, skillDef, skillManaCost } from '../game/skills.js';
-import { QUESTS, LORE, questState } from '../game/quests.js';
+import { QUESTS, LORE, questState, questPhase, depthName } from '../game/quests.js';
+import { NPCS } from '../game/npcs.js';
 import { stock, ALWAYS, buy, sell, buyPrice, repairAll, repairOne, identify, restock } from '../game/shop.js';
 import { makeItem } from '../game/items.js';
 import { levelName, LEVELS } from '../game/world.js';
@@ -48,7 +49,12 @@ const HELP = [
 ■ 물약 띠
 허리띠를 차면 띠의 줄이 늘어납니다.`],
   ['마을·지도', `■ 마을
+마을 사람들은 모두 우물 광장 둘레에 있습니다. 대성당(지하 입구)은 광장 위, 대장간(화덕과 모루)은 왼쪽, 치유사의 집(약초밭)은 왼쪽 아래, 여관 '잿빛 술잔'은 오른쪽, 마녀의 오두막(가마솥)은 오른쪽 위, 핍의 좌판은 아래에 있습니다. 건물 뒤로 가면 건물이 반투명해집니다.
+
 치유사 마렌과 말하면 생명력이 모두 찹니다. 대장장이는 무기·방어구를 팔고 고쳐 주고, 마녀는 마나 물약·주문서·지팡이·장신구를 팝니다. 소년 핍은 비싸지만 좋은 물건을 가끔 가져옵니다.
+
+■ 퀘스트
+머리 위 노란 ! 는 새로 부탁할 일이 있는 사람, 금빛 ? 는 끝낸 일을 보고하거나 물건을 건넬 사람입니다(작은 지도에도 표시). 화면 위 지역 이름 아래 한 줄이 지금 할 일입니다(누르면 퀘스트 창). 퀘스트 창에는 의뢰인, 목표 장소, 끝나면 보고할 사람이 나옵니다.
 
 ■ 귀환
 오른쪽 위 파란 단추(차원문)로 귀환 주문서를 읽으면 마을로 돌아갑니다. 차원문을 다시 지나면 원래 자리로 돌아갑니다.
@@ -605,23 +611,31 @@ export class Panels {
 
   // ═════════ 퀘스트 ═════════
   r_quests() {
-    const h = this.hero, d = h.data;
+    const g = this.game, h = this.hero, d = h.data;
     const p = this.frame('퀘스트');
     const body = el('div', 'pnl-body'); p.appendChild(body);
     const list = el('div', 'qlist two');
-    let n = 0;
-    for (const q of Object.values(QUESTS)) {
-      if (q.lore) continue;
-      const st = questState(this.game, q.id);
-      if (st === 'none') continue;
-      n++;
-      const box = el('div', 'qitem' + (st === 'done' || st === 'reported' ? ' done' : ''));
-      box.appendChild(el('div', 'qs', st === 'active' ? '진행 중' : st === 'done' ? '완료 — 의뢰인에게 알리자' : '완료'));
+    // 보고만 남은 것 → 진행 중 → 새 의뢰 → 끝난 것 순
+    const ORDER = { ready: 0, active: 1, offer: 2, done: 3 };
+    const all = Object.values(QUESTS).filter((q) => !q.lore).map((q) => ({ q, ph: questPhase(g, q.id) })).filter((e) => e.ph !== 'none');
+    all.sort((a, b) => ORDER[a.ph] - ORDER[b.ph] || a.q.depth - b.q.depth);
+    const line = (k, v) => { const r = el('div', 'qline'); r.appendChild(el('b', '', k)); r.appendChild(document.createTextNode(v)); return r; };
+    for (const { q, ph } of all) {
+      const st = questState(g, q.id), who = q.giver ? NPCS[q.giver] : null, to = q.report ? NPCS[q.report] : null;
+      const box = el('div', 'qitem ' + ph);
+      box.appendChild(el('div', 'qs', { ready: '보고만 남음', active: '진행 중', offer: '새 의뢰', done: '완료' }[ph]));
       box.appendChild(el('h4', '', q.name));
-      box.appendChild(el('p', '', q.text?.[st] || q.text?.done || ''));
+      if (who) box.appendChild(line('의뢰', `${who.name} · ${who.role}`));
+      if (ph === 'ready') box.appendChild(el('div', 'qgo', `▶ 마을의 ${to.name}에게 ${q.fetch ? '가져가세요' : '알리세요'}`));
+      else if (ph === 'offer') box.appendChild(el('div', 'qgo', `▶ 마을의 ${who.name}에게 말을 걸어 보세요`));
+      else if (ph === 'active') {
+        box.appendChild(line('목표', `${depthName(q.depth)} — ${q.goal}`));
+        if (to) box.appendChild(line('보고', `끝나면 마을의 ${to.name}에게`));
+      }
+      box.appendChild(el('p', '', ph === 'offer' ? q.text?.none || '' : ph === 'ready' && q.fetch ? q.text?.active || '' : q.text?.[st] || q.text?.done || ''));
       list.appendChild(box);
     }
-    if (!n) list.appendChild(el('div', 'shop-hint', '아직 받은 퀘스트가 없습니다. 마을 사람들과 이야기해 보세요.'));
+    if (!all.length) list.appendChild(el('div', 'shop-hint', '아직 받은 퀘스트가 없습니다. 마을 사람들과 이야기해 보세요.'));
     body.appendChild(list);
     // 읽은 기록
     const lore = Object.keys(d.lore || {});

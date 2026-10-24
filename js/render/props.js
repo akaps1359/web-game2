@@ -182,7 +182,6 @@ export function drawObject(g, o, px, py, s, t, vis, L) {
       return;
     }
     case 'tree': return drawTree(g, o, px, py, s, t);
-    case 'house': return drawHouse(g, o, px, py, s, t, L);
     case 'fence': {
       g.strokeStyle = '#4a3624'; g.lineWidth = 2.4 * s; g.lineCap = 'round';
       const a = o.ori === 'x' ? [-0.5, 0, 0.5, 0] : [0, -0.5, 0, 0.5];
@@ -304,6 +303,7 @@ function drawDoor(g, o, px, py, s, dim, L) {
 }
 
 function drawStairs(g, o, px, py, s, dim, down, L) {
+  if (o.inDoor) return; // 마을 대성당 문(건물 그림에 들어 있다)
   // 계단은 뒤쪽 벽(face 방향 반대)으로 이어진다
   const Pp = (a, b, z) => [SX(px, s, a, b), SY(py, s, a, b, z)];
   const ax = o.face === 'x'; // 벽이 -x 쪽
@@ -409,61 +409,6 @@ function drawTree(g, o, px, py, s, t) {
     if (o.pine) { g.moveTo(px - r + sway, y + r * 0.4); g.lineTo(px + sway * 1.3, y - r * 1.1); g.lineTo(px + r + sway, y + r * 0.4); g.closePath(); }
     else g.ellipse(px + sway * (1 + i * 0.2), y, r, r * 0.8, 0, 0, PI * 2);
     g.fill();
-  }
-}
-
-// 마을 집: 발판(fw × fh 칸)을 차지하는 상자 + 지붕
-function drawHouse(g, o, px, py, s, t, L) {
-  const w = o.w, h = o.h; // 칸 수(x, y)
-  // o.x, o.y는 발판의 가장 깊은(앞) 칸. 중심은 그보다 (w-1)/2, (h-1)/2 뒤
-  const cx = -(w - 1) / 2, cy = -(h - 1) / 2, hx = w / 2 - 0.05, hy = h / 2 - 0.05;
-  const wallH = o.wallH || 52, roofH = o.roofH || 40;
-  isoBox(g, px, py, s, cx, cy, hx, hy, 0, wallH, o.wallCol || '#8a7a62');
-  // 목조 골조
-  g.strokeStyle = '#3a2a1c'; g.lineWidth = 2.2 * s;
-  const Pp = (a, b, z) => [SX(px, s, cx + a, cy + b), SY(py, s, cx + a, cy + b, z)];
-  for (let i = 0; i <= w; i++) { const a = -hx + (i / w) * hx * 2; g.beginPath(); g.moveTo(...Pp(a, hy, 0)); g.lineTo(...Pp(a, hy, wallH)); g.stroke(); }
-  for (let i = 0; i <= h; i++) { const b = hy - (i / h) * hy * 2; g.beginPath(); g.moveTo(...Pp(hx, b, 0)); g.lineTo(...Pp(hx, b, wallH)); g.stroke(); }
-  g.beginPath(); g.moveTo(...Pp(-hx, hy, wallH * 0.5)); g.lineTo(...Pp(hx, hy, wallH * 0.5)); g.lineTo(...Pp(hx, -hy, wallH * 0.5)); g.stroke();
-  // 문과 창
-  if (o.door) {
-    const [dx, dy] = o.door; // 문 위치(발판 기준 오프셋)
-    const front = dy >= h - 1 ? 'y' : 'x';
-    if (front === 'y') { const a = -hx + dx + 0.5 - 0.22; g.fillStyle = '#2a1a10'; poly(g, [...Pp(a, hy + 0.01, 0), ...Pp(a + 0.44, hy + 0.01, 0), ...Pp(a + 0.44, hy + 0.01, 30), ...Pp(a, hy + 0.01, 30)], '#3a2414', OUTC, s); }
-    else { const b = -hy + dy + 0.5 - 0.22; poly(g, [...Pp(hx + 0.01, b, 0), ...Pp(hx + 0.01, b + 0.44, 0), ...Pp(hx + 0.01, b + 0.44, 30), ...Pp(hx + 0.01, b, 30)], '#2e1c10', OUTC, s); }
-  }
-  const lit = 0.6 + 0.4 * Math.sin(t * 2 + o.x);
-  for (let i = 0; i < w; i++) { if (o.door && o.door[0] === i && o.door[1] >= h - 1) continue; const a = -hx + i + 0.5; poly(g, [...Pp(a - 0.13, hy + 0.01, 24), ...Pp(a + 0.13, hy + 0.01, 24), ...Pp(a + 0.13, hy + 0.01, 38), ...Pp(a - 0.13, hy + 0.01, 38)], `rgba(255,${170 + 30 * lit},90,0.9)`, '#2a1a10', s); }
-  // 지붕(박공)
-  const rc = o.roofCol || '#4a3026';
-  const ov = 0.18;
-  if (w >= h) {
-    const r1 = [...Pp(-hx - ov, -hy - ov, wallH), ...Pp(hx + ov, -hy - ov, wallH), ...Pp(hx + ov, 0, wallH + roofH), ...Pp(-hx - ov, 0, wallH + roofH)];
-    const r2 = [...Pp(-hx - ov, hy + ov, wallH), ...Pp(hx + ov, hy + ov, wallH), ...Pp(hx + ov, 0, wallH + roofH), ...Pp(-hx - ov, 0, wallH + roofH)];
-    poly(g, r1, shade(rc, 1.2), OUTC, s);
-    poly(g, [...Pp(hx, -hy, wallH), ...Pp(hx, hy, wallH), ...Pp(hx, 0, wallH + roofH)], shade(o.wallCol || '#8a7a62', 0.6), OUTC, s);
-    poly(g, r2, shade(rc, 0.95), OUTC, s);
-    g.strokeStyle = shade(rc, 0.7); g.lineWidth = 1 * s;
-    for (let i = 1; i < 6; i++) { const k = i / 6; g.beginPath(); g.moveTo(...Pp(-hx - ov, hy + ov - k * (hy + ov), wallH + roofH * k)); g.lineTo(...Pp(hx + ov, hy + ov - k * (hy + ov), wallH + roofH * k)); g.stroke(); }
-  } else {
-    const r1 = [...Pp(-hx - ov, -hy - ov, wallH), ...Pp(-hx - ov, hy + ov, wallH), ...Pp(0, hy + ov, wallH + roofH), ...Pp(0, -hy - ov, wallH + roofH)];
-    const r2 = [...Pp(hx + ov, -hy - ov, wallH), ...Pp(hx + ov, hy + ov, wallH), ...Pp(0, hy + ov, wallH + roofH), ...Pp(0, -hy - ov, wallH + roofH)];
-    poly(g, r1, shade(rc, 1.2), OUTC, s);
-    poly(g, [...Pp(-hx, hy, wallH), ...Pp(hx, hy, wallH), ...Pp(0, hy, wallH + roofH)], shade(o.wallCol || '#8a7a62', 0.85), OUTC, s);
-    poly(g, r2, shade(rc, 0.8), OUTC, s);
-    g.strokeStyle = shade(rc, 0.6); g.lineWidth = 1 * s;
-    for (let i = 1; i < 6; i++) { const k = i / 6; g.beginPath(); g.moveTo(...Pp(hx + ov - k * (hx + ov), -hy - ov, wallH + roofH * k)); g.lineTo(...Pp(hx + ov - k * (hx + ov), hy + ov, wallH + roofH * k)); g.stroke(); }
-  }
-  if (o.chimney) {
-    isoBox(g, px, py, s, cx + hx * 0.5, cy - hy * 0.3, 0.12, 0.12, wallH + roofH * 0.5, roofH * 0.8, '#5a4a40');
-    const [x, y] = Pp(hx * 0.5, -hy * 0.3, wallH + roofH * 1.35);
-    for (let i = 0; i < 3; i++) { const k = ((t * 0.3 + i / 3) % 1); g.fillStyle = `rgba(120,120,120,${0.25 * (1 - k)})`; g.beginPath(); g.arc(x + k * 10 * s, y - k * 40 * s, (3 + k * 8) * s, 0, PI * 2); g.fill(); }
-  }
-  if (o.sign) {
-    const [x, y] = Pp(hx * 0.3, hy + 0.3, wallH - 6);
-    g.fillStyle = '#4a3020'; g.fillRect(x - 12 * s, y - 7 * s, 24 * s, 12 * s);
-    g.strokeStyle = '#c8a050'; g.lineWidth = 1 * s; g.strokeRect(x - 12 * s, y - 7 * s, 24 * s, 12 * s);
-    g.fillStyle = '#e0c890'; g.font = `${8 * s}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(o.sign, x, y - 1 * s);
   }
 }
 

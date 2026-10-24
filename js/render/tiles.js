@@ -14,6 +14,7 @@ const PAL = {
 };
 
 const sat = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const SS = 3;
 
 // 마름모 타일 픽셀 → 타일 좌표(u, v ∈ -0.5..0.5)
 function diamondPixels(RS, fn) {
@@ -135,43 +136,109 @@ export function makeLava(RS, variant) {
   });
 }
 
-// 마을 바닥: 1 풀, 2 흙길, 3 자갈길, 4 풀(짙음), 5 물, 6 다리 판자
-export function makeTownFloor(kind, RS, variant) {
+// 마을 바닥: 1 풀, 2 흙길, 3 자갈길, 4 풀(짙음), 5 물, 6 다리 판자, 7 판석, 8 밭흙
+const TOWN_PRI = [0, 0, 2, 3, 0, -1, -1, 3, 1];
+function townTex(kind, U, V, seed, n, fine) {
+  const grassA = [86, 99, 47], grassB = [60, 71, 34], dirtA = [122, 100, 68], dirtB = [90, 70, 48], stone = [119, 116, 108], stone2 = [91, 88, 80];
+  switch (kind) {
+    case 2: { const c = mix(dirtB, dirtA, n); const peb = vnoise(U * 18, V * 18, seed + 9, 18); const k = (0.85 + fine * 0.22) * (peb > 0.86 ? 1.18 : peb < 0.1 ? 0.82 : 1); return [c[0] * k, c[1] * k, c[2] * k]; }
+    case 3: {
+      // 둥근 자갈
+      const cu = U * 5, cv = V * 5, iu = Math.floor(cu), iv = Math.floor(cv);
+      let md = 9, id = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const gx = iu + dx, gy = iv + dy;
+        const ox = gx + 0.2 + hash2(((gx % 5) + 5) % 5, ((gy % 5) + 5) % 5, 5) * 0.6, oy = gy + 0.2 + hash2(((gx % 5) + 5) % 5, ((gy % 5) + 5) % 5, 6) * 0.6;
+        const d = Math.hypot(cu - ox, cv - oy);
+        if (d < md) { md = d; id = hash2(((gx % 5) + 5) % 5, ((gy % 5) + 5) % 5, 9); }
+      }
+      const c = mix(stone2, stone, id * 0.7 + n * 0.3), k = md > 0.42 ? 0.55 : 0.85 + fine * 0.2 + (0.42 - md) * 0.3;
+      return [c[0] * k, c[1] * k, c[2] * k];
+    }
+    case 7: {
+      // 큰 판석(2×2), 판마다 밝기
+      const cu = Math.floor(U * 2), cv = Math.floor(V * 2), lu = U * 2 - cu, lv = V * 2 - cv;
+      const ed = Math.min(lu, 1 - lu, lv, 1 - lv);
+      const c = mix([96, 92, 86], [128, 124, 116], hash2(cu, cv, 77) * 0.7 + n * 0.3);
+      let k = 0.86 + fine * 0.2;
+      if (ed < 0.035) k = 0.5; else if (ed < 0.07) k *= 0.86; else if (lu > 0.9 || lv > 0.9) k *= 1.06;
+      return [c[0] * k, c[1] * k, c[2] * k];
+    }
+    case 8: {
+      // 밭: 이랑(x 방향 줄)
+      const r = (V * 4) % 1, c = mix([70, 52, 34], [96, 74, 50], n);
+      const k = (r < 0.3 ? 0.7 : r < 0.5 ? 1.1 : 0.92) * (0.88 + fine * 0.2);
+      return [c[0] * k, c[1] * k, c[2] * k];
+    }
+    case 5: { const w = fbm(U, V, 40, 3, 3); return mix([20, 36, 48], [46, 70, 84], w); }
+    case 6: {
+      const p = Math.floor(U * 5), lu = U * 5 - p;
+      const c = mix([70, 50, 32], [110, 82, 52], hash2(p, 3, seed) * 0.6 + fine * 0.4);
+      const k = lu < 0.07 || lu > 0.93 ? 0.5 : 1;
+      return [c[0] * k, c[1] * k, c[2] * k];
+    }
+    case 4: { const c = mix(grassB, grassA, n * 0.7); const k = 0.7 + fine * 0.35; return [c[0] * k, c[1] * k, c[2] * k]; }
+    default: {
+      const c = mix(grassB, grassA, n);
+      const blade = vnoise(U * 60, V * 22, seed + 3, 0);
+      let k = 0.8 + fine * 0.2 + (blade > 0.75 ? 0.15 : 0);
+      // 드문드문 들꽃(변형마다 자리가 다르다)
+      const fl = hash2(Math.floor(U * 24), Math.floor(V * 24), seed + 11);
+      if (fl > 0.992) return fl > 0.996 ? [210, 200, 120] : [200, 150, 200];
+      return [c[0] * k, c[1] * k, c[2] * k];
+    }
+  }
+}
+// key: 바탕 종류, 변형, 그리고 더 높은 바닥(흙길·자갈·판석·밭)이 닿은 모서리 비트(북서·북동·남동·남서).
+// 모서리 값을 겹선형으로 잇고 주기 잡음을 더해 경계를 구불구불하게 한다(이웃 칸과 경계가 그대로 이어진다)
+export function makeTownFloor(kind, RS, variant = 0, spill = null) {
   const seed = 300 + kind * 13 + variant * 7;
-  const grassA = hex('#56632f'), grassB = hex('#3c4722'), dirtA = hex('#7a6444'), dirtB = hex('#5a4630'), stone = hex('#77746c'), stone2 = hex('#5b5850');
   return diamondPixels(RS, (U, V) => {
     const n = fbm(U, V, 11, 4, 4), fine = vnoise(U * 40, V * 40, seed, 40);
-    switch (kind) {
-      case 2: { const c = mix(dirtB, dirtA, n); const k = 0.85 + fine * 0.25; return [c[0] * k, c[1] * k, c[2] * k]; }
-      case 3: {
-        // 둥근 자갈
-        const cu = U * 5, cv = V * 5, iu = Math.floor(cu), iv = Math.floor(cv);
-        let md = 9, id = 0;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-          const gx = iu + dx, gy = iv + dy;
-          const ox = gx + 0.2 + hash2(((gx % 5) + 5) % 5, ((gy % 5) + 5) % 5, 5) * 0.6, oy = gy + 0.2 + hash2(((gx % 5) + 5) % 5, ((gy % 5) + 5) % 5, 6) * 0.6;
-          const d = Math.hypot(cu - ox, cv - oy);
-          if (d < md) { md = d; id = hash2(gx, gy, 9); }
-        }
-        const c = mix(stone2, stone, id * 0.7 + n * 0.3), k = md > 0.42 ? 0.55 : 0.85 + fine * 0.2 + (0.42 - md) * 0.3;
-        return [c[0] * k, c[1] * k, c[2] * k];
-      }
-      case 5: { const w = fbm(U, V, 40, 3, 3); const c = mix([20, 36, 48], [46, 70, 84], w); return c; }
-      case 6: {
-        const p = Math.floor(U * 5), lu = U * 5 - p;
-        const c = mix([70, 50, 32], [110, 82, 52], hash2(p, 3, seed) * 0.6 + fine * 0.4);
-        const k = lu < 0.07 || lu > 0.93 ? 0.5 : 1;
-        return [c[0] * k, c[1] * k, c[2] * k];
-      }
-      case 4: { const c = mix(grassB, grassA, n * 0.7); const k = 0.7 + fine * 0.35; return [c[0] * k, c[1] * k, c[2] * k]; }
-      default: {
-        const c = mix(grassB, grassA, n);
-        const blade = vnoise(U * 60, V * 22, seed + 3, 0);
-        const k = 0.8 + fine * 0.2 + (blade > 0.75 ? 0.15 : 0);
-        return [c[0] * k, c[1] * k, c[2] * k];
-      }
+    let col = townTex(kind, U, V, seed, n, fine);
+    if (spill) for (const [q, m] of spill) {
+      const c0 = m & 1, c1 = (m >> 1) & 1, c2 = (m >> 2) & 1, c3 = (m >> 3) & 1;
+      const f = (c0 * (1 - U) + c1 * U) * (1 - V) + (c3 * (1 - U) + c2 * U) * V;
+      if (f <= 0) continue;
+      const g = f + (fbm(U, V, 23 + q, 3, 4) - 0.5) * 0.55;
+      if (g > 0.6) {
+        col = townTex(q, U, V, 300 + q * 13, n, fine);
+        if (g < 0.66) col = [col[0] * 0.84, col[1] * 0.84, col[2] * 0.84];
+      } else if (g > 0.52 && TOWN_PRI[kind] === 0) col = [col[0] * 0.86, col[1] * 0.84, col[2] * 0.8];
     }
+    return col;
   });
+}
+// 마을 칸마다 바닥 열쇠(바탕·변형·넘쳐 들어오는 바닥의 모서리 비트)
+export function townFloorKeys(L) {
+  const W = L.w, Hh = L.h, keys = new Array(W * Hh), at = (x, y) => (x < 0 || y < 0 || x >= W || y >= Hh ? 0 : L.floor[y * W + x]);
+  for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+    const f = L.floor[y * W + x];
+    if (!f) { keys[y * W + x] = null; continue; }
+    const p = TOWN_PRI[f] ?? 0;
+    const spill = [];
+    if (p >= 0) for (const q of [8, 2, 3, 7]) {
+      if (TOWN_PRI[q] <= p) continue;
+      let m = 0;
+      // 모서리마다 닿은 네 칸: 북서(-1,-1),(0,-1),(-1,0) / 북동 / 남동 / 남서
+      const cor = [[[-1, -1], [0, -1], [-1, 0]], [[1, -1], [0, -1], [1, 0]], [[1, 1], [0, 1], [1, 0]], [[-1, 1], [0, 1], [-1, 0]]];
+      for (let c = 0; c < 4; c++) if (cor[c].some(([dx, dy]) => at(x + dx, y + dy) === q)) m |= 1 << c;
+      if (m) spill.push([q, m]);
+    }
+    const v = f === 1 ? Math.floor(hash2(x, y, 99) * 3) : 0;
+    keys[y * W + x] = `${f}|${v}|${spill.map((s) => s.join(':')).join(',')}`;
+  }
+  return keys;
+}
+export function townFloorSprite(T, key) {
+  let s = T.townFloors.get(key);
+  if (!s) {
+    const [f, v, sp] = key.split('|');
+    const spill = sp ? sp.split(',').map((t) => t.split(':').map(Number)) : null;
+    s = shrink(makeTownFloor(+f, T.RS * SS, +v, spill), SS);
+    T.townFloors.set(key, s);
+  }
+  return s;
 }
 
 // ───────── 벽 블록 ─────────
@@ -288,12 +355,12 @@ export function glowSprite(r, g, b, size = 64) {
 }
 
 // 테마 한 벌을 만든다: 도트 배율 RS의 3배로 크게 그려 줄인다(가장자리가 딱 끊기고 색이 줄어든다)
-const SS = 3;
 export function buildTileset(theme, RS) {
   const T = { theme, RS, floors: [null], walls: [null], wallsDim: [null], floorsDim: [null], lava: [] };
   const R = RS * SS, fin = (c) => shrink(c, SS);
   if (theme === 'town') {
-    for (let k = 1; k <= 6; k++) { const f = fin(makeTownFloor(k, R, 0)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.5)); }
+    T.townFloors = new Map();
+    for (let k = 1; k <= 8; k++) { const f = fin(makeTownFloor(k, R, 0)); T.floors.push(f); T.floorsDim.push(dimmed(f, 0.5)); }
     for (let v = 1; v <= 2; v++) { const w = fin(makeWall('crypt', v, R)); T.walls.push(w); T.wallsDim.push(dimmed(w)); }
     return T;
   }

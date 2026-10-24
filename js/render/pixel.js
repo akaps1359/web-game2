@@ -145,9 +145,27 @@ export function pixEllipse(g, cx, cy, rx, ry, col) {
   }
 }
 
-// 도트 글꼴 글자: 한 도트(d) 어긋난 검은 글자를 깔아 또렷한 외곽선을 만든다(외곽선 그리기는 모서리가 뭉개진다)
+// 도트 글꼴 글자: 한 도트(d) 어긋난 검은 글자를 깔아 또렷한 외곽선을 만든다(외곽선 그리기는 모서리가 뭉개진다).
+// 글자 하나를 여섯 번 쓰는 셈이라, 글꼴이 준비된 뒤에는 한 번 그린 판을 저장해 두고 찍는다(가운데 맞춤 전제)
+const textCache = new Map();
 export function pixText(g, txt, x, y, col, d) {
   x = Math.round(x / d) * d; y = Math.round(y / d) * d;
+  const font = g.font, key = font + '|' + col + '|' + d + '|' + txt;
+  let c = textCache.get(key);
+  if (!c && g.textAlign === 'center' && g.textBaseline === 'middle' && document.fonts?.check?.(font)) {
+    const w = Math.ceil(g.measureText(txt).width) + 4 * d, fs = parseFloat(font) || 12 * d, h = Math.ceil(fs * 1.5) + 4 * d;
+    c = makeCanvas(w, h);
+    const cg = c.getContext('2d');
+    cg.font = font; cg.textAlign = 'center'; cg.textBaseline = 'middle';
+    const cx = Math.round(w / 2 / d) * d, cy = Math.round(h / 2 / d) * d;
+    cg.fillStyle = '#000';
+    cg.fillText(txt, cx - d, cy); cg.fillText(txt, cx + d, cy); cg.fillText(txt, cx, cy - d); cg.fillText(txt, cx, cy + d); cg.fillText(txt, cx + d, cy + d);
+    cg.fillStyle = col; cg.fillText(txt, cx, cy);
+    c.cx = cx; c.cy = cy;
+    if (textCache.size > 400) textCache.clear();
+    textCache.set(key, c);
+  }
+  if (c) { g.drawImage(c, x - c.cx, y - c.cy); return; }
   g.fillStyle = '#000';
   g.fillText(txt, x - d, y); g.fillText(txt, x + d, y); g.fillText(txt, x, y - d); g.fillText(txt, x, y + d); g.fillText(txt, x + d, y + d);
   g.fillStyle = col; g.fillText(txt, x, y);

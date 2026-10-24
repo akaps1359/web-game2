@@ -5,8 +5,9 @@ import { paintSkillIcon } from '../render/skillicons.js';
 import { skillDef, skillManaCost } from '../game/skills.js';
 import { BUFF_INFO } from '../game/buffs.js';
 import { levelName } from '../game/world.js';
+import { currentGoal, npcMark } from '../game/quests.js';
 import { EXP_TABLE } from '../data/classes.js';
-import { F_SEEN, F_VIS, F_LAVA } from '../game/level.js';
+import { F_SEEN, F_VIS, F_LAVA, F_OPAQUE } from '../game/level.js';
 import { TW, TH } from '../core/util.js';
 import { ART } from '../render/pixel.js';
 import { PIX_ICONS, pixRingCanvas, pixDiscCanvas, RING_BTN, stamp, uiFont } from './pixui.js';
@@ -42,6 +43,10 @@ export class HUD {
     const center = el('div', 'hud-center');
     this.areaName = el('div', 'area-name', '');
     center.appendChild(this.areaName);
+    // 지금 할 일(퀘스트 한 줄): 누르면 퀘스트 창
+    this.goal = el('div', 'quest-goal');
+    onTap(this.goal, () => this.app.panels.toggle('quests'));
+    center.appendChild(this.goal);
     this.tbox = el('div', 'target-box');
     this.tname = el('div', 'tn'); this.tmods = el('div', 'tm'); const tb = el('div', 'tb'); this.tbar = el('i'); tb.appendChild(this.tbar);
     this.tbox.append(this.tname, this.tmods, tb);
@@ -352,11 +357,15 @@ export class HUD {
       this.tmods.textContent = [...mods, ...res].join(' · ');
       this.tbar.style.width = Math.max(0, (t.hp / t.hpMax) * 100).toFixed(1) + '%';
     } else this.tbox.classList.remove('on');
-    // 버프
+    // 버프·작은 지도·퀘스트 목표
     this.bT = (this.bT || 0) - dt;
-    if (this.bT <= 0) { this.bT = 0.25; this.drawBuffs(P); this.drawMinimap(); }
+    if (this.bT <= 0) { this.bT = 0.25; this.drawBuffs(P); this.drawMinimap(); this.drawGoal(); }
     if (this.showMap) { this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.1; this.drawAutomap(); } }
     this.drawAim();
+  }
+  drawGoal() {
+    const g = this.game, q = currentGoal(g), txt = q ? q.text : '', cls = 'quest-goal' + (q ? ' on' : '') + (q?.ready ? ' ready' : '');
+    if (txt !== this.goalTxt || cls !== this.goal.className) { this.goalTxt = txt; this.goal.textContent = txt; this.goal.className = cls; }
   }
   drawBuffs(P) {
     const html = [];
@@ -398,7 +407,12 @@ export class HUD {
       if (sx < -4 || sx > 100 || sy < -4 || sy > 100) continue;
       if (L.wall[k]) { g.fillStyle = 'rgba(200,170,120,0.85)'; g.fillRect(sx - 1.6, sy - 1.6, 3.2, 3.2); }
       else if (L.floor[k]) {
-        if (town && f & 1) { g.fillStyle = 'rgba(120,100,80,0.5)'; g.fillRect(sx - 1.5, sy - 1, 3, 2); }
+        if (town) {
+          // 마을: 건물은 밝게, 나무는 어둡게, 길·광장은 흐리게
+          const fl = L.floor[k];
+          const col = f & 1 ? (f & F_OPAQUE && x > 1 && y > 1 && x < L.w - 2 && y < L.h - 2 ? 'rgba(210,180,130,0.9)' : 'rgba(30,60,34,0.7)') : fl === 3 || fl === 7 ? 'rgba(150,145,135,0.6)' : fl === 2 ? 'rgba(140,108,72,0.55)' : null;
+          if (col) { g.fillStyle = col; g.fillRect(sx - 1.6, sy - 1, 3.2, 2); }
+        }
         else if (f & F_LAVA) { g.fillStyle = 'rgba(255,90,20,0.5)'; g.fillRect(sx - 1.5, sy - 1, 3, 2); }
         else if (!town) { g.fillStyle = f & F_VIS ? 'rgba(90,80,70,0.55)' : 'rgba(60,55,50,0.45)'; g.fillRect(sx - 1.5, sy - 0.8, 3, 1.6); }
       }
@@ -412,7 +426,11 @@ export class HUD {
     }
     for (const a of L.actors) {
       if (a === P || a.dead) continue;
-      if (a.kind === 'npc') { const sx = 48 + (a.x - P.x - (a.y - P.y)) * sc, sy = 48 + (a.x - P.x + (a.y - P.y)) * sc * 0.5; g.fillStyle = '#ffe080'; g.fillRect(sx - 1.5, sy - 1.5, 3, 3); }
+      if (a.kind === 'npc') {
+        const sx = 48 + (a.x - P.x - (a.y - P.y)) * sc, sy = 48 + (a.x - P.x + (a.y - P.y)) * sc * 0.5, mk = a.npc && npcMark(game, a.npc);
+        if (mk) { g.fillStyle = mk === '?' ? '#ffd040' : '#fff070'; g.fillRect(sx - 2.5, sy - 2.5, 5, 5); g.fillStyle = '#000'; g.fillRect(sx - 0.5, sy - 1.5, 1, 2); g.fillRect(sx - 0.5, sy + 1, 1, 1); }
+        else { g.fillStyle = '#ffe080'; g.fillRect(sx - 1.5, sy - 1.5, 3, 3); }
+      }
       else if (a.team === 1 && game.canSee(a) && !a.untargetable) { const sx = 48 + (a.x - P.x - (a.y - P.y)) * sc, sy = 48 + (a.x - P.x + (a.y - P.y)) * sc * 0.5; g.fillStyle = a.rank === 'unique' ? '#e0b040' : '#e03020'; g.fillRect(sx - 1.2, sy - 1.2, 2.4, 2.4); }
     }
     g.fillStyle = '#fff'; g.beginPath(); g.arc(48, 48, 2.6, 0, Math.PI * 2); g.fill();
@@ -432,7 +450,7 @@ export class HUD {
     g.beginPath();
     for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
       const k = y * L.w + x;
-      if (!L.wall[k] && !(town && L.flags[k] & 1 && L.floor[k] !== 5)) continue;
+      if (!L.wall[k] && !(town && L.flags[k] & 1 && L.flags[k] & F_OPAQUE && x > 1 && y > 1 && x < L.w - 2 && y < L.h - 2)) continue;
       if (!town && !(L.flags[k] & F_SEEN)) continue;
       const sx = cx + (x - P.x - (y - P.y)) * sc, sy = cy + (x - P.x + (y - P.y)) * sc * 0.5;
       if (sx < -10 || sx > W + 10 || sy < -10 || sy > H + 10) continue;

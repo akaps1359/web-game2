@@ -210,6 +210,11 @@ function wake(game, a, dP) {
 // 한 걸음: 대상 쪽으로(거리 지도 우선), 막히면 옆으로
 function stepToward(game, a, t, flee = false) {
   const L = game.level, P = game.player;
+  // 문을 여는 괴물(디아블로 1의 산양족·가고일·마법사 등): 대상 쪽으로 난 닫힌 문이 바로 옆이면 연다
+  if (!flee && (a.F?.doors || a.boss)) for (let d = 0; d < 8; d += 2) {
+    const nx = a.tx + DIRS[d][0], ny = a.ty + DIRS[d][1], o = L.obj(nx, ny);
+    if (o && o.type === 'door' && !o.open && !o.locked && Math.hypot(nx - t.x, ny - t.y) < Math.hypot(a.tx - t.x, a.ty - t.y)) { game.openDoor(o); a.wait = 0.3; return true; }
+  }
   let best = null, bs = flee ? -1e9 : 1e9;
   const useMap = t === P && !flee && game.dmap.at(a.tx, a.ty) < 1e8;
   for (let d = 0; d < 8; d++) {
@@ -222,14 +227,7 @@ function stepToward(game, a, t, flee = false) {
     if (flee) { if (s > bs) { bs = s; best = [nx, ny]; } }
     else if (s < bs) { bs = s; best = [nx, ny]; }
   }
-  if (!best) {
-    // 문을 여는 괴물(디아블로 1의 산양족·가고일·마법사 등)
-    if (a.F?.doors || a.boss) for (let d = 0; d < 8; d += 2) {
-      const nx = a.tx + DIRS[d][0], ny = a.ty + DIRS[d][1], o = L.obj(nx, ny);
-      if (o && o.type === 'door' && !o.open && (!useMap || game.dmap.at(nx, ny) < game.dmap.at(a.tx, a.ty))) { game.openDoor(o); a.wait = 0.3; return true; }
-    }
-    return false;
-  }
+  if (!best) return false;
   // 가까워지지 않으면(막혀서 돌아가야 하면) 지도 값이 낮을 때만
   if (!flee && !useMap && bs > Math.hypot(a.tx - t.x, a.ty - t.y) + 0.5) return false;
   if (useMap && bs >= game.dmap.at(a.tx, a.ty) + 0.5 && Math.hypot(a.tx - t.x, a.ty - t.y) < 3) return false;
@@ -367,7 +365,7 @@ const AI = {
     const showAt = 4 - a.int * 0.5;
     a.invis = a.retreat > 0 ? Math.max(0, (a.invis ?? 0) - 0.3) : d < showAt ? Math.min(1, (a.invis ?? 0) + 0.35) : Math.max(0, (a.invis ?? 0) - 0.2);
     a.untargetable = a.invis < 0.3;
-    if (a.retreat > 0) { a.retreat--; stepToward(game, a, t, true); return; }
+    if (a.retreat > 0) { a.retreat--; if (!stepToward(game, a, t, true)) a.retreat = 0; return; }
     AI.melee(game, a, dt, dP);
   },
   // 산양족: 빙 돌다가 파고든다
@@ -394,9 +392,10 @@ const AI = {
       a.healedOnce = true; a.fleeT = 6;
     }
     if (a.fleeT > 0) {
+      // 몇 걸음 달아난 뒤(막히면 그 자리에서) 돌이 되어 회복한다
       a.fleeT--;
       const t = pickTarget(game, a);
-      if (t && stepToward(game, a, t, true)) return;
+      if (a.fleeT > 0 && t && stepToward(game, a, t, true)) return;
       a.fleeT = 0; a.stone = true; a.setAnim('stone', 1); a.stoneHeal = true;
       return;
     }
@@ -436,13 +435,14 @@ const AI = {
     if (!t) return;
     const d = Math.hypot(a.x - t.x, a.y - t.y);
     const L = game.level;
-    if (d > 4 && d < 10 && L.clearPath(a.x, a.y, t.x, t.y) && chance(0.4) && !a.charging) {
+    // 돌진 중이면 닿거나 막힐 때까지 곧장 달린다
+    if (a.charging) { chargeStep(game, a, t); return; }
+    if (d > 4 && d < 10 && L.clearPath(a.x, a.y, t.x, t.y) && chance(0.4)) {
       a.charging = true;
       game.sfx('mon_beast', a.x, a.y);
       chargeStep(game, a, t);
       return;
     }
-    a.charging = false;
     AI.melee(game, a, dt, dP);
   },
   // 대악마: 근접 + 불길
@@ -499,9 +499,10 @@ const AI = {
   // 망자의 왕: 해골을 일으킨다
   king(game, a, dt, dP) {
     if (!wake(game, a, dP)) return;
-    a.raiseT = (a.raiseT ?? 4) - 0.1;
-    if (a.raiseT <= 0) {
-      a.raiseT = 7;
+    // 깨어난 지 4초 뒤부터 7초마다(판단 횟수가 아니라 시간으로)
+    a.raiseAt ??= game.time + 4;
+    if (game.time >= a.raiseAt) {
+      a.raiseAt = game.time + 7;
       const L = game.level;
       const bones = L.corpses.filter((c) => !c.eaten && c.monRef && MONSTERS[c.type]?.F?.bones && Math.hypot(c.x - a.x, c.y - a.y) < 9).slice(0, 3);
       let n = 0;
@@ -529,10 +530,10 @@ const AI = {
     if (!wake(game, a, dP)) return;
     const t = pickTarget(game, a);
     if (!t) return;
-    a.apoT = (a.apoT ?? 6) - 0.1;
-    a.sumT = (a.sumT ?? 12) - 0.1;
-    if (a.apoT <= 0 && Math.hypot(a.x - t.x, a.y - t.y) < 12) {
-      a.apoT = 7 + Math.random() * 3;
+    a.apoAt ??= game.time + 6;
+    a.sumAt ??= game.time + 12;
+    if (game.time >= a.apoAt && Math.hypot(a.x - t.x, a.y - t.y) < 12) {
+      a.apoAt = game.time + 7 + Math.random() * 3;
       a.setAnim('special', 1.0, { hitAt: 0.7, onHit: () => {
         game.fx.ring(a.x, a.y, 0.5, 9, 0.8, [255, 60, 30], 5, true); game.fx.shake(0.8);
         game.sfx('meteor_impact', a.x, a.y);
@@ -545,8 +546,8 @@ const AI = {
       game.sfx('boss_roar', a.x, a.y);
       return;
     }
-    if (a.sumT <= 0) {
-      a.sumT = 14;
+    if (game.time >= a.sumAt) {
+      a.sumAt = game.time + 14;
       for (let i = 0; i < 3; i++) {
         const p = game.level.nearestFree(a.tx + rnd(-3, 3), a.ty + rnd(-3, 3), 3);
         if (p) { const s = spawnMonster(game, game.level, rnd(0, 1) ? 'blood_knight' : 'advocate', p.x, p.y); s.aware = true; game.fx.magic(s.x, s.y, 20, 16, [255, 60, 40]); }

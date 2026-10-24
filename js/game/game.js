@@ -14,14 +14,14 @@ import { useObject, objectVerb, SHRINES } from './objects.js';
 import { groundItem, pickupItem, autoGold } from './loot.js';
 import { itemName, itemColor, makeItem } from './items.js';
 import { BASE } from '../data/items.js';
-import { setQuest, questState } from './quests.js';
+import { setQuest, questState, questsOnEnter } from './quests.js';
 import { restock } from './shop.js';
 import { clamp } from '../core/util.js';
 
 const NOFX = new Proxy({}, { get: () => () => {} });
 // 터치로 내린 명령의 거리: 근접 공격은 이만큼 안의 적에게만 다가가고(이동은 조이스틱으로),
 // 아이템·물체·마을 사람은 손 닿는 거리에서만 쓴다
-const LEASH = 4.5, REACH = 2.6, TALK = 3.2;
+const LEASH = 4.5, REACH = 2.6, TALK = 2.8;
 // 공격 단추가 몸을 돌려 겨누는 거리: 근접은 손 닿는 거리보다 조금 더(다가오는 적), 활은 빛이 닿는 데까지
 const MELEE_AIM = MELEE_HIT + 0.4, BOW_AIM = 10;
 // 시야 반지름: 화면 가장자리 너머까지(한 번 본 곳은 빛 밖에서도 어둡게 남는다)
@@ -121,7 +121,7 @@ export class Game {
     if (depth > 0) {
       const d = this.hero.data;
       d.maxDepth = Math.max(d.maxDepth || 0, depth);
-      if (!L.visited) { L.visited = true; this.emit('discover', depth); }
+      if (!L.visited) { L.visited = true; this.emit('discover', depth); questsOnEnter(this, depth); }
     } else if (!fromTown && how !== 'start') {
       // 마을에 돌아오면 가게가 물건을 새로 들인다(디아블로 1)
       restock(this, 'smith'); restock(this, 'healer'); restock(this, 'witch');
@@ -284,7 +284,8 @@ export class Game {
     };
     for (const it of L.items) consider('item', it, it.x, it.y, REACH, '줍기', 0);
     for (const o of L.objects) { const v = objectVerb(o); if (v) consider('obj', o, o.x, o.y, REACH, v, v === '살펴보기' ? 1.2 : 0.3); }
-    for (const a of L.actors) if (a.kind === 'npc' && !a.dead) consider('npc', a, a.x, a.y, TALK, '대화', -0.5);
+    // 마을 사람은 조금 먼저(마을 사람끼리 가까이 모여 있으니, 더 가까운 아이템·물체를 가리지 않을 만큼만)
+    for (const a of L.actors) if (a.kind === 'npc' && !a.dead) consider('npc', a, a.x, a.y, TALK, '대화', -0.15);
   }
   // 상호작용 단추: 줍기·열기·대화·계단 등
   interact() {
@@ -673,5 +674,5 @@ export class Game {
 
 function rebuildObjAt(L) {
   L.objAt.fill(0);
-  L.objects.forEach((o, i) => { o.idx = i; if (o.x != null && (o.type !== 'house' || true)) L.objAt[o.y * L.w + o.x] = i + 1; });
+  L.objects.forEach((o, i) => { o.idx = i; if (o.x != null && !o.noAt) L.objAt[o.y * L.w + o.x] = i + 1; });
 }

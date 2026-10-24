@@ -1,6 +1,6 @@
 // 마을 사람들: 대장장이·치유사·마녀·현자·여관 주인·여급·소년·술꾼(디아블로 1 트리스트럼의 역할을 그대로)
 import { Actor } from './actor.js';
-import { questState, setQuest, QUESTS } from './quests.js';
+import { questState, setQuest, QUESTS, questOffered, questReady } from './quests.js';
 import { makeItem, makeUnique, itemName } from './items.js';
 import { BASE } from '../data/items.js';
 
@@ -127,11 +127,12 @@ export function spawnNPCs(game, L) {
 // ───────── 대화 ─────────
 // 선택지: { label, act, sub, quest }
 export function talkTo(game, npcId) {
-  const N = NPCS[npcId], h = game.hero, d = h.data;
+  const N = NPCS[npcId], h = game.hero;
   const out = { name: N.name, role: N.role, look: N.look, text: '', opts: [] };
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   out.text = pick(N.greet || ['…']);
-  const qopt = (id, label) => out.opts.push({ label, act: 'quest', quest: id });
+  // 퀘스트 선택지는 맨 앞에(새 부탁·보고 표시와 함께)
+  const qopt = (id, label) => out.opts.push({ label, act: 'quest', quest: id, sub: questReady(game, id) ? '보고' : '새 의뢰' });
   switch (npcId) {
     case 'wounded':
       out.text = '"거, 거기 누구요…? 도망쳐… 대성당 지하… 피 냄새 나는 방에… 놈이 있어… 고기를 자르는… 도살자…\n\n놈이 내 친구들을… 갈고리에… 크윽…"\n\n그는 마지막 숨을 몰아쉬고는 움직이지 않는다.';
@@ -146,32 +147,33 @@ export function talkTo(game, npcId) {
       out.opts.push({ label: '고급품 보기', act: 'shop', shop: 'premium', sub: '마법이 깃든 장비' });
       out.opts.push({ label: '팔기', act: 'sell' });
       out.opts.push({ label: '수리', act: 'repair' });
-      if (questState(game, 'magic_rock') === 'none' && d.maxDepth >= 4) qopt('magic_rock', '이상한 돌 이야기');
-      if (questState(game, 'magic_rock') === 'active' && h.data.inv.some((i) => i.b === 'q_rock')) qopt('magic_rock', '돌을 건넨다');
-      if (questState(game, 'anvil') === 'none' && d.maxDepth >= 9) qopt('anvil', '분노의 모루');
-      if (questState(game, 'anvil') === 'active' && h.data.inv.some((i) => i.b === 'q_anvil')) qopt('anvil', '모루를 건넨다');
+      if (questOffered(game, 'magic_rock')) qopt('magic_rock', '이상한 돌 이야기');
+      if (questReady(game, 'magic_rock')) qopt('magic_rock', '돌을 건넨다');
+      if (questOffered(game, 'anvil')) qopt('anvil', '분노의 모루');
+      if (questReady(game, 'anvil')) qopt('anvil', '모루를 건넨다');
       break;
     case 'witch':
       out.opts.push({ label: '물건 사기', act: 'shop', shop: 'witch' });
       out.opts.push({ label: '팔기', act: 'sell' });
-      if (questState(game, 'mushroom') === 'none' && d.maxDepth >= 8) qopt('mushroom', '필요한 재료');
-      if (questState(game, 'mushroom') === 'active' && h.data.inv.some((i) => i.b === 'q_mushroom')) qopt('mushroom', '검은 버섯을 건넨다');
+      if (questOffered(game, 'mushroom')) qopt('mushroom', '필요한 재료');
+      if (questReady(game, 'mushroom')) qopt('mushroom', '검은 버섯을 건넨다');
       break;
     case 'sage':
       out.opts.push({ label: '아이템 감정', act: 'identify', sub: '하나에 100골드' });
       out.opts.push({ label: '이야기를 듣는다', act: 'lore' });
-      if (questState(game, 'blind') === 'none' && d.maxDepth >= 6) qopt('blind', '카타콤의 회랑');
-      if (questState(game, 'blind') === 'done') qopt('blind', '회랑을 정리했다고 알린다');
-      if (questState(game, 'seraphine') === 'none' && d.maxDepth >= 13) qopt('seraphine', '세라핀의 진실');
+      if (questOffered(game, 'blind')) qopt('blind', '카타콤의 회랑');
+      if (questReady(game, 'blind')) qopt('blind', '회랑을 정리했다고 알린다');
+      if (questOffered(game, 'seraphine')) qopt('seraphine', '세라핀의 진실');
       break;
     case 'inn':
-      if (questState(game, 'hollow_king') === 'none') qopt('hollow_king', '오드릭 왕 이야기');
-      if (questState(game, 'hollow_king') === 'done') qopt('hollow_king', '왕을 잠재웠다고 알린다');
+      if (questOffered(game, 'hollow_king')) qopt('hollow_king', '오드릭 왕 이야기');
+      if (questReady(game, 'hollow_king')) qopt('hollow_king', '왕을 잠재웠다고 알린다');
       break;
     case 'boy':
       out.opts.push({ label: '물건 보기 (50골드)', act: 'shop', shop: 'boy' });
       break;
   }
+  out.opts.sort((a, b) => (b.act === 'quest') - (a.act === 'quest'));
   out.opts.push({ label: '소문을 묻는다', act: 'gossip' });
   out.opts.push({ label: '떠난다', act: 'leave' });
   return out;

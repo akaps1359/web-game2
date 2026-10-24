@@ -52,7 +52,7 @@ export class Level {
   addObject(o) {
     this.objects.push(o);
     o.idx = this.objects.length - 1;
-    if (o.x != null) this.objAt[this.idx(o.x, o.y)] = this.objects.length;
+    if (o.x != null && !o.noAt) this.objAt[this.idx(o.x, o.y)] = this.objects.length;
     return o;
   }
   setFlag(x, y, f, on = true) {
