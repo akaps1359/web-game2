@@ -3,7 +3,7 @@ import { CLASSES, EXP_TABLE, MAX_LEVEL } from '../data/classes.js';
 import { BASE } from '../data/items.js';
 import { itemMods, itemAC, itemDmg, meetsReq, isTwoHanded, invalidate, makeItem, itemName } from './items.js';
 import { SKILLS, skillDef, passiveMods } from './skills.js';
-import { bestiaryMods } from './bestiary.js';
+import { bestiaryMods, backfillBestiary } from './bestiary.js';
 import { clamp, josa } from '../core/util.js';
 
 export const INV_W = 10, INV_H = 4;
@@ -48,7 +48,7 @@ export class Hero {
     this.actor = null;
     this.st = {};
     for (const k of ['inv', 'belt']) if (!data[k]) data[k] = k === 'belt' ? new Array(16).fill(null) : [];
-    if (!data.bestiary) data.bestiary = {};
+    backfillBestiary(data);
     this.recalc();
   }
   bind(a) {
@@ -113,8 +113,9 @@ export class Hero {
     // 방어도
     let ac = Math.floor(st.dex / 5);
     for (const it of live) ac += itemAC(it);
+    ac += M.defFlat || 0;
     if (M.defPct) ac = Math.floor(ac * (1 + M.defPct / 100));
-    st.ac = Math.max(0, ac + (M.defFlat || 0));
+    st.ac = Math.max(0, ac);
     st.block = sh ? st.dex + C.block : 0;
     st.hasShield = !!sh;
     // 저항(최대 75%)

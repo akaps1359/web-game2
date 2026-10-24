@@ -168,11 +168,13 @@ export const QUESTS = {
       placeSolid(L, { type: 'altar', x: r.cx, y: r.cy - 3 });
       L.decals.push({ x: r.cx, y: r.cy, kind: 'pent', rot: 0, s: 1.2, keep: true });
       const down = L.objects.find((o) => o.type === 'stairs_down');
-      if (game.hero.data.quests.seraphine?.st === 'done') return;
-      if (down) down.sealed = true;
-      spawnBoss(game, L, 'seraphine', r.cx, r.cy - 1);
-      spawnBoss(game, L, 'handmaiden_r', r.cx - 2, r.cy + 1);
-      spawnBoss(game, L, 'handmaiden_b', r.cx + 2, r.cy + 1);
+      const done = game.hero.data.quests.seraphine?.st === 'done';
+      if (!done) {
+        if (down) down.sealed = true;
+        spawnBoss(game, L, 'seraphine', r.cx, r.cy - 1);
+      }
+      // 시녀들은 세라핀이 먼저 쓰러져도 도감에 아직 없으면 다시 나온다(놓치면 도감을 못 채우니)
+      for (const [id, dx] of [['handmaiden_r', -2], ['handmaiden_b', 2]]) if (!done || !(game.hero.data.bestiary?.[id] > 0)) spawnBoss(game, L, id, r.cx + dx, r.cy + 1);
     },
   },
   velgath: {
@@ -246,15 +248,15 @@ export function questsOnEnter(game, depth) {
 
 export function onMonsterKilled(game, m) {
   if (m.quest) {
-    const st = questState(game, m.quest);
-    if (st !== 'done' && st !== 'reported') setQuest(game, m.quest, 'done');
+    const st = questState(game, m.quest), first = st !== 'done' && st !== 'reported';
+    if (first) setQuest(game, m.quest, 'done');
     if (m.quest === 'seraphine') {
       const down = game.level.objects.find((o) => o.type === 'stairs_down');
       if (down) { down.sealed = false; game.toast('봉인이 풀렸다. 아래로 가는 길이 열렸다.', 'big'); game.fx.flash(down.x, down.y, 4, [255, 60, 40], 1); }
       game.emit('lore', 'seraphine_death');
     }
     if (m.quest === 'warlord') for (const o of game.level.objects) if (o.type === 'rack') o.used = false;
-    if (m.quest === 'velgath') setTimeout(() => game.emit('victory'), 3500);
+    if (m.quest === 'velgath' && first) setTimeout(() => game.emit('victory'), 3500);
     if (m.quest === 'scribe') game.emit('lore', 'scribe_death');
   }
   if (m.questTag === 'blind') {

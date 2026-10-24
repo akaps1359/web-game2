@@ -16,6 +16,10 @@ export const BOSS_BONUS = {
   handmaiden_r: { dex: 1 }, handmaiden_b: { dex: 1 }, seraphine: { mag: 1 }, velgath: { str: 1, mag: 1, dex: 1, vit: 1 },
 };
 const BOSS_DEPTH = { butcher: 2, hollow_king: 3, scribe: 8, warlord: 13, handmaiden_r: 15, handmaiden_b: 15, seraphine: 15, velgath: 16 };
+// 보통 나오는 층 밖에서도 나오는 것: 눈먼 자들의 회랑(7층) 직조자, 카르낙의 방(13층) 강철 군주, 통·석관에서 튀어나오는 시체 도끼병
+const EXTRA_DEPTH = { weaver: [7, 10], steel_lord: [13, 15], corpseaxe: [2, 16] };
+// 보스 → 그 보스를 쓰러뜨리면 끝나는 퀘스트(도감이 생기기 전 저장을 메울 때)
+const BOSS_QUEST = { butcher: 'butcher', hollow_king: 'hollow_king', scribe: 'scribe', warlord: 'warlord', seraphine: 'seraphine', handmaiden_r: 'seraphine', handmaiden_b: 'seraphine', velgath: 'velgath' };
 
 const LABEL = {
   life: ['생명력', ''], mana: ['마나', ''], tohit: ['명중률', '%'], defFlat: ['방어도', ''],
@@ -45,7 +49,7 @@ export const ENTRIES = (() => {
   fams.sort((a, b) => a.d - b.d || a.i - b.i);
   const out = [];
   for (const { fid } of fams) {
-    for (const m of Object.values(MONSTERS)) if (m.fam === fid) out.push({ id: m.id, name: m.name, short: m.name, boss: false, fam: fid, def: m, depth: m.dl, bonus: FAM_BONUS[fid] || { life: 1 } });
+    for (const m of Object.values(MONSTERS)) if (m.fam === fid) out.push({ id: m.id, name: m.name, short: m.name, boss: false, fam: fid, def: m, depth: EXTRA_DEPTH[m.id] || m.dl, bonus: FAM_BONUS[fid] || { life: 1 } });
   }
   for (const bid of Object.keys(BOSS_BONUS)) {
     const B = BOSSES[bid];
@@ -63,6 +67,16 @@ export function entryIdOf(a) {
   return id && ENTRY[id] ? id : null;
 }
 export const killsOf = (d, id) => d.bestiary?.[id] || 0;
+
+// 도감이 생기기 전 저장: 퀘스트를 끝낸 보스는 다시 나오지 않으므로 이미 쓰러뜨린 것으로 채운다(보너스도 받는다)
+export function backfillBestiary(d) {
+  if (d.bestiary) return;
+  d.bestiary = {};
+  for (const bid in BOSS_QUEST) {
+    const st = d.quests?.[BOSS_QUEST[bid]]?.st;
+    if (st === 'done' || st === 'reported') d.bestiary[bid] = 1;
+  }
+}
 export const knownCount = (d) => ENTRIES.reduce((n, e) => n + (killsOf(d, e.id) > 0 ? 1 : 0), 0);
 
 // 받은 보너스를 모두 더한 것(능력치 계산에 넣는다)

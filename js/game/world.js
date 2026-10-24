@@ -110,7 +110,7 @@ function buildThrone(game, L, rng) {
     placeSolid(L, { type: 'brazier', x, y });
   }
   L.throneRoom = r;
-  if (!game.hero?.data.quests.velgath?.done) {
+  if (game.hero?.data.quests.velgath?.st !== 'done') {
     const b = spawnBoss(game, L, 'velgath', r.cx, r.cy - 2);
     for (let i = 0; i < 4; i++) {
       const p = L.nearestFree(r.cx + rnd(-4, 4), r.cy + rnd(-3, 4), 3);
